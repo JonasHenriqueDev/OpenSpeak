@@ -1,0 +1,121 @@
+#include "Layout.h"
+
+#include <QVariantList>
+#include <algorithm>
+#include <cmath>
+#include <optional>
+
+namespace openspeak {
+
+namespace {
+
+struct Fit {
+    int rows = 1, cols = 1;
+    double w = 0, h = 0;
+};
+
+Fit fit(int count, int rows, double width, double height, double gap)
+{
+    Fit f;
+    f.rows = rows;
+    f.cols = int(std::ceil(double(count) / rows));
+    const double cellW = (width - (f.cols - 1) * gap) / f.cols;
+    const double cellH = (height - (rows - 1) * gap) / rows;
+    f.w = std::floor(std::min(cellW, cellH * LayoutAspect));
+    f.h = std::floor(f.w / LayoutAspect);
+    return f;
+}
+
+QList<QRectF> place(int count, const Fit &f, double width, double height, double gap)
+{
+    QList<QRectF> out;
+    const double usedH = f.rows * f.h + (f.rows - 1) * gap;
+    const double top = std::max(0.0, (height - usedH) / 2);
+    for (int i = 0; i < count; ++i) {
+        const int row = i / f.cols;
+        const int inRow = row == f.rows - 1 ? count - f.cols * (f.rows - 1) : f.cols;
+        const int col = i % f.cols;
+        const double rowW = inRow * f.w + (inRow - 1) * gap;
+        out.append(QRectF(std::round((width - rowW) / 2 + col * (f.w + gap)), std::round(top + row * (f.h + gap)), f.w, f.h));
+    }
+    return out;
+}
+
+} // namespace
+
+LayoutResult gridLayout(int count, double width, double height, double gap, int offset, int minHeight)
+{
+    LayoutResult r;
+    if (count <= 0 || width <= 0 || height <= 0)
+        return r;
+    std::optional<Fit> best;
+    for (int rows = 1; rows <= count; ++rows) {
+        const Fit f = fit(count, rows, width, height, gap);
+        if (f.h < minHeight)
+            continue;
+        if (!best || f.w * f.h > best->w * best->h)
+            best = f;
+    }
+    int shown = count;
+    if (!best) {
+        // Paginação: maior quantidade que cabe com a altura mínima.
+        const int maxRows = std::max(1, int((height + gap) / (minHeight + gap)));
+        const int maxCols = std::max(1, int((width + gap) / (minHeight * LayoutAspect + gap)));
+        shown = std::clamp(maxRows * maxCols, 1, count);
+        for (int rows = 1; rows <= maxRows; ++rows) {
+            const Fit f = fit(shown, rows, width, height, gap);
+            if (f.cols > maxCols)
+                continue;
+            if (!best || f.w * f.h > best->w * best->h)
+                best = f;
+        }
+        if (!best)
+            best = fit(shown, 1, width, height, gap);
+    }
+    const int start = std::clamp(offset, 0, std::max(0, count - shown));
+    const auto rects = place(std::min(shown, count - start), *best, width, height, gap);
+    for (int i = 0; i < rects.size(); ++i)
+        r.tiles.append({rects[i], start + i, false});
+    r.perPage = shown;
+    return r;
+}
+
+LayoutResult focusLayout(int count, int focusIndex, double width, double height, double gap, int offset)
+{
+    constexpr double StripHeight = 100;
+    LayoutResult r;
+    if (count <= 0)
+        return r;
+    QList<int> others;
+    for (int i = 0; i < count; ++i)
+        if (i != focusIndex)
+            others.append(i);
+    const bool hasStrip = !others.isEmpty() && height - StripHeight - gap >= 140;
+    const double mainH = hasStrip ? height - StripHeight - gap : height;
+    const double w = std::floor(std::min(width, mainH * LayoutAspect));
+    const double h = std::floor(w / LayoutAspect);
+    r.tiles.append({QRectF(std::round((width - w) / 2), 0, w, h), focusIndex, true});
+    if (!hasStrip)
+        return r;
+    const double sw = std::floor(StripHeight * LayoutAspect);
+    r.perPage = std::max(1, int((width + gap) / (sw + gap)));
+    const int start = std::clamp(offset, 0, std::max(0, int(others.size()) - r.perPage));
+    const auto visible = others.mid(start, r.perPage);
+    const double rowW = visible.size() * sw + (visible.size() - 1) * gap;
+    for (int i = 0; i < visible.size(); ++i)
+        r.tiles.append({QRectF(std::round((width - rowW) / 2 + i * (sw + gap)), h + gap, sw, StripHeight), visible[i], false});
+    return r;
+}
+
+QVariantMap StreamLayout::compute(int count, int focusIndex, double width, double height, double gap, int offset) const
+{
+    const LayoutResult r = focusIndex >= 0 ? focusLayout(count, focusIndex, width, height, gap, offset)
+                                           : gridLayout(count, width, height, gap, offset);
+    QVariantList tiles;
+    for (const LayoutTile &t : r.tiles)
+        tiles.append(QVariantMap{{"x", t.rect.x()}, {"y", t.rect.y()}, {"w", t.rect.width()}, {"h", t.rect.height()},
+                                 {"index", t.index}, {"focused", t.focused}});
+    return {{"perPage", r.perPage}, {"tiles", tiles}};
+}
+
+} // namespace openspeak

@@ -1,0 +1,167 @@
+#pragma once
+// Orquestrador central (com::teamspeak::video::ScreenshareManager), exposto à QML.
+//  - Streams próprios: uma captura + UM encoder compartilhado + uma
+//    SessionOutbound por espectador (single-encoding).
+//  - Streams assistidos: uma SessionInbound por stream.
+//  - Pedidos de entrada, privacidade, limite, kick/ban, miniaturas, estatísticas.
+
+#include "AudioCapture.h"
+#include "AudioCodec.h"
+#include "ConnectionHandler.h"
+#include "SessionInbound.h"
+#include "SessionOutbound.h"
+#include "Settings.h"
+#include "VideoEncoder.h"
+#include "VideoSource.h"
+
+#include <QMap>
+#include <QObject>
+#include <QSet>
+#include <QTimer>
+#include <QVariantList>
+#include <QVideoSink>
+
+#include <memory>
+#include <mutex>
+
+namespace openspeak {
+
+class ScreenshareManager : public QObject {
+    Q_OBJECT
+    Q_PROPERTY(QVariantList items READ items NOTIFY itemsChanged)
+    Q_PROPERTY(int pendingRequests READ pendingRequests NOTIFY itemsChanged)
+    Q_PROPERTY(QStringList encoders READ encoders CONSTANT)
+    Q_PROPERTY(bool previewActive READ previewActive NOTIFY previewChanged)
+    Q_PROPERTY(QString previewLabel READ previewLabel NOTIFY previewChanged)
+public:
+    ScreenshareManager(ConnectionHandler *handler, Settings *settings, QObject *parent = nullptr);
+    ~ScreenshareManager() override;
+
+    QVariantList items() const;
+    int pendingRequests() const;
+    QStringList encoders() const { return VideoEncoder::availableEncoders(); }
+    bool previewActive() const { return m_preview && m_preview->isActive(); }
+    QString previewLabel() const { return m_preview ? m_preview->label() : QString(); }
+
+    // --- fontes / pré-visualização (diálogo de setup)
+    Q_INVOKABLE QVariantList sources(int type) const;
+    Q_INVOKABLE bool openPreview(const QVariantMap &source, int fps);
+    Q_INVOKABLE void closePreview();
+    Q_INVOKABLE void attachPreview(QVideoSink *sink);
+    Q_INVOKABLE void detachPreview(QVideoSink *sink);
+
+    // --- streams próprios
+    Q_INVOKABLE void startStream(const QVariantMap &config);
+    Q_INVOKABLE void updateStream(const QString &id, const QVariantMap &config);
+    Q_INVOKABLE void changeSource(const QString &id);
+    Q_INVOKABLE void stopStream(const QString &id);
+    Q_INVOKABLE void setPaused(const QString &id, bool paused);
+    Q_INVOKABLE QVariantMap ownConfig(const QString &id) const;
+    Q_INVOKABLE void attachOwnPreview(const QString &id, QVideoSink *sink);
+    Q_INVOKABLE void detachOwnPreview(const QString &id, QVideoSink *sink);
+    Q_INVOKABLE void respondJoinRequest(const QString &id, int clid, bool accept, bool ban = false);
+    Q_INVOKABLE void removeViewer(const QString &id, int clid, bool ban = false);
+    Q_INVOKABLE void unban(const QString &id, const QString &uid);
+    Q_INVOKABLE QVariantMap viewers(const QString &id) const;
+
+    // --- streams assistidos
+    Q_INVOKABLE void joinStream(const QString &id);
+    Q_INVOKABLE void leaveStream(const QString &id);
+    Q_INVOKABLE void dismiss(const QString &id);
+    Q_INVOKABLE void attachVideo(const QString &id, QVideoSink *sink);
+    Q_INVOKABLE void detachVideo(const QString &id, QVideoSink *sink);
+    Q_INVOKABLE void setVolume(const QString &id, double volume);
+
+    // --- estatísticas
+    Q_INVOKABLE QVariantMap stats(const QString &id, int viewerClid) const;
+
+signals:
+    void itemsChanged();
+    void previewChanged();
+    void statsChanged(const QString &id);
+    void joinRequest(const QString &id, int clid, const QString &nickname);
+    void joinRequestResolved(const QString &id, int clid);
+    void errorOccurred(const QString &message);
+
+private:
+    struct StreamConfig {
+        QString name;
+        StreamType type = StreamType::Screen;
+        StreamAccess access = StreamAccess::Public;
+        int bitrate = 3'000'000;
+        int viewerLimit = 0;
+        bool audio = true;
+        int width = 1280, height = 720, fps = 30, audioBitrate = 128'000;
+    };
+    struct JoinReq {
+        int clid = 0;
+        QString nickname, uid;
+        QStringList codecs;
+    };
+    struct History {
+        QList<QVariantMap> video, audio;
+    };
+    struct OwnStream {
+        QString id;
+        StreamConfig config;
+        std::unique_ptr<VideoSource> source;
+        std::unique_ptr<VideoEncoder> encoder;
+        std::unique_ptr<AudioCapture> audio;
+        std::unique_ptr<OpusEncoder> opus;
+        QMap<int, SessionOutbound *> sessions;
+        std::mutex sinkMutex;           // protege `sinks` (thread do encoder/áudio)
+        QList<SessionOutbound *> sinks;
+        QMap<int, JoinReq> joinRequests;
+        QSet<int> viewers;
+        QSet<QString> banned;
+        bool paused = false;
+        QTimer thumbTimer;
+        QMap<int, History> history;
+    };
+    enum class InStatus { Waiting, Connecting, Playing, Reconnecting, Error };
+    struct InboundView {
+        QString id;
+        int ownerClid = 0;
+        InStatus status = InStatus::Waiting;
+        QString errorKey;
+        SessionInbound *session = nullptr;
+        double volume = 1.0;
+        History history;
+    };
+
+    static StreamConfig configFromMap(const QVariantMap &m, const StreamConfig &base);
+    static QJsonObject wireConfig(const StreamConfig &c);
+    void onNotification(const QString &cmd, const QJsonObject &args);
+    void onJoinRequest(const QJsonObject &a);
+    bool maybeAutoAccept(OwnStream &own, const JoinReq &req);
+    bool viewerLimitReached(const OwnStream &own) const;
+    void onClientJoined(const QJsonObject &a);
+    void onClientLeft(const QJsonObject &a);
+    void onJoinResponse(const QJsonObject &a);
+    void onSignaling(const QJsonObject &a);
+    void startMedia(OwnStream &own);
+    void startAudioFor(OwnStream &own);
+    void configureEncoder(OwnStream &own);
+    void scheduleThumbnails(OwnStream &own);
+    void removeSession(OwnStream &own, int clid);
+    void disposeOwn(const QString &id);
+    void disposeInbound(InboundView &view);
+    void setInboundError(InboundView &view, const QString &key);
+    void collectStats();
+    void notifyChanged();
+    QString errorMessage(const CommandResult &r) const;
+
+    ConnectionHandler *m_handler;
+    ServerConnection *m_conn;
+    Settings *m_settings;
+    std::unique_ptr<VideoSource> m_preview;
+    std::map<int, std::unique_ptr<VideoSource>> m_pendingSources; // aguardando setupstream
+    int m_nextToken = 1;
+    std::map<QString, std::unique_ptr<OwnStream>> m_own;
+    QMap<QString, InboundView> m_inbound;
+    QMap<QString, QList<QJsonObject>> m_earlySignals;
+    QTimer m_statsTimer;
+    QTimer m_changeDebounce;
+};
+
+} // namespace openspeak

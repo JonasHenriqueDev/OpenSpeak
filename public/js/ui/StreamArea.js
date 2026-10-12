@@ -1,0 +1,206 @@
+// Área central de streams: grade automática / foco, paginação e barra inferior.
+
+import { h, replaceChildren } from './dom.js';
+import { icon } from './icons.js';
+import { t } from './i18n.js';
+import { StreamTile } from './StreamTile.js';
+import { gridLayout, focusLayout } from '../video/layout.js';
+import { Severity } from '../core/protocol.js';
+
+const GAP = 8;
+
+export class StreamArea {
+  /**
+   * @param {object} o
+   * @param {import('../core/ConnectionHandler.js').ConnectionHandler} o.handler
+   * @param {import('../video/ScreenshareManager.js').ScreenshareManager} o.manager
+   * @param {object} o.settings
+   * @param {object} o.actions  callbacks de alto nível (abrir diálogos/painéis)
+   */
+  constructor({ handler, manager, settings, actions }) {
+    this.handler = handler;
+    this.manager = manager;
+    this.settings = settings;
+    this.actions = actions;
+    this.tiles = new Map();
+    this.focusId = null;
+    this.offset = 0;
+    this.perPage = 0;
+
+    this.stage = h('div.stream-stage');
+    this.empty = h('div.stream-empty');
+    this.pagerPrev = h('button.pager.prev', { title: '', on: { click: () => this.#page(-1) } }, icon('chevronLeft'));
+    this.pagerNext = h('button.pager.next', { on: { click: () => this.#page(1) } }, icon('chevronRight'));
+    this.toolbar = h('div.stream-toolbar');
+    this.el = h('section.stream-area',
+      h('div.stream-stage-wrap', this.stage, this.empty, this.pagerPrev, this.pagerNext),
+      this.toolbar);
+
+    new ResizeObserver(() => this.layout()).observe(this.stage);
+    document.addEventListener('fullscreenchange', () => this.render());
+  }
+
+  /** Lista ordenada do que aparece na área (canal atual). */
+  #items() {
+    const own = this.handler.ownClient;
+    if (!own) return [];
+    const hidden = new Set(this.settings.get('hiddenStreams'));
+    const showOwn = this.settings.get('showOwnStreams');
+    const showInactive = this.settings.get('showInactiveStreams');
+    const items = [];
+    for (const info of this.handler.streamsInChannel(own.cid)) {
+      const ownStream = this.manager.ownStreams.get(info.streamIdentifier);
+      if (ownStream) {
+        if (showOwn) items.push({ kind: 'own', info, own: ownStream });
+        continue;
+      }
+      const view = this.manager.inbound.get(info.streamIdentifier) ?? null;
+      if (hidden.has(info.streamIdentifier) && !view) continue;
+      if (!showInactive && !view) continue;
+      items.push({ kind: 'remote', info, view });
+    }
+    items.sort((a, b) => (a.kind === b.kind ? a.info.created - b.info.created : a.kind === 'own' ? -1 : 1));
+    return items;
+  }
+
+  render() {
+    const items = this.#items();
+    this.items = items;
+    const ids = new Set(items.map(i => i.info.streamIdentifier));
+    for (const [id, tile] of this.tiles) {
+      if (!ids.has(id)) {
+        tile.destroy();
+        this.tiles.delete(id);
+      }
+    }
+    if (this.focusId && !ids.has(this.focusId)) this.focusId = null;
+    for (const item of items) {
+      const id = item.info.streamIdentifier;
+      let tile = this.tiles.get(id);
+      if (!tile) {
+        tile = new StreamTile(id, this.#tileActions());
+        this.tiles.set(id, tile);
+        this.stage.append(tile.el);
+      }
+      tile.update({
+        ...item,
+        ownerName: this.handler.clientName(item.info.ownerClid),
+        severity: this.#severity(item),
+        isFocused: this.focusId === id,
+      });
+    }
+    this.#renderEmpty(items);
+    this.#renderToolbar();
+    this.layout();
+  }
+
+  /** Atualização leve apenas dos indicadores de problemas. */
+  refreshStats(streamIdentifier) {
+    const tile = this.tiles.get(streamIdentifier);
+    const item = this.items?.find(i => i.info.streamIdentifier === streamIdentifier);
+    if (!tile || !item) return;
+    const severity = this.#severity(item);
+    if (severity !== tile.model?.severity) tile.update({ ...tile.model, severity });
+  }
+
+  #severity(item) {
+    if (item.kind === 'own') return this.manager.ownStreamSeverity(item.own);
+    return item.view?.stats?.worstSeverity ?? Severity.OK;
+  }
+
+  layout() {
+    const items = this.items ?? [];
+    const width = this.stage.clientWidth;
+    const height = this.stage.clientHeight;
+    const focusIndex = this.focusId ? items.findIndex(i => i.info.streamIdentifier === this.focusId) : -1;
+    const result = focusIndex >= 0
+      ? focusLayout(items.length, focusIndex, width, height, { gap: GAP, offset: this.offset })
+      : gridLayout(items.length, width, height, { gap: GAP, offset: this.offset });
+    this.perPage = result.perPage;
+    const visible = new Set();
+    for (const rect of result.tiles) {
+      const item = items[rect.index];
+      const tile = this.tiles.get(item.info.streamIdentifier);
+      tile.setRect(rect, rect.focused);
+      tile.el.hidden = false;
+      visible.add(item.info.streamIdentifier);
+    }
+    for (const [id, tile] of this.tiles) if (!visible.has(id)) tile.el.hidden = true;
+    const pageable = focusIndex >= 0 ? items.length - 1 : items.length;
+    this.pagerPrev.hidden = this.offset <= 0;
+    this.pagerNext.hidden = this.offset + this.perPage >= pageable || this.perPage === 0;
+  }
+
+  #page(dir) {
+    this.offset = Math.max(0, this.offset + dir * Math.max(1, this.perPage));
+    this.layout();
+  }
+
+  #renderEmpty(items) {
+    this.empty.hidden = items.length > 0;
+    if (items.length) return;
+    const hiddenCount = this.settings.get('hiddenStreams')
+      .filter(id => this.handler.streams.get(id)?.cid === this.handler.ownClient?.cid).length;
+    replaceChildren(this.empty,
+      icon('stream', 'big'),
+      h('h3', hiddenCount ? t('video.stream.empty_due_to_hidden') : t('video.stream.empty')),
+      h('p', t('video.stream.empty.hint')),
+      this.handler.hasStreamingP2P
+        ? h('button.btn.attention', { on: { click: () => this.actions.startStream() } }, icon('stream'), t('video.action.start_stream'))
+        : null);
+  }
+
+  #renderToolbar() {
+    const items = this.items ?? [];
+    const hidden = this.settings.get('hiddenStreams')
+      .filter(id => this.handler.streams.get(id)?.cid === this.handler.ownClient?.cid);
+    const pendingTotal = [...this.manager.ownStreams.values()].reduce((n, o) => n + o.joinRequests.size, 0);
+    replaceChildren(this.toolbar,
+      this.handler.hasStreamingP2P
+        ? h('button.btn.attention', { on: { click: () => this.actions.startStream() } }, icon('stream'), t('video.action.start_stream'))
+        : null,
+      pendingTotal ? h('button.btn.warn', {
+        title: t('video.join_requests.tooltip'),
+        on: { click: () => this.actions.manageViewers([...this.manager.ownStreams.keys()][0]) },
+      }, icon('users'), String(pendingTotal)) : null,
+      h('span.toolbar-count', t('video.streams', { count: items.length })),
+      h('span.spacer'),
+      this.focusId ? h('button.btn.ghost', {
+        title: t('video.layout.auto.tooltip'),
+        on: { click: () => { this.focusId = null; this.offset = 0; this.render(); } },
+      }, icon('grid'), t('video.layout.auto')) : null,
+      hidden.length ? h('button.btn.ghost', {
+        on: { click: ev => this.actions.manageHidden(ev.currentTarget) },
+      }, icon('eyeOff'), `${t('video.stream.manage_hidden_streams')} (${hidden.length})`) : null,
+      h('button.btn.ghost', { on: { click: ev => this.actions.viewSettings(ev.currentTarget) } }, icon('settings'), t('video.view_settings')),
+    );
+  }
+
+  #tileActions() {
+    const m = this.manager;
+    const a = this.actions;
+    const guard = p => Promise.resolve(p).catch(err => a.error(err));
+    return {
+      joinStream: id => guard(m.joinStream(id)),
+      leaveStream: id => guard(m.leaveStream(id)),
+      dismiss: id => m.dismissInbound(id),
+      stopStream: id => guard(m.stopStream(id)),
+      togglePause: id => guard(m.setPaused(id, !m.ownStreams.get(id)?.paused)),
+      changeSource: id => a.changeSource(id),
+      editStream: id => a.editStream(id),
+      manageViewers: id => a.manageViewers(id),
+      showStats: id => a.showStats(id),
+      hideStream: id => {
+        const list = this.settings.get('hiddenStreams');
+        if (!list.includes(id)) this.settings.set('hiddenStreams', [...list, id]);
+        guard(m.leaveStream(id));
+        this.render();
+      },
+      toggleFocus: id => {
+        this.focusId = this.focusId === id ? null : id;
+        this.offset = 0;
+        this.render();
+      },
+    };
+  }
+}

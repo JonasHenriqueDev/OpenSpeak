@@ -1,0 +1,9 @@
+node_modules/
+*.pem
+native/build/
+native/dist/
+native/shots/
+native/vcpkg_installed/
+native/*.log
+.claude/
+*.log

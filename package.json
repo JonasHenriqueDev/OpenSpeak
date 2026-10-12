@@ -1,0 +1,17 @@
+{
+  "name": "openspeak",
+  "version": "0.1.0",
+  "description": "Voz + transmissão de vídeo P2P no estilo TeamSpeak (servidor de sinalização + cliente WebRTC)",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

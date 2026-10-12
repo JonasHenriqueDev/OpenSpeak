@@ -1,0 +1,217 @@
+// Um quadro na área de streams. Mantém o <video> vivo entre atualizações;
+// só a sobreposição (overlay) é redesenhada.
+
+import { h, replaceChildren } from './dom.js';
+import { icon } from './icons.js';
+import { t } from './i18n.js';
+import { StreamAccess, StreamType, Severity } from '../core/protocol.js';
+import { InboundStatus } from '../video/ScreenshareManager.js';
+
+const ACCESS_ICON = { [StreamAccess.PUBLIC]: 'globe', [StreamAccess.CONTACTS_ONLY]: 'contacts', [StreamAccess.PRIVATE]: 'lock' };
+const TYPE_ICON = { [StreamType.CAMERA]: 'camera', [StreamType.SCREEN]: 'screen', [StreamType.WINDOW]: 'window' };
+
+function btn(iconName, title, onClick, cls = '') {
+  return h('button.tile-btn', {
+    class: cls, title, 'aria-label': title,
+    on: { click: ev => { ev.stopPropagation(); onClick(ev); } },
+  }, icon(iconName));
+}
+
+function initials(name) {
+  return (name || '?').trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+}
+
+export class StreamTile {
+  /**
+   * @param {object} actions  callbacks da StreamArea
+   */
+  constructor(streamIdentifier, actions) {
+    this.streamIdentifier = streamIdentifier;
+    this.actions = actions;
+    this.volume = 1;
+    this.muted = false;
+    this.video = h('video.tile-video', { autoplay: true, playsInline: true });
+    this.overlay = h('div.tile-overlay');
+    this.el = h('div.video-stream', { dataset: { stream: streamIdentifier } }, this.video, this.overlay);
+    this.el.addEventListener('dblclick', () => this.toggleFullscreen());
+    this._srcObject = null;
+  }
+
+  setRect({ x, y, w, h: height }, focused = false) {
+    Object.assign(this.el.style, { transform: `translate(${x}px, ${y}px)`, width: `${w}px`, height: `${height}px` });
+    this.el.classList.toggle('focused', !!focused);
+    this.el.classList.toggle('small', height < 160);
+  }
+
+  toggleFullscreen() {
+    if (document.fullscreenElement === this.el) document.exitFullscreen();
+    else this.el.requestFullscreen?.().catch(() => {});
+  }
+
+  #attach(mediaStream, { muted }) {
+    if (this._srcObject !== mediaStream) {
+      this._srcObject = mediaStream;
+      this.video.srcObject = mediaStream;
+      if (mediaStream) this.video.play().catch(() => {});
+    }
+    this.video.muted = muted || this.muted;
+    this.video.volume = this.volume;
+    this.video.hidden = !mediaStream;
+  }
+
+  /**
+   * @param {object} m
+   * @param {'own'|'remote'} m.kind
+   * @param {object} m.info        stream público (handler.streams)
+   * @param {object} [m.own]       OwnStream (ScreenshareManager)
+   * @param {object} [m.view]      InboundStream (ScreenshareManager)
+   * @param {string} m.ownerName
+   * @param {number} m.severity
+   * @param {boolean} m.isFocused
+   */
+  update(m) {
+    this.model = m;
+    const el = this.el;
+    el.classList.toggle('own', m.kind === 'own');
+    el.classList.toggle('paused', !!m.info?.paused);
+    if (m.kind === 'own') return this.#renderOwn(m);
+    return this.#renderRemote(m);
+  }
+
+  // ------------------------------------------------------------ próprio
+
+  #renderOwn(m) {
+    const { own } = m;
+    this.#attach(own.source.stream, { muted: true });
+    const pending = own.joinRequests.size;
+    const a = this.actions;
+    const id = own.streamIdentifier;
+    replaceChildren(this.overlay,
+      this.#topBar(m, h('span.badge.live', t('video.stream.live'))),
+      own.paused ? h('div.tile-center', h('div.paused-label', icon('pause'), t('video.stream.paused'))) : null,
+      h('div.tile-actions',
+        btn(own.paused ? 'play' : 'pause', t(own.paused ? 'video.action.resume' : 'video.action.pause'), () => a.togglePause(id)),
+        btn('swap', t('video.action.change_source'), () => a.changeSource(id)),
+        btn('settings', t('video.settings'), () => a.editStream(id)),
+        h('span.btn-badge-wrap',
+          btn('users', t('video.action.manage_viewers'), () => a.manageViewers(id), pending ? 'attention' : ''),
+          pending ? h('span.btn-badge', String(pending)) : null),
+        btn('chart', t('video.action.stats'), () => a.showStats(id)),
+        h('span.spacer'),
+        btn(m.isFocused ? 'grid' : 'focus', t(m.isFocused ? 'video.action.unfocus' : 'video.action.focus'), () => a.toggleFocus(id)),
+        btn(document.fullscreenElement === this.el ? 'fullscreenExit' : 'fullscreen', t('video.action.fullscreen.open'), () => this.toggleFullscreen()),
+        btn('stop', t('video.action.stop_stream'), () => a.stopStream(id), 'danger'),
+      ),
+    );
+  }
+
+  // ------------------------------------------------------------ remoto
+
+  #renderRemote(m) {
+    const { info, view } = m;
+    const a = this.actions;
+    const id = info.streamIdentifier;
+    const status = view?.status ?? null;
+
+    if (status === InboundStatus.PLAYING || status === InboundStatus.RECONNECTING) {
+      this.#attach(view.session?.mediaStream ?? null, { muted: false });
+      replaceChildren(this.overlay,
+        this.#topBar(m),
+        info.paused ? h('div.tile-center', h('div.paused-label', icon('pause'), t('video.stream.paused'))) : null,
+        status === InboundStatus.RECONNECTING
+          ? h('div.tile-center', h('div.status-pill', h('span.spinner'), t('video.join.status.reconnecting'))) : null,
+        h('div.tile-actions',
+          this.#volumeControl(),
+          btn('chart', t('video.action.stats'), () => a.showStats(id)),
+          h('span.spacer'),
+          btn('eyeOff', t('video.stream.hide_stream'), () => a.hideStream(id)),
+          btn(m.isFocused ? 'grid' : 'focus', t(m.isFocused ? 'video.action.unfocus' : 'video.action.focus'), () => a.toggleFocus(id)),
+          btn('fullscreen', t('video.action.fullscreen.open'), () => this.toggleFullscreen()),
+          btn('leave', t('video.action.leave'), () => a.leaveStream(id), 'danger'),
+        ),
+      );
+      return;
+    }
+
+    this.#attach(null, { muted: true });
+    const thumb = info.thumbnail;
+    const card = h('div.stream-preview',
+      thumb ? h('div.stream-preview__thumb', { style: { backgroundImage: `url("${thumb}")` } }) : null,
+      h('div.stream-preview__user-card',
+        h('div.avatar', initials(m.ownerName)),
+        h('div.stream-preview__name', info.name),
+        h('div.stream-preview__meta',
+          icon(TYPE_ICON[info.type] ?? 'stream'), m.ownerName,
+          h('span.dot-sep', '•'), icon(ACCESS_ICON[info.access] ?? 'globe'),
+          h('span.dot-sep', '•'), icon('users'), String(info.viewerCount ?? 0)),
+        this.#previewStatus(view, id)),
+    );
+    replaceChildren(this.overlay, card,
+      h('div.tile-actions.always',
+        h('span.spacer'),
+        btn('eyeOff', t('video.stream.hide_stream'), () => a.hideStream(id))));
+  }
+
+  #previewStatus(view, id) {
+    const a = this.actions;
+    if (!view) {
+      return h('button.btn.primary.stream-preview__join', { on: { click: () => a.joinStream(id) } },
+        icon('play'), t('video.action.join'));
+    }
+    if (view.status === InboundStatus.ERROR) {
+      return h('div.stream-preview__error',
+        h('div.stream-preview__error__text', icon('warning'), t(view.error.key, view.error.params)),
+        h('div.row',
+          h('button.btn', { on: { click: () => a.joinStream(id) } }, t('video.action.retry')),
+          h('button.btn.ghost', { on: { click: () => a.dismiss(id) } }, t('video.action.dismiss'))));
+    }
+    const key = view.status === InboundStatus.WAITING ? 'video.join.status.waiting_for_answer' : 'video.join.status.connecting';
+    return h('div.stream-preview__status',
+      h('div.status-pill', h('span.spinner'), t(key)),
+      h('button.btn.ghost', { on: { click: () => a.leaveStream(id) } }, t('video.action.join.abort')));
+  }
+
+  #topBar(m, ...prefix) {
+    const { info } = m;
+    const sev = m.severity;
+    return h('div.tile-top',
+      ...prefix,
+      h('span.tile-title', icon(TYPE_ICON[info?.type] ?? 'stream'), h('span.ellipsis', info?.name ?? '')),
+      m.kind === 'remote' ? h('span.tile-owner', m.ownerName) : null,
+      h('span.spacer'),
+      sev ? h('span.issue-indicator', {
+        class: sev >= Severity.MAJOR ? 'major' : 'minor',
+        title: t('video.action.stats'),
+        on: { click: ev => { ev.stopPropagation(); this.actions.showStats(info.streamIdentifier); } },
+      }, icon(sev >= Severity.MAJOR ? 'warning' : 'info')) : null,
+      h('span.viewer-count', { title: t('video.viewers') }, icon('users'), String(info?.viewerCount ?? 0)),
+    );
+  }
+
+  #volumeControl() {
+    const slider = h('input.volume-slider', {
+      type: 'range', min: '0', max: '1', step: '0.05', value: String(this.muted ? 0 : this.volume),
+      on: {
+        input: ev => {
+          this.volume = Number(ev.target.value);
+          this.muted = this.volume === 0;
+          this.video.volume = this.volume;
+          this.video.muted = this.muted;
+        },
+        click: ev => ev.stopPropagation(),
+      },
+    });
+    return h('span.volume',
+      btn(this.muted ? 'mute' : 'volume', t('video.action.volume'), () => {
+        this.muted = !this.muted;
+        this.video.muted = this.muted;
+        this.update(this.model);
+      }),
+      slider);
+  }
+
+  destroy() {
+    this.video.srcObject = null;
+    this.el.remove();
+  }
+}

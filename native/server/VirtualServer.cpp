@@ -1,0 +1,511 @@
+#include "VirtualServer.h"
+
+#include <QDateTime>
+#include <QJsonDocument>
+#include <QRegularExpression>
+
+#include <algorithm>
+#include <cmath>
+
+namespace openspeak {
+
+namespace {
+
+[[noreturn]] void fail(const QString &code, const QString &message = {}) { throw CommandError(code, message); }
+
+QString cleanString(const QJsonValue &v, int maxLength)
+{
+    if (!v.isString())
+        return {};
+    static const QRegularExpression control(QStringLiteral("[\\x00-\\x1f]"));
+    return v.toString().remove(control).trimmed().left(maxLength);
+}
+
+int clampInt(const QJsonValue &v, int min, int max, int fallback)
+{
+    if (!v.isDouble())
+        return fallback;
+    const double d = v.toDouble();
+    if (!std::isfinite(d))
+        return fallback;
+    return std::clamp(int(std::lround(d)), min, max);
+}
+
+bool isOneOf(int v, std::initializer_list<int> values) { return std::find(values.begin(), values.end(), v) != values.end(); }
+
+qint64 nowMs() { return QDateTime::currentMSecsSinceEpoch(); }
+
+} // namespace
+
+VirtualServer::VirtualServer(SendFn send, QString name, QJsonArray iceServers)
+    : m_send(std::move(send)), m_name(std::move(name)), m_iceServers(std::move(iceServers))
+{
+    const struct { const char *name; const char *description; } defaults[] = {
+        {"Lobby", "Canal padrão"},
+        {"Jogos", "Partidas e transmissões de gameplay"},
+        {"Trabalho", "Reuniões e compartilhamento de tela"},
+        {"AFK", "Ausente"},
+    };
+    int cid = 1;
+    for (const auto &d : defaults) {
+        m_channels[cid] = Channel{cid, cid, QString::fromUtf8(d.name), QString::fromUtf8(d.description)};
+        ++cid;
+    }
+}
+
+const QHash<QString, VirtualServer::Handler> &VirtualServer::handlers()
+{
+    static const QHash<QString, Handler> map = {
+        {QStringLiteral("login"), &VirtualServer::cmdLogin},
+        {QStringLiteral("clientmove"), &VirtualServer::cmdClientMove},
+        {QStringLiteral("clientupdate"), &VirtualServer::cmdClientUpdate},
+        {QStringLiteral("setupstream"), &VirtualServer::cmdSetupStream},
+        {QStringLiteral("updatestream"), &VirtualServer::cmdUpdateStream},
+        {QStringLiteral("stopstream"), &VirtualServer::cmdStopStream},
+        {QStringLiteral("streamthumbnail"), &VirtualServer::cmdStreamThumbnail},
+        {QStringLiteral("requeststreaminfo"), &VirtualServer::cmdRequestStreamInfo},
+        {QStringLiteral("joinstreamrequest"), &VirtualServer::cmdJoinStreamRequest},
+        {QStringLiteral("respondjoinstreamrequest"), &VirtualServer::cmdRespondJoinStreamRequest},
+        {QStringLiteral("removeclientfromstream"), &VirtualServer::cmdRemoveClientFromStream},
+        {QStringLiteral("streamunban"), &VirtualServer::cmdStreamUnban},
+        {QStringLiteral("streamsignaling"), &VirtualServer::cmdStreamSignaling},
+    };
+    return map;
+}
+
+// ------------------------------------------------------------------ conexão
+
+int VirtualServer::connect()
+{
+    const int clid = m_nextClid++;
+    m_clients[clid] = Client{clid};
+    return clid;
+}
+
+void VirtualServer::disconnect(int clid)
+{
+    auto it = m_clients.find(clid);
+    if (it == m_clients.end())
+        return;
+    const Client client = it->second;
+    if (client.loggedIn)
+        detachFromStreams(client, LeaveReason::Left);
+    m_clients.erase(clid);
+    if (client.loggedIn)
+        broadcast(QStringLiteral("notifyclientleftview"), {{"clid", clid}});
+}
+
+QJsonObject VirtualServer::handle(int clid, const QString &cmd, const QJsonObject &args)
+{
+    auto it = m_clients.find(clid);
+    if (it == m_clients.end())
+        fail(rc::ClientNotFound);
+    if (cmd != QLatin1String("login") && !it->second.loggedIn)
+        fail(rc::NotLoggedIn);
+    const auto handler = handlers().value(cmd, nullptr);
+    if (!handler)
+        fail(rc::UnknownCommand, QStringLiteral("comando desconhecido: %1").arg(cmd));
+    return (this->*handler)(it->second, args);
+}
+
+// ----------------------------------------------------------------- comandos
+
+QJsonObject VirtualServer::cmdLogin(Client &client, const QJsonObject &args)
+{
+    if (client.loggedIn)
+        fail(rc::InvalidArgs, QStringLiteral("já autenticado"));
+    const QString nickname = cleanString(args.value("nickname"), 32);
+    const QString uid = cleanString(args.value("uid"), 64);
+    if (nickname.isEmpty() || uid.isEmpty())
+        fail(rc::InvalidArgs, QStringLiteral("nickname e uid são obrigatórios"));
+    client.nickname = nickname;
+    client.uid = uid;
+    client.cid = m_defaultChannel;
+    client.loggedIn = true;
+    broadcast(QStringLiteral("notifycliententerview"), {{"client", publicClient(client)}}, client.clid);
+
+    QJsonArray channels, clients, streams;
+    for (const auto &[cid, ch] : m_channels)
+        channels.append(QJsonObject{{"cid", ch.cid}, {"order", ch.order}, {"name", ch.name}, {"description", ch.description}});
+    for (const auto &[id, c] : m_clients)
+        if (c.loggedIn)
+            clients.append(publicClient(c));
+    for (const auto &[id, s] : m_streams)
+        streams.append(publicStream(s));
+    return {
+        {"clid", client.clid},
+        {"server", QJsonObject{{"name", m_name}, {"capabilityExtensions", QJsonArray{CapStreamP2P}}}},
+        {"iceServers", m_iceServers},
+        {"channels", channels},
+        {"clients", clients},
+        {"streams", streams},
+    };
+}
+
+QJsonObject VirtualServer::cmdClientMove(Client &client, const QJsonObject &args)
+{
+    const int cid = args.value("cid").toInt();
+    if (!m_channels.count(cid))
+        fail(rc::ChannelNotFound);
+    if (client.cid == cid)
+        return {};
+    // Streams pertencem ao canal: sair encerra os próprios e a participação nos demais.
+    detachFromStreams(client, LeaveReason::Left);
+    client.cid = cid;
+    broadcast(QStringLiteral("notifyclientmoved"), {{"clid", client.clid}, {"cid", cid}});
+    return {};
+}
+
+QJsonObject VirtualServer::cmdClientUpdate(Client &client, const QJsonObject &args)
+{
+    if (args.contains("nickname")) {
+        const QString nickname = cleanString(args.value("nickname"), 32);
+        if (nickname.isEmpty())
+            fail(rc::InvalidArgs);
+        client.nickname = nickname;
+    }
+    broadcast(QStringLiteral("notifyclientupdated"), {{"client", publicClient(client)}});
+    return {};
+}
+
+QJsonObject VirtualServer::cmdSetupStream(Client &client, const QJsonObject &args)
+{
+    const int mode = args.contains("mode") ? args.value("mode").toInt() : int(StreamMode::P2P);
+    if (mode != int(StreamMode::P2P))
+        fail(rc::ModeNotSupported, QStringLiteral("o servidor só suporta STREAM_P2P"));
+    const auto owned = std::count_if(m_streams.begin(), m_streams.end(),
+                                     [&](const auto &p) { return p.second.ownerClid == client.clid; });
+    if (owned >= MaxStreamsPerClient)
+        fail(rc::StreamLimit);
+
+    Stream s;
+    s.id = QStringLiteral("s%1").arg(m_nextStreamId++);
+    s.ownerClid = client.clid;
+    s.cid = client.cid;
+    s.mode = mode;
+    s.created = nowMs();
+    s.name = QStringLiteral("Stream de %1").arg(client.nickname);
+    applyConfig(s, args);
+    const QString id = s.id;
+    m_streams[id] = std::move(s);
+    broadcast(QStringLiteral("notifystreamstarted"), {{"stream", publicStream(m_streams[id])}});
+    return {{"streamIdentifier", id}};
+}
+
+QJsonObject VirtualServer::cmdUpdateStream(Client &client, const QJsonObject &args)
+{
+    Stream &s = ownStream(client, args.value("streamIdentifier"));
+    const int accessBefore = s.access;
+    applyConfig(s, args);
+    if (args.contains("paused"))
+        s.paused = args.value("paused").toBool();
+    if (s.access != int(StreamAccess::Public))
+        s.thumbnail.clear();
+    broadcast(QStringLiteral("notifystreamupdated"),
+              {{"stream", publicStream(s)}, {"accessChanged", accessBefore != s.access}});
+    return {};
+}
+
+QJsonObject VirtualServer::cmdStopStream(Client &client, const QJsonObject &args)
+{
+    const Stream &s = ownStream(client, args.value("streamIdentifier"));
+    stopStream(s.id, LeaveReason::StreamStopped);
+    return {};
+}
+
+QJsonObject VirtualServer::cmdStreamThumbnail(Client &client, const QJsonObject &args)
+{
+    Stream &s = ownStream(client, args.value("streamIdentifier"));
+    const QString thumb = args.value("thumbnail").toString();
+    if (!thumb.startsWith(QLatin1String("data:image/")))
+        fail(rc::InvalidArgs);
+    if (thumb.size() > MaxThumbnailBytes)
+        fail(rc::PayloadTooLarge);
+    // Miniaturas só são publicadas para streams públicos (igual ao TS).
+    if (s.access != int(StreamAccess::Public))
+        return {{"published", false}};
+    s.thumbnail = thumb;
+    broadcastToChannel(s.cid, QStringLiteral("notifystreamthumbnail"),
+                       {{"streamIdentifier", s.id}, {"thumbnail", thumb}}, client.clid);
+    return {{"published", true}};
+}
+
+QJsonObject VirtualServer::cmdRequestStreamInfo(Client &client, const QJsonObject &args)
+{
+    const Stream &s = stream(args.value("streamIdentifier"));
+    QJsonObject info = publicStream(s);
+    if (s.ownerClid == client.clid) {
+        QJsonArray viewers, pending, banned;
+        for (int v : s.viewers)
+            viewers.append(v);
+        for (const auto &[clid, req] : s.pending)
+            pending.append(clid);
+        for (const QString &uid : s.banned)
+            banned.append(uid);
+        info["viewers"] = viewers;
+        info["pending"] = pending;
+        info["banned"] = banned;
+    }
+    notify(client.clid, QStringLiteral("notifystreaminfo"), {{"stream", info}});
+    return {{"stream", info}};
+}
+
+QJsonObject VirtualServer::cmdJoinStreamRequest(Client &client, const QJsonObject &args)
+{
+    Stream &s = stream(args.value("streamIdentifier"));
+    if (s.ownerClid == client.clid)
+        fail(rc::InvalidArgs, QStringLiteral("não é possível assistir ao próprio stream"));
+    if (s.cid != client.cid)
+        fail(rc::NotInChannel);
+    if (s.banned.contains(client.uid))
+        fail(rc::Banned);
+    if (s.viewers.contains(client.clid))
+        fail(rc::AlreadyJoined);
+    if (s.viewerLimit > 0 && s.viewers.size() >= s.viewerLimit)
+        fail(rc::ViewerLimit);
+    QJsonArray codecs;
+    for (const QJsonValue &c : args.value("codecs").toArray()) {
+        if (c.isString() && codecs.size() < 16)
+            codecs.append(c);
+    }
+    s.pending[client.clid] = PendingRequest{codecs, nowMs()};
+    notify(s.ownerClid, QStringLiteral("notifyjoinstreamrequest"),
+           {{"streamIdentifier", s.id}, {"clid", client.clid}, {"nickname", client.nickname},
+            {"uid", client.uid}, {"codecs", codecs}});
+    return {{"pending", true}};
+}
+
+QJsonObject VirtualServer::cmdRespondJoinStreamRequest(Client &client, const QJsonObject &args)
+{
+    Stream &s = ownStream(client, args.value("streamIdentifier"));
+    const int clid = args.value("clid").toInt();
+    auto req = s.pending.find(clid);
+    if (req == s.pending.end())
+        fail(rc::NoPendingRequest);
+    auto viewer = m_clients.find(clid);
+    if (viewer == m_clients.end() || viewer->second.cid != s.cid) {
+        s.pending.erase(req);
+        fail(rc::ClientNotFound);
+    }
+    if (args.value("accept").toBool()) {
+        if (s.viewerLimit > 0 && s.viewers.size() >= s.viewerLimit)
+            fail(rc::ViewerLimit);
+        const QJsonArray codecs = req->second.codecs;
+        s.pending.erase(req);
+        s.viewers.append(clid);
+        notify(clid, QStringLiteral("notifyrespondjoinstreamrequest"),
+               {{"streamIdentifier", s.id}, {"accepted", true}, {"ownerClid", s.ownerClid}});
+        notify(s.ownerClid, QStringLiteral("notifystreamclientjoined"),
+               {{"streamIdentifier", s.id}, {"clid", clid}, {"codecs", codecs}});
+        notifyAttendees(s);
+    } else {
+        s.pending.erase(req);
+        const bool doBan = args.value("ban").toBool();
+        if (doBan)
+            ban(s, viewer->second.uid);
+        notify(clid, QStringLiteral("notifyrespondjoinstreamrequest"),
+               {{"streamIdentifier", s.id}, {"accepted", false},
+                {"reason", int(doBan ? LeaveReason::Banned : LeaveReason::Denied)}});
+    }
+    return {};
+}
+
+QJsonObject VirtualServer::cmdRemoveClientFromStream(Client &client, const QJsonObject &args)
+{
+    Stream &s = stream(args.value("streamIdentifier"));
+    const int target = args.contains("clid") ? args.value("clid").toInt() : client.clid;
+    const bool isOwner = s.ownerClid == client.clid;
+    if (!isOwner && target != client.clid)
+        fail(rc::PermissionDenied);
+    int reason = isOwner && target != client.clid ? args.value("reason").toInt(int(LeaveReason::Kicked))
+                                                  : int(LeaveReason::Left);
+    if (!isOneOf(reason, {int(LeaveReason::Left), int(LeaveReason::Kicked), int(LeaveReason::Banned), int(LeaveReason::Failed)}))
+        reason = int(LeaveReason::Kicked);
+    if (reason == int(LeaveReason::Banned)) {
+        auto it = m_clients.find(target);
+        if (it != m_clients.end())
+            ban(s, it->second.uid);
+    }
+    removeViewer(s, target, LeaveReason(reason));
+    return {};
+}
+
+QJsonObject VirtualServer::cmdStreamUnban(Client &client, const QJsonObject &args)
+{
+    Stream &s = ownStream(client, args.value("streamIdentifier"));
+    const QString uid = cleanString(args.value("uid"), 64);
+    if (s.banned.remove(uid))
+        notify(client.clid, QStringLiteral("notifystreambanremoved"), {{"streamIdentifier", s.id}, {"uid", uid}});
+    return {};
+}
+
+QJsonObject VirtualServer::cmdStreamSignaling(Client &client, const QJsonObject &args)
+{
+    const Stream &s = stream(args.value("streamIdentifier"));
+    const int target = args.value("clid").toInt();
+    const QJsonObject payload = args.value("payload").toObject();
+    if (!args.value("payload").isObject() || !payload.value("type").isString())
+        fail(rc::InvalidArgs);
+    if (QJsonDocument(payload).toJson(QJsonDocument::Compact).size() > MaxSignalingBytes)
+        fail(rc::PayloadTooLarge);
+    // Só pares legítimos conversam: dono <-> espectador aceito.
+    const bool ownerToViewer = s.ownerClid == client.clid && s.viewers.contains(target);
+    const bool viewerToOwner = s.ownerClid == target && s.viewers.contains(client.clid);
+    if (!ownerToViewer && !viewerToOwner)
+        fail(rc::PermissionDenied);
+    notify(target, QStringLiteral("notifystreamsignaling"),
+           {{"streamIdentifier", s.id}, {"clid", client.clid}, {"payload", payload}});
+    return {};
+}
+
+// --------------------------------------------------------------- auxiliares
+
+void VirtualServer::applyConfig(Stream &s, const QJsonObject &args)
+{
+    if (args.contains("name")) {
+        const QString name = cleanString(args.value("name"), 64);
+        if (!name.isEmpty())
+            s.name = name;
+    }
+    if (args.contains("type")) {
+        const int t = args.value("type").toInt(-1);
+        if (t >= int(StreamType::None) && t <= int(StreamType::ExistingSession))
+            s.type = t;
+    }
+    if (args.contains("access")) {
+        const int a = args.value("access").toInt(-1);
+        if (isOneOf(a, {int(StreamAccess::Public), int(StreamAccess::ContactsOnly), int(StreamAccess::Private)}))
+            s.access = a;
+    }
+    if (args.contains("bitrate"))
+        s.bitrate = clampInt(args.value("bitrate"), 100'000, 50'000'000, s.bitrate);
+    if (args.contains("viewerLimit"))
+        s.viewerLimit = clampInt(args.value("viewerLimit"), 0, 1000, s.viewerLimit);
+    if (args.contains("audio"))
+        s.audio = args.value("audio").toBool();
+    if (args.value("quality").isObject()) {
+        const QJsonObject q = args.value("quality").toObject();
+        s.quality.width = clampInt(q.value("width"), -1, 7680, s.quality.width);
+        s.quality.height = clampInt(q.value("height"), -1, 4320, s.quality.height);
+        s.quality.fps = clampInt(q.value("fps"), 1, 144, s.quality.fps);
+    }
+}
+
+VirtualServer::Stream &VirtualServer::stream(const QJsonValue &id)
+{
+    auto it = m_streams.find(id.toString());
+    if (it == m_streams.end())
+        fail(rc::StreamNotFound);
+    return it->second;
+}
+
+VirtualServer::Stream &VirtualServer::ownStream(const Client &c, const QJsonValue &id)
+{
+    Stream &s = stream(id);
+    if (s.ownerClid != c.clid)
+        fail(rc::PermissionDenied);
+    return s;
+}
+
+void VirtualServer::ban(Stream &s, const QString &uid)
+{
+    if (uid.isEmpty() || s.banned.contains(uid))
+        return;
+    s.banned.insert(uid);
+    notify(s.ownerClid, QStringLiteral("notifystreambanadded"), {{"streamIdentifier", s.id}, {"uid", uid}});
+}
+
+void VirtualServer::removeViewer(Stream &s, int clid, LeaveReason reason)
+{
+    const bool wasViewer = s.viewers.removeAll(clid) > 0;
+    const bool wasPending = s.pending.erase(clid) > 0;
+    if (!wasViewer && !wasPending)
+        return;
+    const QJsonObject args{{"streamIdentifier", s.id}, {"clid", clid}, {"reason", int(reason)}, {"wasPending", wasPending}};
+    notify(s.ownerClid, QStringLiteral("notifystreamclientleft"), args);
+    if (clid != s.ownerClid && m_clients.count(clid))
+        notify(clid, QStringLiteral("notifystreamclientleft"), args);
+    if (wasViewer)
+        notifyAttendees(s);
+}
+
+void VirtualServer::stopStream(QString id, LeaveReason reason)
+{
+    m_streams.erase(id);
+    broadcast(QStringLiteral("notifystreamstopped"), {{"streamIdentifier", id}, {"reason", int(reason)}});
+}
+
+void VirtualServer::detachFromStreams(const Client &c, LeaveReason reason)
+{
+    QStringList owned;
+    for (auto &[id, s] : m_streams) {
+        if (s.ownerClid == c.clid)
+            owned.append(id);
+        else
+            removeViewer(s, c.clid, reason);
+    }
+    for (const QString &id : owned)
+        stopStream(id, LeaveReason::StreamStopped);
+}
+
+void VirtualServer::notifyAttendees(const Stream &s)
+{
+    QJsonArray viewers;
+    for (int v : s.viewers)
+        viewers.append(v);
+    const QJsonObject args{{"streamIdentifier", s.id}, {"viewers", viewers}};
+    notify(s.ownerClid, QStringLiteral("notifystreamattendees"), args);
+    for (int v : s.viewers)
+        notify(v, QStringLiteral("notifystreamattendees"), args);
+    // A contagem de espectadores é pública (aparece na árvore de canais).
+    broadcast(QStringLiteral("notifystreamupdated"), {{"stream", publicStream(s)}});
+}
+
+QJsonObject VirtualServer::publicClient(const Client &c) const
+{
+    return {{"clid", c.clid}, {"nickname", c.nickname}, {"uid", c.uid}, {"cid", c.cid},
+            {"inputMuted", false}, {"outputMuted", false}};
+}
+
+QJsonObject VirtualServer::publicStream(const Stream &s) const
+{
+    const bool isPublic = s.access == int(StreamAccess::Public);
+    return {
+        {"streamIdentifier", s.id},
+        {"ownerClid", s.ownerClid},
+        {"cid", s.cid},
+        {"name", s.name},
+        {"type", s.type},
+        {"access", s.access},
+        {"mode", s.mode},
+        {"bitrate", s.bitrate},
+        {"viewerLimit", s.viewerLimit},
+        {"audio", s.audio},
+        {"quality", QJsonObject{{"width", s.quality.width}, {"height", s.quality.height}, {"fps", s.quality.fps}}},
+        {"paused", s.paused},
+        {"created", double(s.created)},
+        {"viewerCount", int(s.viewers.size())},
+        {"thumbnail", isPublic && !s.thumbnail.isEmpty() ? QJsonValue(s.thumbnail) : QJsonValue(QJsonValue::Null)},
+    };
+}
+
+void VirtualServer::notify(int clid, const QString &cmd, const QJsonObject &args)
+{
+    m_send(clid, {{"type", "notify"}, {"cmd", cmd}, {"args", args}});
+}
+
+void VirtualServer::broadcast(const QString &cmd, const QJsonObject &args, int exceptClid)
+{
+    for (const auto &[id, c] : m_clients)
+        if (c.loggedIn && id != exceptClid)
+            notify(id, cmd, args);
+}
+
+void VirtualServer::broadcastToChannel(int cid, const QString &cmd, const QJsonObject &args, int exceptClid)
+{
+    for (const auto &[id, c] : m_clients)
+        if (c.loggedIn && c.cid == cid && id != exceptClid)
+            notify(id, cmd, args);
+}
+
+} // namespace openspeak

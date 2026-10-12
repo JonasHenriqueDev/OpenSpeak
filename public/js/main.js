@@ -1,0 +1,294 @@
+// Inicialização do cliente: tela de conexão, layout principal e ligações.
+
+import { h, replaceChildren } from './ui/dom.js';
+import { icon } from './ui/icons.js';
+import { t } from './ui/i18n.js';
+import { settings, contacts } from './ui/settings.js';
+import { ConnectionHandler } from './core/ConnectionHandler.js';
+import { ScreenshareManager } from './video/ScreenshareManager.js';
+import { StreamArea } from './ui/StreamArea.js';
+import { ChannelTree } from './ui/ChannelTree.js';
+import { SetupStreamDialog } from './ui/SetupStreamDialog.js';
+import { ViewersPanel } from './ui/ViewersPanel.js';
+import { StatsPanel } from './ui/StatsPanel.js';
+import { Toasts } from './ui/Toasts.js';
+
+const root = document.getElementById('app');
+const toasts = new Toasts();
+document.body.append(toasts.el);
+
+function errorText(err) {
+  const code = err?.returnCode ?? err?.message;
+  const key = `error.${code}`;
+  const translated = t(key);
+  return translated !== key ? translated : (err?.message || String(err));
+}
+
+function showError(err) {
+  console.error('[openspeak]', err);
+  toasts.show({ kind: 'error', text: errorText(err) });
+}
+
+function defaultServerUrl() {
+  const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${scheme}://${location.host}/ws`;
+}
+
+// ================================================================ login
+
+function renderLogin(message = '') {
+  const nick = h('input.input', { value: settings.get('nickname'), placeholder: 'Ex.: Jonas', maxLength: 32, required: true });
+  const server = h('input.input', { value: settings.get('serverUrl') || defaultServerUrl() });
+  const status = h('div.login-status', message);
+  const submit = h('button.btn.primary.wide', { type: 'submit' }, t('app.connect'));
+  const form = h('form.login-card', {
+    on: {
+      submit: async ev => {
+        ev.preventDefault();
+        const nickname = nick.value.trim();
+        if (!nickname) return;
+        settings.set('nickname', nickname);
+        settings.set('serverUrl', server.value.trim());
+        submit.disabled = true;
+        status.textContent = t('app.connecting');
+        try {
+          await startSession(server.value.trim(), nickname);
+        } catch (err) {
+          submit.disabled = false;
+          status.textContent = errorText(err);
+        }
+      },
+    },
+  },
+  h('div.login-logo', icon('logo', 'big'), h('h1', 'OpenSpeak')),
+  h('label.field', h('span.field-label', t('app.nickname')), nick),
+  h('label.field', h('span.field-label', t('app.server')), server),
+  submit,
+  status);
+  replaceChildren(root, h('div.login', form));
+  nick.focus();
+}
+
+// ============================================================== sessão
+
+async function startSession(url, nickname) {
+  const handler = new ConnectionHandler();
+  await handler.connect(url, { nickname, uid: settings.get('uid') });
+  const manager = new ScreenshareManager(handler, { contacts, settings });
+  new App(handler, manager).mount();
+}
+
+class App {
+  constructor(handler, manager) {
+    this.handler = handler;
+    this.manager = manager;
+    this.panel = null; // { kind, streamIdentifier, view }
+    this.popover = null;
+
+    this.tree = new ChannelTree({
+      handler, manager, contacts, onError: showError,
+      onStreamClick: id => this.#onTreeStream(id),
+    });
+    this.area = new StreamArea({
+      handler, manager, settings,
+      actions: {
+        startStream: () => this.openSetup(),
+        editStream: id => this.openSetup({ edit: manager.ownStreams.get(id) }),
+        changeSource: id => this.openSetup({ edit: manager.ownStreams.get(id), sourceOnly: true }),
+        manageViewers: id => this.openPanel('viewers', id),
+        showStats: id => this.openPanel('stats', id),
+        manageHidden: anchor => this.#hiddenPopover(anchor),
+        viewSettings: anchor => this.#viewSettingsPopover(anchor),
+        error: showError,
+      },
+    });
+    this.sidePanel = h('aside.side-panel');
+    this.statusBar = h('div.status-bar');
+  }
+
+  mount() {
+    const hd = this.handler;
+    replaceChildren(root,
+      h('div.app',
+        h('header.titlebar',
+          icon('logo'), h('span.brand', 'OpenSpeak'),
+          h('span.sep'),
+          h('span.server-name', icon('server'), hd.serverName),
+          h('span.spacer'),
+          this.statusBar,
+          h('button.btn.ghost.small', { title: t('app.settings'), on: { click: ev => this.#settingsPopover(ev.currentTarget) } }, icon('settings')),
+          h('button.btn.ghost.small', { on: { click: () => hd.disconnect() } }, icon('leave'), t('app.disconnect'))),
+        h('div.app-body',
+          h('div.sidebar', this.tree.el),
+          h('main.content', this.area.el),
+          this.sidePanel)));
+
+    hd.on('changed', () => this.render());
+    hd.on('streamupdated', () => this.area.render());
+    hd.on('disconnected', () => {
+      this.#closePopover();
+      renderLogin(t('app.disconnected'));
+    });
+    this.manager.on('changed', () => this.render());
+    this.manager.on('stats', id => {
+      this.area.refreshStats(id);
+      if (this.panel?.kind === 'stats' && this.panel.streamIdentifier === id) this.panel.view.refresh();
+    });
+    this.manager.on('joinrequest', (own, req) => this.#joinRequestToast(own, req));
+    this.manager.on('ownstreamstopped', own => {
+      if (this.panel?.streamIdentifier === own.streamIdentifier) this.closePanel();
+    });
+    window.addEventListener('beforeunload', () => hd.disconnect());
+    this.render();
+  }
+
+  render() {
+    this.tree.render();
+    this.area.render();
+    if (this.panel?.kind === 'viewers') this.panel.view.render();
+    const own = this.handler.ownClient;
+    const ch = own ? this.handler.channels.get(own.cid) : null;
+    replaceChildren(this.statusBar,
+      h('span.online-dot'), own?.nickname ?? '', ch ? h('span.muted', ` — ${ch.name}`) : null);
+  }
+
+  // ------------------------------------------------------------- ações
+
+  openSetup({ edit = null, sourceOnly = false } = {}) {
+    if (!this.manager.isSupported) {
+      showError(new Error(t('video.error.streaming_not_supported_on_os')));
+      return;
+    }
+    new SetupStreamDialog({
+      manager: this.manager, handler: this.handler, settings, edit, sourceOnly, onError: showError,
+    }).open();
+  }
+
+  openPanel(kind, streamIdentifier) {
+    if (!streamIdentifier) return;
+    if (this.panel?.kind === kind && this.panel.streamIdentifier === streamIdentifier) {
+      this.closePanel();
+      return;
+    }
+    const View = kind === 'viewers' ? ViewersPanel : StatsPanel;
+    const view = new View({ handler: this.handler, manager: this.manager, streamIdentifier, onError: showError });
+    this.panel = { kind, streamIdentifier, view };
+    const name = this.handler.streams.get(streamIdentifier)?.name ?? '';
+    replaceChildren(this.sidePanel,
+      h('header.panel-header',
+        h('div', h('h3', view.title), h('div.muted.ellipsis', name)),
+        h('span.spacer'),
+        h('button.icon-btn', { title: t('app.close'), on: { click: () => this.closePanel() } }, icon('close'))),
+      view.el);
+    this.sidePanel.classList.add('open');
+    view.render();
+  }
+
+  closePanel() {
+    this.panel = null;
+    this.sidePanel.classList.remove('open');
+    replaceChildren(this.sidePanel);
+  }
+
+  #onTreeStream(streamIdentifier) {
+    if (this.manager.ownStreams.has(streamIdentifier)) return;
+    const hidden = settings.get('hiddenStreams');
+    if (hidden.includes(streamIdentifier)) settings.set('hiddenStreams', hidden.filter(id => id !== streamIdentifier));
+    if (!this.manager.inbound.has(streamIdentifier)) this.manager.joinStream(streamIdentifier).catch(showError);
+    this.area.focusId = streamIdentifier;
+    this.area.render();
+  }
+
+  #joinRequestToast(own, req) {
+    const key = `join:${own.streamIdentifier}:${req.clid}`;
+    const respond = opts => this.manager.respondJoinRequest(own.streamIdentifier, req.clid, opts).catch(err => {
+      showError(err.message === 'viewer_limit_reached' ? new Error(t('video.join.request.viewer_limit_reached')) : err);
+    });
+    toasts.show({
+      key, kind: 'request', icon: 'users', timeout: 30_000,
+      text: t('video.join.request.notification', { user: req.nickname }),
+      actions: [
+        { label: t('video.join.request.accept'), cls: 'primary', onClick: () => respond({ accept: true }) },
+        { label: t('video.join.request.deny'), onClick: () => respond({ accept: false }) },
+        { label: t('video.join.request.block'), cls: 'danger', title: t('video.join.request.block.tooltip'), onClick: () => respond({ accept: false, ban: true }) },
+      ],
+    });
+    // some quando o pedido é resolvido por outro caminho (painel, cancelamento)
+    const off = this.manager.on('changed', () => {
+      if (!own.joinRequests.has(req.clid)) {
+        toasts.dismiss(key);
+        off();
+      }
+    });
+  }
+
+  // ---------------------------------------------------------- popovers
+
+  #popover(anchor, content) {
+    this.#closePopover();
+    const rect = anchor.getBoundingClientRect();
+    const pop = h('div.popover', content);
+    document.body.append(pop);
+    const top = rect.top - pop.offsetHeight - 6 > 8 ? rect.top - pop.offsetHeight - 6 : rect.bottom + 6;
+    Object.assign(pop.style, {
+      left: `${Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, rect.right - pop.offsetWidth))}px`,
+      top: `${top}px`,
+    });
+    const onDown = ev => { if (!pop.contains(ev.target) && ev.target !== anchor) this.#closePopover(); };
+    setTimeout(() => document.addEventListener('mousedown', onDown));
+    this.popover = { el: pop, onDown };
+  }
+
+  #closePopover() {
+    if (!this.popover) return;
+    document.removeEventListener('mousedown', this.popover.onDown);
+    this.popover.el.remove();
+    this.popover = null;
+  }
+
+  #toggleRow(key, label) {
+    return h('label.toggle',
+      h('input', { type: 'checkbox', checked: settings.get(key), on: { change: ev => { settings.set(key, ev.target.checked); this.area.render(); } } }),
+      h('span.toggle-ui'), h('span', label));
+  }
+
+  #viewSettingsPopover(anchor) {
+    this.#popover(anchor, [
+      h('h4', t('video.view_settings')),
+      this.#toggleRow('showOwnStreams', t('video.view_settings.show_own_streams')),
+      this.#toggleRow('showInactiveStreams', t('video.view_settings.show_inactive_streams')),
+    ]);
+  }
+
+  #hiddenPopover(anchor) {
+    const ids = settings.get('hiddenStreams').filter(id => this.handler.streams.has(id));
+    this.#popover(anchor, [
+      h('h4', t('video.stream.manage_hidden_streams')),
+      ids.map(id => {
+        const s = this.handler.streams.get(id);
+        return h('div.viewer-row', icon('eyeOff'), h('span.ellipsis', `${s.name} — ${this.handler.clientName(s.ownerClid)}`),
+          h('span.spacer'),
+          h('button.btn.ghost.small', {
+            on: { click: () => {
+              settings.set('hiddenStreams', settings.get('hiddenStreams').filter(x => x !== id));
+              this.#closePopover();
+              this.area.render();
+            } },
+          }, icon('eye'), t('video.stream.show_stream')));
+      }),
+    ]);
+  }
+
+  #settingsPopover(anchor) {
+    const codecs = ['auto', 'video/AV1', 'video/VP9', 'video/H264', 'video/VP8'];
+    this.#popover(anchor, [
+      h('h4', t('app.settings')),
+      h('label.field', h('span.field-label', t('app.codec')),
+        h('select.input', { on: { change: ev => settings.set('preferredCodec', ev.target.value) } },
+          codecs.map(c => h('option', { value: c, selected: settings.get('preferredCodec') === c },
+            c === 'auto' ? t('app.codec.auto') : c.replace('video/', ''))))),
+    ]);
+  }
+}
+
+renderLogin();

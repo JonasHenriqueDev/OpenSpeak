@@ -1,0 +1,16 @@
+{
+  "name": "openspeak-native",
+  "version-string": "0.1.0",
+  "dependencies": [
+    {
+      "name": "libdatachannel",
+      "default-features": false,
+      "features": ["srtp"]
+    },
+    {
+      "name": "ffmpeg",
+      "default-features": false,
+      "features": ["avcodec", "swscale", "swresample", "nvcodec", "amf", "qsv", "openh264", "dav1d", "opus"]
+    }
+  ]
+}

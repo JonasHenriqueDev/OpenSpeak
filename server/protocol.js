@@ -1,0 +1,38 @@
+// Constantes compartilhadas pelo servidor. O cliente tem um espelho em
+// public/js/core/protocol.js (mantenha os dois em sincronia).
+//
+// Os valores numéricos seguem os enums do cliente TeamSpeak 6
+// (ver docs/ANALISE_TEAMSPEAK_P2P.md §3).
+
+export const StreamAccess = Object.freeze({ NONE: 0, PUBLIC: 1, CONTACTS_ONLY: 2, PRIVATE: 3 });
+export const StreamMode = Object.freeze({ NONE: 0, P2P: 1, SFU: 2 });
+export const StreamType = Object.freeze({ NONE: 0, CAMERA: 1, SCREEN: 2, WINDOW: 3, EXISTING_SESSION: 4 });
+export const LeaveReason = Object.freeze({
+  NONE: 0, LEFT: 1, DENIED: 2, FAILED: 3, KICKED: 4, BANNED: 5, STREAM_STOPPED: 6, VIEWER_LIMIT: 7,
+});
+
+export const ReturnCode = Object.freeze({
+  OK: 'ok',
+  INVALID_ARGS: 'invalid_args',
+  NOT_LOGGED_IN: 'not_logged_in',
+  UNKNOWN_COMMAND: 'unknown_command',
+  STREAM_NOT_FOUND: 'stream_not_found',
+  CLIENT_NOT_FOUND: 'client_not_found',
+  CHANNEL_NOT_FOUND: 'channel_not_found',
+  PERMISSION_DENIED: 'permission_denied',
+  NOT_IN_CHANNEL: 'not_in_channel',
+  MODE_NOT_SUPPORTED: 'mode_not_supported',
+  STREAM_LIMIT: 'stream_limit',
+  VIEWER_LIMIT: 'viewer_limit',
+  BANNED: 'banned',
+  ALREADY_JOINED: 'already_joined',
+  NO_PENDING_REQUEST: 'no_pending_request',
+  PAYLOAD_TOO_LARGE: 'payload_too_large',
+});
+
+// Extensões anunciadas em capabilityExtensions (igual ao TS: STREAM_P2P / STREAM_SFU).
+export const CAPABILITIES = Object.freeze(['STREAM_P2P']);
+
+export const MAX_STREAMS_PER_CLIENT = 3;
+export const MAX_THUMBNAIL_BYTES = 256 * 1024;
+export const MAX_SIGNALING_BYTES = 64 * 1024;

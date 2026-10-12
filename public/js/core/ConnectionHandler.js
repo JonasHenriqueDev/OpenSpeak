@@ -1,0 +1,113 @@
+// Espelho local do estado do servidor (canais, clientes, streams anunciados).
+// Equivalente ao "ServerConnectionHandler" do TS no lado da UI.
+
+import { EventEmitter } from './EventEmitter.js';
+import { ServerConnection } from './ServerConnection.js';
+import { Capability } from './protocol.js';
+
+export class ConnectionHandler extends EventEmitter {
+  constructor() {
+    super();
+    this.connection = new ServerConnection();
+    this.serverName = '';
+    this.capabilities = [];
+    this.iceServers = [];
+    this.ownClid = 0;
+    this.channels = new Map();
+    this.clients = new Map();
+    this.streams = new Map(); // streamIdentifier -> info pública
+    this.#bind();
+  }
+
+  get hasStreamingP2P() {
+    return this.capabilities.includes(Capability.STREAM_P2P);
+  }
+
+  get hasStreamingSFU() {
+    return this.capabilities.includes(Capability.STREAM_SFU);
+  }
+
+  get ownClient() {
+    return this.clients.get(this.ownClid) ?? null;
+  }
+
+  async connect(url, { nickname, uid }) {
+    await this.connection.connect(url);
+    const data = await this.connection.sendCommand('login', { nickname, uid });
+    this.ownClid = data.clid;
+    this.serverName = data.server.name;
+    this.capabilities = data.server.capabilityExtensions ?? [];
+    this.iceServers = data.iceServers ?? [];
+    this.channels = new Map(data.channels.map(c => [c.cid, c]));
+    this.clients = new Map(data.clients.map(c => [c.clid, c]));
+    this.streams = new Map(data.streams.map(s => [s.streamIdentifier, s]));
+    this.emit('connected');
+    this.emit('changed');
+  }
+
+  disconnect() {
+    this.connection.disconnect();
+  }
+
+  moveTo(cid) {
+    return this.connection.sendCommand('clientmove', { cid });
+  }
+
+  streamsInChannel(cid) {
+    return [...this.streams.values()].filter(s => s.cid === cid);
+  }
+
+  clientName(clid) {
+    return this.clients.get(clid)?.nickname ?? `#${clid}`;
+  }
+
+  #bind() {
+    const c = this.connection;
+    c.on('disconnected', info => {
+      this.emit('disconnected', info);
+    });
+    c.on('notifycliententerview', ({ client }) => {
+      this.clients.set(client.clid, client);
+      this.emit('changed');
+    });
+    c.on('notifyclientleftview', ({ clid }) => {
+      this.clients.delete(clid);
+      this.emit('changed');
+    });
+    c.on('notifyclientmoved', ({ clid, cid }) => {
+      const client = this.clients.get(clid);
+      if (client) client.cid = cid;
+      this.emit('changed');
+      if (clid === this.ownClid) this.emit('ownchannelchanged', cid);
+    });
+    c.on('notifyclientupdated', ({ client }) => {
+      this.clients.set(client.clid, client);
+      this.emit('changed');
+    });
+    c.on('notifystreamstarted', ({ stream }) => {
+      this.streams.set(stream.streamIdentifier, stream);
+      this.emit('streamadded', stream);
+      this.emit('changed');
+    });
+    c.on('notifystreamupdated', ({ stream }) => {
+      const prev = this.streams.get(stream.streamIdentifier);
+      // a miniatura chega por notificação própria; preserve-a
+      if (prev && stream.thumbnail == null && stream.access === prev.access) stream.thumbnail = prev.thumbnail;
+      this.streams.set(stream.streamIdentifier, stream);
+      this.emit('streamupdated', stream);
+      this.emit('changed');
+    });
+    c.on('notifystreamthumbnail', ({ streamIdentifier, thumbnail }) => {
+      const s = this.streams.get(streamIdentifier);
+      if (!s) return;
+      s.thumbnail = thumbnail;
+      this.emit('streamupdated', s);
+    });
+    c.on('notifystreamstopped', ({ streamIdentifier, reason }) => {
+      const s = this.streams.get(streamIdentifier);
+      this.streams.delete(streamIdentifier);
+      if (s) this.emit('streamremoved', s, reason);
+      this.emit('changed');
+    });
+  }
+}

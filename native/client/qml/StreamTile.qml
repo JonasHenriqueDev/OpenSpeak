@@ -1,0 +1,404 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtQuick.Window
+import QtMultimedia
+import "I18n.js" as I18n
+
+// Um quadro na área de streams (equivalente ao .video-stream do TS 6).
+Rectangle {
+    id: tile
+    property string streamId
+    property var data_
+    property bool focused: false
+
+    signal toggleFocus()
+    signal editRequested()
+    signal changeSourceRequested()
+    signal viewersRequested()
+    signal statsRequested()
+
+    readonly property bool own: data_.kind === "own"
+    readonly property string status: data_.status
+    readonly property bool playing: own || status === "playing" || status === "reconnecting" || status === "connecting"
+    readonly property bool small: height < 160
+    readonly property bool hovered: hover.hovered
+
+    color: "#05070b"
+    radius: Theme.radius
+    border.width: 1
+    border.color: focused ? Theme.accent : own ? Qt.rgba(0.94, 0.22, 0.29, 0.45) : Theme.border
+    clip: true
+
+    function typeIcon(t) { return t === 1 ? "camera" : t === 3 ? "window" : "screen" }
+    function accessIcon(a) { return a === 2 ? "contacts" : a === 3 ? "lock" : "globe" }
+    function initials(name) {
+        return (name || "?").trim().split(/\s+/).slice(0, 2).map(p => p[0]).join("").toUpperCase()
+    }
+
+    // ---------------------------------------------------------------- vídeo
+    property var attachedSinks: []
+    function attach(sink) {
+        if (own)
+            Screenshare.attachOwnPreview(streamId, sink)
+        else
+            Screenshare.attachVideo(streamId, sink)
+    }
+    function detach(sink) {
+        if (own)
+            Screenshare.detachOwnPreview(streamId, sink)
+        else
+            Screenshare.detachVideo(streamId, sink)
+    }
+    function refreshAttachment() {
+        if (playing)
+            attach(video.videoSink)
+        if (fullscreenWindow.visible)
+            attach(fullscreenVideo.videoSink)
+    }
+    onStatusChanged: refreshAttachment()
+    Component.onCompleted: refreshAttachment()
+    Component.onDestruction: {
+        detach(video.videoSink)
+        detach(fullscreenVideo.videoSink)
+    }
+
+    VideoOutput {
+        id: video
+        anchors.fill: parent
+        anchors.margins: 1
+        fillMode: VideoOutput.PreserveAspectFit
+        visible: tile.playing
+        opacity: tile.data_.paused ? 0.35 : 1
+    }
+
+    HoverHandler { id: hover }
+    TapHandler {
+        acceptedButtons: Qt.LeftButton
+        onDoubleTapped: tile.openFullscreen()
+    }
+
+    // ---------------------------------------------------------- tela cheia
+    function openFullscreen() {
+        if (!tile.playing)
+            return
+        fullscreenWindow.showFullScreen()
+        attach(fullscreenVideo.videoSink)
+    }
+    Window {
+        id: fullscreenWindow
+        color: "black"
+        title: tile.data_.name
+        onVisibleChanged: if (!visible) tile.detach(fullscreenVideo.videoSink)
+        VideoOutput {
+            id: fullscreenVideo
+            anchors.fill: parent
+            fillMode: VideoOutput.PreserveAspectFit
+        }
+        Shortcut { sequence: "Esc"; onActivated: fullscreenWindow.close() }
+        TapHandler { onDoubleTapped: fullscreenWindow.close() }
+    }
+
+    // ---------------------------------------------- cartão (não assistindo)
+    Item {
+        anchors.fill: parent
+        visible: !tile.playing
+
+        Image {
+            anchors.fill: parent
+            source: tile.data_.thumbnail || ""
+            fillMode: Image.PreserveAspectCrop
+            opacity: 0.32
+            visible: source != ""
+        }
+
+        ColumnLayout {
+            anchors.centerIn: parent
+            width: Math.min(parent.width - 24, 360)
+            spacing: tile.small ? 3 : 6
+
+            Rectangle {
+                Layout.alignment: Qt.AlignHCenter
+                width: tile.small ? 30 : 54
+                height: width
+                radius: width / 2
+                gradient: Gradient {
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: "#2160a8" }
+                    GradientStop { position: 1; color: Theme.accent }
+                }
+                border.width: 3
+                border.color: Qt.rgba(0.94, 0.22, 0.29, 0.8)
+                Label {
+                    anchors.centerIn: parent
+                    text: tile.initials(tile.data_.ownerName)
+                    font.pixelSize: tile.small ? 12 : 18
+                    font.weight: Font.Bold
+                    color: "white"
+                }
+            }
+            Label {
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                text: tile.data_.name
+                elide: Text.ElideRight
+                font.pixelSize: 15
+                font.weight: Font.DemiBold
+                color: Theme.text
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignHCenter
+                visible: !tile.small
+                spacing: 5
+                Icon { name: tile.typeIcon(tile.data_.type); size: 14; color: Theme.textDim }
+                Label { text: tile.data_.ownerName; color: Theme.textDim; font.pixelSize: 12 }
+                Label { text: "•"; color: Theme.textFaint }
+                Icon { name: tile.accessIcon(tile.data_.access); size: 14; color: Theme.textDim }
+                Label { text: "•"; color: Theme.textFaint }
+                Icon { name: "users"; size: 14; color: Theme.textDim }
+                Label { text: tile.data_.viewerCount; color: Theme.textDim; font.pixelSize: 12 }
+            }
+
+            // Assistir
+            Button {
+                Layout.alignment: Qt.AlignHCenter
+                visible: tile.status === ""
+                text: I18n.t("video.action.join")
+                highlighted: true
+                onClicked: Screenshare.joinStream(tile.streamId)
+            }
+            // Aguardando / conectando
+            ColumnLayout {
+                Layout.alignment: Qt.AlignHCenter
+                visible: tile.status === "waiting"
+                spacing: 6
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    BusyIndicator { implicitWidth: 22; implicitHeight: 22; running: parent.visible }
+                    Label { text: I18n.t("video.join.status.waiting_for_answer"); color: Theme.text }
+                }
+                Button {
+                    Layout.alignment: Qt.AlignHCenter
+                    flat: true
+                    text: I18n.t("video.action.join.abort")
+                    onClicked: Screenshare.leaveStream(tile.streamId)
+                }
+            }
+            // Erro
+            ColumnLayout {
+                Layout.alignment: Qt.AlignHCenter
+                visible: tile.status === "error"
+                spacing: 6
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    Icon { name: "warning"; size: 16; color: Theme.warn }
+                    Label {
+                        text: I18n.t(tile.data_.errorKey || "video.join.error.generic", { reason: "" })
+                        color: Theme.warn
+                        wrapMode: Text.WordWrap
+                    }
+                }
+                RowLayout {
+                    Layout.alignment: Qt.AlignHCenter
+                    Button { text: I18n.t("video.action.retry"); onClicked: Screenshare.joinStream(tile.streamId) }
+                    Button { flat: true; text: I18n.t("video.action.dismiss"); onClicked: Screenshare.dismiss(tile.streamId) }
+                }
+            }
+        }
+    }
+
+    // --------------------------------------------------- estados de vídeo
+    Rectangle {
+        anchors.centerIn: parent
+        visible: tile.playing && !tile.own && (tile.status !== "playing" || !tile.data_.hasVideo)
+        radius: 18
+        color: Qt.rgba(0, 0, 0, 0.6)
+        implicitWidth: connRow.implicitWidth + 28
+        implicitHeight: 36
+        RowLayout {
+            id: connRow
+            anchors.centerIn: parent
+            BusyIndicator { implicitWidth: 20; implicitHeight: 20; running: parent.visible }
+            Label {
+                text: tile.status === "reconnecting" ? I18n.t("video.join.status.reconnecting") : I18n.t("video.join.status.connecting")
+                color: Theme.text
+            }
+        }
+    }
+    Rectangle {
+        anchors.centerIn: parent
+        visible: tile.playing && tile.data_.paused
+        radius: 20
+        color: Qt.rgba(0, 0, 0, 0.6)
+        implicitWidth: pausedRow.implicitWidth + 32
+        implicitHeight: 40
+        RowLayout {
+            id: pausedRow
+            anchors.centerIn: parent
+            Icon { name: "pause" }
+            Label { text: I18n.t("video.stream.paused"); color: Theme.text; font.weight: Font.DemiBold }
+        }
+    }
+
+    // ------------------------------------------------------- barra superior
+    Rectangle {
+        id: topBar
+        anchors.top: parent.top
+        width: parent.width
+        height: tile.small ? 28 : 38
+        visible: tile.playing
+        opacity: tile.hovered || tile.data_.severity > 0 ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+        gradient: Gradient {
+            GradientStop { position: 0; color: Qt.rgba(0, 0, 0, 0.7) }
+            GradientStop { position: 1; color: "transparent" }
+        }
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            spacing: 8
+            Rectangle {
+                visible: tile.own
+                radius: 3
+                color: Theme.live
+                implicitWidth: liveText.implicitWidth + 12
+                implicitHeight: 18
+                Label { id: liveText; anchors.centerIn: parent; text: I18n.t("video.stream.live"); color: "white"; font.pixelSize: 10; font.weight: Font.Black }
+                SequentialAnimation on opacity {
+                    loops: Animation.Infinite
+                    NumberAnimation { to: 0.7; duration: 1000 }
+                    NumberAnimation { to: 1; duration: 1000 }
+                }
+            }
+            Icon { name: tile.typeIcon(tile.data_.type); size: 15; color: Theme.textDim }
+            Label {
+                Layout.fillWidth: true
+                text: tile.data_.name + (tile.own ? "" : "  ·  " + tile.data_.ownerName)
+                elide: Text.ElideRight
+                color: Theme.text
+                font.weight: Font.DemiBold
+            }
+            ToolButton {
+                padding: 3
+                visible: tile.data_.severity > 0
+                implicitWidth: 26
+                implicitHeight: 26
+                contentItem: Item {}
+        Icon { anchors.centerIn: parent; name: tile.data_.severity >= 2 ? "warning" : "info"; color: Theme.severityColor(tile.data_.severity) }
+                onClicked: tile.statsRequested()
+            }
+            Icon { name: "users"; size: 15; color: Theme.text }
+            Label { text: tile.data_.viewerCount; color: Theme.text }
+        }
+    }
+
+    // ------------------------------------------------------- barra de ações
+    component TileButton: ToolButton {
+        padding: 3
+        property string iconName
+        property string tip
+        property color iconColor: "white"
+        implicitWidth: tile.small ? 26 : 32
+        implicitHeight: implicitWidth
+        contentItem: Item {}
+        Icon { anchors.centerIn: parent; name: parent.iconName; color: parent.iconColor; size: tile.small ? 15 : 18 }
+        ToolTip.visible: hovered
+        ToolTip.text: tip
+    }
+
+    Rectangle {
+        anchors.bottom: parent.bottom
+        width: parent.width
+        height: tile.small ? 32 : 44
+        opacity: tile.hovered || !tile.playing ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+        gradient: Gradient {
+            GradientStop { position: 0; color: "transparent" }
+            GradientStop { position: 1; color: Qt.rgba(0, 0, 0, 0.75) }
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 6
+            anchors.rightMargin: 6
+            spacing: 2
+
+            // --- próprio
+            TileButton {
+                visible: tile.own
+                iconName: tile.data_.paused ? "play" : "pause"
+                tip: tile.data_.paused ? I18n.t("video.action.resume") : I18n.t("video.action.pause")
+                onClicked: Screenshare.setPaused(tile.streamId, !tile.data_.paused)
+            }
+            TileButton { visible: tile.own; iconName: "swap"; tip: I18n.t("video.action.change_source"); onClicked: tile.changeSourceRequested() }
+            TileButton { visible: tile.own; iconName: "settings"; tip: I18n.t("video.settings"); onClicked: tile.editRequested() }
+            TileButton {
+                visible: tile.own
+                iconName: "users"
+                iconColor: tile.data_.pendingRequests > 0 ? Theme.warn : "white"
+                tip: I18n.t("video.action.manage_viewers")
+                onClicked: tile.viewersRequested()
+                Rectangle {
+                    visible: tile.data_.pendingRequests > 0
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    width: 16; height: 16; radius: 8
+                    color: Theme.warn
+                    Label { anchors.centerIn: parent; text: tile.data_.pendingRequests; color: "black"; font.pixelSize: 10; font.weight: Font.Bold }
+                }
+            }
+
+            // --- remoto assistindo
+            TileButton {
+                id: volumeButton
+                visible: !tile.own && tile.playing
+                iconName: volumeSlider.value === 0 ? "mute" : "volume"
+                tip: I18n.t("video.action.volume")
+                onClicked: volumeSlider.value = volumeSlider.value === 0 ? 1 : 0
+            }
+            Slider {
+                id: volumeSlider
+                visible: !tile.own && tile.playing && !tile.small
+                Layout.preferredWidth: 90
+                from: 0; to: 1
+                value: tile.data_.volume
+                onMoved: Screenshare.setVolume(tile.streamId, value)
+                onValueChanged: if (!pressed) Screenshare.setVolume(tile.streamId, value)
+            }
+
+            TileButton { visible: tile.playing; iconName: "chart"; tip: I18n.t("video.action.stats"); onClicked: tile.statsRequested() }
+            Item { Layout.fillWidth: true }
+            TileButton {
+                visible: !tile.own
+                iconName: "eyeOff"
+                tip: I18n.t("video.stream.hide_stream")
+                onClicked: {
+                    Settings.hideStream(tile.streamId)
+                    Screenshare.leaveStream(tile.streamId)
+                }
+            }
+            TileButton {
+                visible: tile.playing
+                iconName: tile.focused ? "grid" : "focus"
+                tip: tile.focused ? I18n.t("video.action.unfocus") : I18n.t("video.action.focus")
+                onClicked: tile.toggleFocus()
+            }
+            TileButton { visible: tile.playing; iconName: "fullscreen"; tip: I18n.t("video.action.fullscreen.open"); onClicked: tile.openFullscreen() }
+            TileButton {
+                visible: tile.own
+                iconName: "stop"
+                iconColor: Theme.danger
+                tip: I18n.t("video.action.stop_stream")
+                onClicked: Screenshare.stopStream(tile.streamId)
+            }
+            TileButton {
+                visible: !tile.own && tile.playing
+                iconName: "leave"
+                iconColor: Theme.danger
+                tip: I18n.t("video.action.leave")
+                onClicked: Screenshare.leaveStream(tile.streamId)
+            }
+        }
+    }
+}

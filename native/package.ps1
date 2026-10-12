@@ -2,7 +2,7 @@
 #   .\package.ps1                # compila Release antes
 #   .\package.ps1 -SkipBuild
 param(
-    [string]$Version = '0.2.1',
+    [string]$Version = '0.2.2',
     [switch]$SkipBuild,
     [string]$QtDir = 'C:\Qt\6.11.3\msvc2022_64'
 )
@@ -48,4 +48,12 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
 # 5) Distribuição portátil com as mesmas dependências do instalador.
 Compress-Archive -Path $staging -DestinationPath (Join-Path $here "dist\OpenSpeak-$Version-portable.zip") -Force
+
+# 6) Um único exe: launcher nativo com o ZIP embutido e runtime estático.
+$cmake = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+& $cmake -S (Join-Path $here 'portable') -B (Join-Path $here 'build\portable') -G 'Visual Studio 18 2026' -A x64 "-DPAYLOAD_ZIP=$here/dist/OpenSpeak-$Version-portable.zip"
+if ($LASTEXITCODE) { throw 'Configuração do launcher portátil falhou' }
+& $cmake --build (Join-Path $here 'build\portable') --config Release --parallel
+if ($LASTEXITCODE) { throw 'Build do launcher portátil falhou' }
+Copy-Item (Join-Path $here 'build\portable\Release\OpenSpeakPortable.exe') (Join-Path $here "dist\OpenSpeak-Portable-$Version.exe") -Force
 exit 0

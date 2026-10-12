@@ -39,6 +39,7 @@ public:
 
     /// Lista as fontes disponíveis: telas, janelas e câmeras.
     static QList<SourceDescriptor> availableSources(StreamType type);
+    static bool isShareableWindow(const QCapturableWindow &window);
 
     bool open(const SourceDescriptor &desc, int targetFps);
     void close();

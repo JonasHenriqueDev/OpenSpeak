@@ -8,6 +8,9 @@
 #include <QPainter>
 #include <QScreen>
 #include <QtMath>
+#include <QtMultimedia/private/qcapturablewindow_p.h>
+#include <windows.h>
+#include <dwmapi.h>
 
 namespace openspeak {
 
@@ -20,6 +23,29 @@ VideoSource::VideoSource(QObject *parent) : QObject(parent)
 }
 
 VideoSource::~VideoSource() { close(); }
+
+bool VideoSource::isShareableWindow(const QCapturableWindow &window)
+{
+    const auto *handle = QCapturableWindowPrivate::handle(window);
+    const HWND hwnd = handle ? reinterpret_cast<HWND>(handle->id) : nullptr;
+    if (!hwnd || !IsWindow(hwnd) || !IsWindowVisible(hwnd) || GetAncestor(hwnd, GA_ROOT) != hwnd)
+        return false;
+    // Qt supplies "Window 0x..." for untitled shell surfaces. Use the actual
+    // native title and styles rather than filtering localized application names.
+    if (GetWindowTextLengthW(hwnd) <= 0) return false;
+    const auto style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    if (style & (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)) return false;
+    if (GetWindow(hwnd, GW_OWNER) && !(style & WS_EX_APPWINDOW)) return false;
+    DWORD cloaked = 0;
+    if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, &cloaked, sizeof(cloaked))) && cloaked)
+        return false;
+    wchar_t className[256]{};
+    GetClassNameW(hwnd, className, 256);
+    const QString cls = QString::fromWCharArray(className);
+    if (cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd" || cls == "Progman" || cls == "WorkerW")
+        return false;
+    return true;
+}
 
 QList<SourceDescriptor> VideoSource::availableSources(StreamType type)
 {
@@ -35,7 +61,7 @@ QList<SourceDescriptor> VideoSource::availableSources(StreamType type)
         const auto windows = QWindowCapture::capturableWindows();
         for (int i = 0; i < windows.size(); ++i) {
             const QString title = windows[i].description().trimmed();
-            if (!title.isEmpty())
+            if (!title.isEmpty() && isShareableWindow(windows[i]))
                 out.append({StreamType::Window, QString::number(i), title, false, windows[i], true});
         }
     } else if (type == StreamType::Camera) {

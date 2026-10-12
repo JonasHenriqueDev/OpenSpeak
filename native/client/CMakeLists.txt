@@ -1,6 +1,7 @@
 
 # ---------------------------------------------------------------- motor
 # Biblioteca separada da UI para os testes poderem usá-la.
+find_package(Qt6 REQUIRED COMPONENTS MultimediaPrivate)
 add_library(openspeak_engine STATIC
     core/ServerConnection.cpp core/ServerConnection.h
     core/ConnectionHandler.cpp core/ConnectionHandler.h
@@ -37,6 +38,7 @@ target_link_libraries(openspeak_engine PUBLIC
     openspeak_ffmpeg
     ole32 mmdevapi
 )
+target_link_libraries(openspeak_engine PRIVATE Qt6::MultimediaPrivate dwmapi)
 target_compile_definitions(openspeak_engine PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
 
 # ---------------------------------------------------------------- app

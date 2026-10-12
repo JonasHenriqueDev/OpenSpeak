@@ -10,6 +10,7 @@
 // O lado de saída (transmissor) é sempre quem oferta, então não há "glare".
 
 import { EventEmitter } from '../core/EventEmitter.js';
+import { tailnetCandidate, tailnetSdp } from '../core/tailnet.js';
 
 export const SessionState = Object.freeze({
   NEW: 'new',
@@ -56,13 +57,15 @@ export class StreamBase extends EventEmitter {
   }
 
   createPeerConnection() {
+    this.tailscaleOnly = globalThis.OpenSpeakConfig?.tailscaleOnly === true;
     const pc = new RTCPeerConnection({
-      iceServers: this.iceServers,
+      iceServers: this.tailscaleOnly ? [] : this.iceServers,
       bundlePolicy: 'max-bundle',
       rtcpMuxPolicy: 'require',
     });
     pc.addEventListener('icecandidate', ev => {
       if (pc !== this.pc) return;
+      if (this.tailscaleOnly && ev.candidate && !tailnetCandidate(ev.candidate.candidate)) return;
       this.sendToPeer({ type: 'ice', candidate: ev.candidate ? ev.candidate.toJSON() : null });
     });
     pc.addEventListener('connectionstatechange', () => {
@@ -125,7 +128,7 @@ export class StreamBase extends EventEmitter {
       const offer = await this.pc.createOffer({ iceRestart });
       offer.sdp = this.transformLocalSdp(offer.sdp, 'offer');
       await this.pc.setLocalDescription(offer);
-      this.sendToPeer({ type: 'offer', sdp: this.pc.localDescription.sdp, isReconnect });
+      this.sendToPeer({ type: 'offer', sdp: this.tailscaleOnly ? tailnetSdp(this.pc.localDescription.sdp) : this.pc.localDescription.sdp, isReconnect });
     } catch (err) {
       this._negotiating = false;
       console.error(`${this.tag} StartOfferAnswer: falha ao criar oferta`, err);
@@ -216,7 +219,7 @@ export class StreamBase extends EventEmitter {
     const answer = await this.pc.createAnswer();
     answer.sdp = this.transformLocalSdp(answer.sdp, 'answer');
     await this.pc.setLocalDescription(answer);
-    this.sendToPeer({ type: 'answer', sdp: this.pc.localDescription.sdp });
+    this.sendToPeer({ type: 'answer', sdp: this.tailscaleOnly ? tailnetSdp(this.pc.localDescription.sdp) : this.pc.localDescription.sdp });
   }
 
   async #onAnswer({ sdp }) {

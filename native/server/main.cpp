@@ -48,11 +48,14 @@ int main(int argc, char *argv[])
     QCommandLineOption nameOpt(QStringLiteral("name"), QStringLiteral("Nome do servidor."), QStringLiteral("nome"), QStringLiteral("OpenSpeak"));
     QCommandLineOption webOpt(QStringLiteral("web"), QStringLiteral("Pasta do cliente web a servir (opcional)."), QStringLiteral("pasta"));
     QCommandLineOption noWebOpt(QStringLiteral("no-web"), QStringLiteral("Não servir o cliente web."));
-    parser.addOptions({portOpt, nameOpt, webOpt, noWebOpt});
+    QCommandLineOption hostOpt(QStringLiteral("host"), QStringLiteral("Interface de escuta (padrão 0.0.0.0)."), QStringLiteral("ip"), QStringLiteral("0.0.0.0"));
+    parser.addOptions({portOpt, nameOpt, webOpt, noWebOpt, hostOpt});
     parser.process(app);
 
     ServerHost::Options options;
     options.port = quint16(parser.value(portOpt).toUInt());
+    options.address = QHostAddress(parser.value(hostOpt));
+    if (options.address.isNull()) { qCritical("Interface de escuta inválida"); return 1; }
     options.name = parser.value(nameOpt);
     options.iceServers = iceServersFromEnv();
     if (!parser.isSet(noWebOpt))

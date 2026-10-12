@@ -1,3 +1,21 @@
+# OpenSpeak nativo 0.2.2
+
+- Filtro de janelas baseado no HWND real: remove superfícies sem título, ocultas,
+  cloaked, tool windows, popups internos e barras de tarefas. Janelas reais de
+  Configurações continuam disponíveis.
+- Miniaturas DWM seguem imediatamente a geometria dos ancestrais e as animações,
+  acompanhando a rolagem com recorte no viewport. Teste verifica pixels no desktop.
+- Portátil em um único executável, com ZIP embutido, extração automática no Temp
+  e limpeza ao fechar. O launcher tem runtime estático e usa PowerShell do Windows
+  para extrair; o app interno é o mesmo do instalador. Configurações ficam no perfil.
+- `--local-test` no portátil inicia um servidor e dois perfis separados no mesmo PC.
+- `--server-only` permite hospedar a sinalização privada com o mesmo portátil.
+  O servidor aceita `--host` para escutar só no loopback atrás do Tailscale Serve.
+- Cliente web publicado como entrada no Vercel: a sessão abre na origem HTTPS da
+  tailnet, evitando acesso entre uma origem pública e a rede privada. Tailscale é
+  obrigatório. Sem TURN nesta versão. Apps nativos conectados a servidores ts.net
+  vinculam a mídia ao endereço do Tailscale, sem servidores STUN/TURN.
+
 # OpenSpeak nativo 0.2.1
 
 - Seleção de telas, janelas e câmeras em uma grade de cartões com miniaturas.

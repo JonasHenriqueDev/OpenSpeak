@@ -108,6 +108,10 @@ void RtcSession::createPeerConnection()
 
     rtc::Configuration config;
     config.iceServers = toIceServers(m_iceServers);
+    if (!m_bindAddress.isEmpty()) {
+        config.bindAddress = m_bindAddress.toStdString();
+        config.iceServers.clear(); // tailnet transport needs neither STUN nor TURN
+    }
     config.disableAutoNegotiation = true;
     config.forceMediaTransport = true;
     m_pc = std::make_shared<rtc::PeerConnection>(config);

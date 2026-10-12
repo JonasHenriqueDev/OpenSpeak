@@ -12,6 +12,12 @@ import { SetupStreamDialog } from './ui/SetupStreamDialog.js';
 import { ViewersPanel } from './ui/ViewersPanel.js';
 import { StatsPanel } from './ui/StatsPanel.js';
 import { Toasts } from './ui/Toasts.js';
+import { isTailnetServer, privateEntryUrl } from './core/tailnet.js';
+
+const deployment = window.OpenSpeakConfig || {};
+deployment.tailscaleOnly ||= location.hostname.endsWith('.ts.net');
+window.OpenSpeakConfig = deployment;
+const entryParams = new URLSearchParams(location.search);
 
 const root = document.getElementById('app');
 const toasts = new Toasts();
@@ -30,6 +36,7 @@ function showError(err) {
 }
 
 function defaultServerUrl() {
+  if (deployment.serverUrl) return deployment.serverUrl;
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
   return `${scheme}://${location.host}/ws`;
 }
@@ -37,7 +44,7 @@ function defaultServerUrl() {
 // ================================================================ login
 
 function renderLogin(message = '') {
-  const nick = h('input.input', { value: settings.get('nickname'), placeholder: 'Ex.: Jonas', maxLength: 32, required: true });
+  const nick = h('input.input', { value: entryParams.get('nickname')?.slice(0, 32) || settings.get('nickname'), placeholder: 'Ex.: Jonas', maxLength: 32, required: true });
   const server = h('input.input', { value: settings.get('serverUrl') || defaultServerUrl() });
   const status = h('div.login-status', message);
   const submit = h('button.btn.primary.wide', { type: 'submit' }, t('app.connect'));
@@ -47,8 +54,16 @@ function renderLogin(message = '') {
         ev.preventDefault();
         const nickname = nick.value.trim();
         if (!nickname) return;
+        if (deployment.tailscaleOnly && !isTailnetServer(server.value.trim())) {
+          status.textContent = 'Conecte o Tailscale e informe o endereço wss://…ts.net/ws da sua rede.';
+          return;
+        }
         settings.set('nickname', nickname);
         settings.set('serverUrl', server.value.trim());
+        if (deployment.tailscaleOnly && new URL(server.value.trim()).hostname !== location.hostname) {
+          location.assign(privateEntryUrl(server.value.trim(), nickname, entryParams.get('profile')));
+          return;
+        }
         submit.disabled = true;
         status.textContent = t('app.connecting');
         try {
@@ -61,12 +76,15 @@ function renderLogin(message = '') {
     },
   },
   h('div.login-logo', icon('logo', 'big'), h('h1', 'OpenSpeak')),
+  deployment.tailscaleOnly ? h('p.login-status', 'Tailscale obrigatório: conecte este PC à mesma tailnet do servidor. A sessão abre no endereço privado da rede.') : null,
   h('label.field', h('span.field-label', t('app.nickname')), nick),
   h('label.field', h('span.field-label', t('app.server')), server),
   submit,
   status);
   replaceChildren(root, h('div.login', form));
   nick.focus();
+  if (!message && entryParams.get('autoconnect') === '1' && location.hostname.endsWith('.ts.net') && nick.value.trim())
+    queueMicrotask(() => form.requestSubmit());
 }
 
 // ============================================================== sessão
@@ -74,6 +92,7 @@ function renderLogin(message = '') {
 async function startSession(url, nickname) {
   const handler = new ConnectionHandler();
   await handler.connect(url, { nickname, uid: settings.get('uid') });
+  if (deployment.tailscaleOnly) handler.iceServers = [];
   const manager = new ScreenshareManager(handler, { contacts, settings });
   new App(handler, manager).mount();
 }

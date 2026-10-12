@@ -2,6 +2,7 @@
 #include "Presets.h"
 
 #include <QLoggingCategory>
+#include <QUrl>
 
 #include <algorithm>
 
@@ -674,6 +675,8 @@ void ScreenshareManager::onClientJoined(const QJsonObject &a)
             m_conn->sendCommand(QStringLiteral("streamsignaling"), {{"streamIdentifier", id}, {"clid", clid}, {"payload", payload}});
         },
         [encoder] { encoder->requestKeyFrame(); }, this);
+    if (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")) && m_handler->directory())
+        session->setBindAddress(m_handler->directory()->self().address.toString());
     if (!session->remoteSupportsH264()) {
         qCWarning(lcShare) << "espectador" << clid << "não decodifica H.264";
         delete session;
@@ -760,6 +763,8 @@ void ScreenshareManager::onJoinResponse(const QJsonObject &a)
     auto *session = new SessionInbound(id, owner, m_handler->iceServers(), [this, id, owner](const QJsonObject &payload) {
         m_conn->sendCommand(QStringLiteral("streamsignaling"), {{"streamIdentifier", id}, {"clid", owner}, {"payload", payload}});
     }, this);
+    if (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")) && m_handler->directory())
+        session->setBindAddress(m_handler->directory()->self().address.toString());
     session->setVolume(it->volume);
     it->session = session;
     connect(session, &RtcSession::stateChanged, this, [this, id](RtcSession::State s) {

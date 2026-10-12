@@ -26,11 +26,14 @@ signals:
     void previewEnabledChanged();
     void availableChanged();
 private:
+    void watchGeometry();
     void sync();
     void release();
     QVariant m_source;
     bool m_enabled = false;
     HTHUMBNAIL m_thumbnail = nullptr;
     QTimer m_update;
+    QList<QMetaObject::Connection> m_geometryConnections;
+    QMetaObject::Connection m_animationConnection;
 };
 }

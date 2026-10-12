@@ -11,10 +11,38 @@ WindowThumbnail::WindowThumbnail(QQuickItem *parent) : QQuickItem(parent)
     m_update.setInterval(100);
     connect(&m_update, &QTimer::timeout, this, &WindowThumbnail::sync);
     connect(this, &QQuickItem::visibleChanged, this, &WindowThumbnail::sync);
-    connect(this, &QQuickItem::windowChanged, this, [this] { release(); sync(); });
+    connect(this, &QQuickItem::parentChanged, this, &WindowThumbnail::watchGeometry);
+    connect(this, &QQuickItem::windowChanged, this, [this] {
+        release();
+        disconnect(m_animationConnection);
+        if (window())
+            m_animationConnection = connect(window(), &QQuickWindow::afterAnimating, this, &WindowThumbnail::sync);
+        watchGeometry();
+    });
+    watchGeometry();
+    if (window())
+        m_animationConnection = connect(window(), &QQuickWindow::afterAnimating, this, &WindowThumbnail::sync);
 }
 
 WindowThumbnail::~WindowThumbnail() { release(); }
+
+void WindowThumbnail::watchGeometry()
+{
+    for (const auto &connection : std::as_const(m_geometryConnections)) disconnect(connection);
+    m_geometryConnections.clear();
+    // Flickable moves its contentItem, not the preview itself. Follow every
+    // ancestor immediately, and reconcile once animations finish before rendering.
+    for (auto *item = static_cast<QQuickItem *>(this); item; item = item->parentItem()) {
+        m_geometryConnections.append(connect(item, &QQuickItem::xChanged, this, &WindowThumbnail::sync));
+        m_geometryConnections.append(connect(item, &QQuickItem::yChanged, this, &WindowThumbnail::sync));
+        m_geometryConnections.append(connect(item, &QQuickItem::widthChanged, this, &WindowThumbnail::sync));
+        m_geometryConnections.append(connect(item, &QQuickItem::heightChanged, this, &WindowThumbnail::sync));
+        m_geometryConnections.append(connect(item, &QQuickItem::clipChanged, this, &WindowThumbnail::sync));
+        if (item != this)
+            m_geometryConnections.append(connect(item, &QQuickItem::parentChanged, this, &WindowThumbnail::watchGeometry));
+    }
+    sync();
+}
 
 void WindowThumbnail::release()
 {

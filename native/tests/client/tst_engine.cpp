@@ -12,6 +12,8 @@
 #include <QImage>
 #include <QSignalSpy>
 #include <QTest>
+#include <QWindow>
+#include <windows.h>
 
 using namespace openspeak;
 
@@ -30,6 +32,32 @@ class TestEngine : public QObject {
     }
 
 private slots:
+    void filtersShellAndBackgroundWindows()
+    {
+        QWindow normal;
+        normal.setTitle("OpenSpeak filter test");
+        normal.resize(320, 180);
+        normal.show();
+        ShowWindow(reinterpret_cast<HWND>(normal.winId()), SW_SHOWNORMAL);
+        const QCapturableWindow descriptor(&normal);
+        QTRY_VERIFY(VideoSource::isShareableWindow(descriptor));
+        normal.setTitle("");
+        SetWindowTextW(reinterpret_cast<HWND>(normal.winId()), L"");
+        QVERIFY(!VideoSource::isShareableWindow(descriptor));
+        normal.setTitle("Settings"); // real Settings windows remain shareable
+        QVERIFY(VideoSource::isShareableWindow(descriptor));
+        normal.hide();
+        QVERIFY(!VideoSource::isShareableWindow(descriptor));
+        normal.show();
+        const HWND hwnd = reinterpret_cast<HWND>(normal.winId());
+        const auto style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_TOOLWINDOW);
+        QVERIFY(!VideoSource::isShareableWindow(descriptor));
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_NOACTIVATE);
+        QVERIFY(!VideoSource::isShareableWindow(descriptor));
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style);
+        QVERIFY(VideoSource::isShareableWindow(descriptor));
+    }
     void vanishedSourceDoesNotSelectAnotherDevice()
     {
         VideoSource capture;
@@ -172,7 +200,7 @@ private slots:
 
     void encodeDecodeRoundTrip()
     {
-        // Codifica 10 quadros com o melhor encoder disponível e decodifica de volta.
+        // Alimenta o encoder durante sua inicialização e decodifica a saída.
         const QStringList encoders = VideoEncoder::availableEncoders();
         QVERIFY2(!encoders.isEmpty(), "nenhum encoder H.264");
         qInfo() << "encoders disponíveis:" << encoders;
@@ -183,17 +211,20 @@ private slots:
         VideoEncoderConfig cfg;
         cfg.maxWidth = 640;
         cfg.maxHeight = 360;
-        cfg.fps = 1000; // não descartar quadros no teste
+        cfg.fps = 60; // taxa suportada pelo hardware; entradas espaçadas abaixo
         cfg.bitrate = 1'000'000;
         enc.start(cfg, [&](const EncodedVideoFrame &f) {
             std::lock_guard lock(m);
             packets.append(f);
         });
         QImage img(1280, 720, QImage::Format_RGBX8888);
-        for (int i = 0; i < 10; ++i) {
-            img.fill(QColor::fromHsv(i * 30, 200, 200));
+        for (int i = 0; i < 150; ++i) {
+            img.fill(QColor::fromHsv((i * 30) % 360, 200, 200));
             enc.pushFrame(QVideoFrame(img));
             QTest::qWait(30);
+            std::lock_guard lock(m);
+            if (packets.size() >= 5)
+                break;
         }
         QTRY_VERIFY_WITH_TIMEOUT([&] { std::lock_guard lock(m); return packets.size() >= 5; }(), 5000);
         enc.stop();

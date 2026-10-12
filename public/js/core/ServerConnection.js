@@ -27,12 +27,19 @@ export class ServerConnection extends EventEmitter {
       const ws = new WebSocket(url);
       this.#ws = ws;
       let opened = false;
+      const connectTimer = setTimeout(() => {
+        if (opened) return;
+        reject(new Error('Não foi possível conectar. Confira o Tailscale, o servidor e a permissão de acesso à rede local do navegador.'));
+        ws.close();
+      }, COMMAND_TIMEOUT_MS);
       ws.addEventListener('open', () => {
+        clearTimeout(connectTimer);
         opened = true;
         resolve();
       });
       ws.addEventListener('message', ev => this.#onMessage(ev.data));
       ws.addEventListener('close', ev => {
+        clearTimeout(connectTimer);
         for (const { reject: rej, timer, cmd } of this.#pending.values()) {
           clearTimeout(timer);
           rej(new CommandError(cmd, 'disconnected', 'conexão encerrada'));

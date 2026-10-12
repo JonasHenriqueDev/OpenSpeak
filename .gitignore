@@ -7,3 +7,5 @@ native/vcpkg_installed/
 native/*.log
 .claude/
 *.log
+web-dist/
+.vercel/

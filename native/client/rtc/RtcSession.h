@@ -35,6 +35,7 @@ public:
     virtual void start() = 0;
     void onSignalingMessage(const QJsonObject &payload);
     void close();
+    void setBindAddress(const QString &address) { m_bindAddress = address; }
 
     QString streamId() const { return m_streamId; }
     int peerClid() const { return m_peerClid; }
@@ -81,6 +82,7 @@ private:
     QString m_streamId;
     int m_peerClid = 0;
     QJsonArray m_iceServers;
+    QString m_bindAddress;
     bool m_inbound = false;
     SignalFn m_send;
     State m_state = State::New;

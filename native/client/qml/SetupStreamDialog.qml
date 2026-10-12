@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtMultimedia
+import OpenSpeak.Native 1.0
 import "I18n.js" as I18n
 
 // "Iniciar transmissão" / "Ajustar transmissão" (setup-stream do TS 6):
@@ -16,7 +17,21 @@ Dialog {
     width: Math.min(1000, parent ? parent.width - 40 : 1000)
     height: Math.min(680, parent ? parent.height - 40 : 680)
     padding: 0
+    topPadding: 0
+    bottomPadding: 0
+    leftInset: 0
+    rightInset: 0
+    topInset: 0
+    bottomInset: 0
     title: editing ? I18n.t("video.setup.title.edit") : sourceOnly ? I18n.t("video.action.change_source") : I18n.t("video.setup.title")
+    header: Label {
+        text: dialog.title
+        color: Theme.text
+        font.pixelSize: 20
+        font.weight: Font.DemiBold
+        leftPadding: 24; rightPadding: 24; topPadding: 20; bottomPadding: 14
+        elide: Text.ElideRight
+    }
 
     readonly property var presets: [
         { id: "360", bitrate: 500000, width: 640, height: 360, fps: 30, audioBitrate: 64000 },
@@ -38,6 +53,7 @@ Dialog {
     property var sourceList: []
     property string selectedSource: ""
     property bool busy: false
+    property var thumbnails: ({})
 
     function patch(p) { cfg = Object.assign({}, cfg, p) }
     function presetId() {
@@ -51,13 +67,29 @@ Dialog {
         if (p) patch({ width: p.width, height: p.height, fps: p.fps, bitrate: p.bitrate, audioBitrate: p.audioBitrate })
     }
     function tabType(tab) { return tab === 1 ? 3 : tab === 2 ? 1 : 2 }
+    function switchTab(tab) {
+        if (sourceTab === tab) return
+        sourceTab = tab
+        refreshSources()
+    }
     function refreshSources() {
+        SourceThumbnails.stop()
+        Screenshare.closePreview()
+        selectedSource = ""
+        thumbnails = ({})
         sourceList = sourceTab === 3 ? [{ type: 2, id: "test", label: I18n.t("video.setup.test_pattern"), test: true }]
                                      : Screenshare.sources(tabType(sourceTab))
+        SourceThumbnails.start(sourceList)
     }
     function pick(src) {
-        selectedSource = src.id + ":" + src.type
-        Screenshare.openPreview(src, cfg.fps || 30)
+        SourceThumbnails.stop()
+        const images = Object.assign({}, thumbnails)
+        for (const source of sourceList) {
+            const key = source.id + ":" + source.type
+            if (images[key] === undefined) images[key] = ""
+        }
+        thumbnails = images
+        selectedSource = Screenshare.openPreview(src, cfg.fps || 30) ? src.id + ":" + src.type : ""
     }
 
     onOpened: {
@@ -74,11 +106,12 @@ Dialog {
         if (editing) {
             Screenshare.attachOwnPreview(editId, preview.videoSink)
         } else {
-            sourceTab = 0
+            sourceTab = DebugOpen === "setup-windows" ? 1 : DebugOpen === "setup-cameras" ? 2 : 0
             refreshSources()
         }
     }
     onClosed: {
+        SourceThumbnails.stop()
         if (editing)
             Screenshare.detachOwnPreview(editId, preview.videoSink)
         Screenshare.detachPreview(preview.videoSink)
@@ -86,10 +119,16 @@ Dialog {
             Screenshare.closePreview()
     }
     Connections {
+        target: SourceThumbnails
+        function onReady(key, image) {
+            dialog.thumbnails = Object.assign({}, dialog.thumbnails, { [key]: image })
+        }
+    }
+    Connections {
         target: Screenshare
         function onPreviewChanged() {
-            if (Screenshare.previewActive && !dialog.editing)
-                Screenshare.attachPreview(preview.videoSink)
+            if (!Screenshare.previewActive && !dialog.editing)
+                dialog.selectedSource = ""
         }
     }
 
@@ -109,16 +148,17 @@ Dialog {
                 Layout.fillWidth: true
                 visible: !dialog.editing
                 currentIndex: dialog.sourceTab
-                onCurrentIndexChanged: if (currentIndex !== dialog.sourceTab) { dialog.sourceTab = currentIndex; dialog.refreshSources() }
-                TabButton { text: I18n.t("video.sources.screens") }
-                TabButton { text: I18n.t("video.sources.apps") }
-                TabButton { text: I18n.t("video.sources.cameras") }
-                TabButton { text: I18n.t("video.sources.test"); visible: Settings.debug; width: visible ? implicitWidth : 0 }
+                TabButton { text: I18n.t("video.sources.screens"); onClicked: dialog.switchTab(0) }
+                TabButton { text: I18n.t("video.sources.apps"); onClicked: dialog.switchTab(1) }
+                TabButton { text: I18n.t("video.sources.cameras"); onClicked: dialog.switchTab(2) }
+                TabButton { text: I18n.t("video.sources.test"); visible: Settings.debug; width: visible ? implicitWidth : 0; onClicked: dialog.switchTab(3) }
             }
 
             Rectangle {
+                visible: dialog.editing
                 Layout.fillWidth: true
-                Layout.preferredHeight: width * 9 / 16
+                Layout.fillHeight: true
+                Layout.preferredHeight: Math.min(width * 9 / 16, dialog.availableHeight - 150)
                 radius: Theme.radius
                 color: "#05070b"
                 border.color: Theme.border
@@ -137,7 +177,7 @@ Dialog {
                 }
             }
             RowLayout {
-                visible: dialog.editing || Screenshare.previewActive
+                visible: dialog.editing
                 Icon { name: "check"; size: 15; color: Theme.online }
                 Label {
                     Layout.fillWidth: true
@@ -147,22 +187,107 @@ Dialog {
                 }
             }
 
-            // lista de fontes
-            ListView {
+            // Cards reserve the entire source pane, with a live preview on selection.
+            GridView {
+                id: sourceGrid
+                objectName: "sourceGrid"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 visible: !dialog.editing
                 clip: true
-                spacing: 4
+                cellWidth: width / Math.max(2, Math.floor(width / 230))
+                cellHeight: cellWidth * 9 / 16 + 48
                 model: dialog.sourceList
                 ScrollBar.vertical: ScrollBar {}
-                delegate: ItemDelegate {
+                delegate: Item {
+                    id: card
                     required property var modelData
-                    width: ListView.view.width
-                    highlighted: dialog.selectedSource === modelData.id + ":" + modelData.type
-                    text: modelData.label
-                    icon.width: 0
-                    onClicked: dialog.pick(modelData)
+                    readonly property string key: modelData.id + ":" + modelData.type
+                    readonly property bool selected: dialog.selectedSource === key
+                    width: sourceGrid.cellWidth
+                    height: sourceGrid.cellHeight
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 5
+                        radius: Theme.radius
+                        color: card.selected ? Theme.accentSoft : cardMouse.containsMouse ? Theme.panel3 : Theme.panel2
+                        border.width: card.selected ? 2 : 1
+                        border.color: card.selected ? Theme.accent : cardMouse.containsMouse ? Theme.borderStrong : Theme.border
+                        Rectangle {
+                            id: cardImage
+                            anchors.top: parent.top
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.margins: 6
+                            height: width * 9 / 16
+                            color: "#090c12"
+                            radius: 4
+                            Image {
+                                anchors.fill: parent
+                                source: dialog.thumbnails[card.key] || ""
+                                fillMode: Image.PreserveAspectFit
+                                visible: !card.selected && !nativePreview.available
+                            }
+                            VideoOutput {
+                                id: cardVideo
+                                anchors.fill: parent
+                                visible: card.selected && !nativePreview.available
+                                fillMode: VideoOutput.PreserveAspectFit
+                            }
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: 8
+                                visible: !card.selected && !nativePreview.available && !dialog.thumbnails[card.key]
+                                Icon {
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    name: dialog.sourceTab === 2 ? "camera" : dialog.sourceTab === 1 ? "window" : "screen"
+                                    size: 28; color: Theme.textFaint
+                                }
+                                Label {
+                                    text: dialog.thumbnails[card.key] === undefined ? "Carregando prévia…" : "Prévia indisponível"
+                                    font.pixelSize: 11; color: Theme.textFaint
+                                }
+                            }
+                            WindowThumbnail {
+                                id: nativePreview
+                                anchors.fill: parent
+                                sourceWindow: card.modelData.window || null
+                                visible: dialog.sourceTab === 1
+                                previewEnabled: dialog.opened && dialog.sourceTab === 1
+                            }
+                        }
+                        Label {
+                            anchors.top: cardImage.bottom
+                            anchors.bottom: parent.bottom
+                            anchors.left: parent.left; anchors.right: parent.right
+                            anchors.leftMargin: 10; anchors.rightMargin: card.selected ? 34 : 10
+                            verticalAlignment: Text.AlignVCenter
+                            text: card.modelData.label
+                            elide: Text.ElideRight
+                            font.pixelSize: 12
+                            color: card.selected ? Theme.text : Theme.textDim
+                        }
+                        Rectangle {
+                            visible: card.selected
+                            anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
+                            width: 22; height: 22; radius: 11; color: Theme.accent
+                            Icon { anchors.centerIn: parent; name: "check"; size: 14; color: "#09131c" }
+                        }
+                        MouseArea {
+                            id: cardMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: dialog.pick(card.modelData)
+                        }
+                        ToolTip.visible: cardMouse.containsMouse
+                        ToolTip.text: card.modelData.label
+                    }
+                    onSelectedChanged: {
+                        if (selected) Screenshare.attachPreview(cardVideo.videoSink)
+                        else Screenshare.detachPreview(cardVideo.videoSink)
+                    }
+                    Component.onDestruction: Screenshare.detachPreview(cardVideo.videoSink)
                 }
                 Label {
                     anchors.centerIn: parent
@@ -190,14 +315,18 @@ Dialog {
 
         // ------------------------------------------------- configurações
         ScrollView {
+            id: settingsScroll
+            objectName: "settingsPane"
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: !dialog.sourceOnly
             contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            ScrollBar.vertical.policy: ScrollBar.AsNeeded
             clip: true
 
             ColumnLayout {
-                width: parent.width
+                width: settingsScroll.availableWidth
                 spacing: 14
 
                 Item { height: 2 }
@@ -248,12 +377,15 @@ Dialog {
                     spacing: 6
                     Label { text: I18n.t("video.privacy"); color: Theme.textDim }
                     RowLayout {
+                        Layout.fillWidth: true
                         spacing: 4
                         Repeater {
                             model: [{ v: 1, k: "public" }, { v: 2, k: "contacts" }, { v: 3, k: "private" }]
                             delegate: Button {
                                 required property var modelData
                                 text: I18n.t("video.privacy." + modelData.k)
+                                Layout.fillWidth: true
+                                implicitWidth: 0
                                 checkable: true
                                 checked: dialog.cfg.access === modelData.v
                                 highlighted: checked
@@ -277,6 +409,7 @@ Dialog {
                     spacing: 6
                     Label { text: I18n.t("video.mode.title"); color: Theme.textDim }
                     RowLayout {
+                        Layout.fillWidth: true
                         spacing: 4
                         Button { text: I18n.t("video.mode.p2p"); checkable: true; checked: true; highlighted: true; enabled: !dialog.editing }
                         Button {
@@ -302,7 +435,7 @@ Dialog {
                     Layout.leftMargin: 16
                     Layout.rightMargin: 16
                     visible: Settings.advancedMode
-                    columns: 2
+                    columns: settingsScroll.availableWidth < 380 ? 1 : 2
                     columnSpacing: 12
                     rowSpacing: 10
 
@@ -319,12 +452,16 @@ Dialog {
 
                     Label { text: I18n.t("video.fps"); color: Theme.textDim }
                     RowLayout {
+                        Layout.fillWidth: true
                         spacing: 4
                         Repeater {
                             model: [5, 30, 60]
                             delegate: Button {
                                 required property int modelData
+                                objectName: "fps" + modelData
                                 text: modelData
+                                Layout.fillWidth: true
+                                implicitWidth: 0
                                 checkable: true
                                 checked: dialog.cfg.fps === modelData
                                 highlighted: checked
@@ -335,6 +472,7 @@ Dialog {
 
                     Label { text: I18n.t("video.bitrate"); color: Theme.textDim }
                     RowLayout {
+                        Layout.fillWidth: true
                         Slider {
                             id: bitrateSlider
                             Layout.fillWidth: true
@@ -342,7 +480,7 @@ Dialog {
                             value: (dialog.cfg.bitrate || 3000000) / 1000
                             onMoved: dialog.patch({ bitrate: value * 1000 })
                         }
-                        Label { text: Math.round(bitrateSlider.value) + " Kbps"; color: Theme.text; Layout.preferredWidth: 80 }
+                        Label { text: Math.round(bitrateSlider.value) + " Kbps"; color: Theme.text; font.pixelSize: 11 }
                     }
 
                     Label { text: I18n.t("video.viewer_limit"); color: Theme.textDim }
@@ -368,29 +506,64 @@ Dialog {
         }
     }
 
-    footer: DialogButtonBox {
-        Button {
-            text: I18n.t("app.cancel")
-            flat: true
-            DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
-        }
-        Button {
-            highlighted: true
-            palette.accent: dialog.editing || dialog.sourceOnly ? Theme.accent : Theme.live
-            enabled: !dialog.busy && (dialog.editing || Screenshare.previewActive)
-            text: dialog.editing ? I18n.t("video.setup.adjust_settings")
-                                 : dialog.sourceOnly ? I18n.t("video.action.change_source") : I18n.t("video.action.go_live")
-            onClicked: {
-                dialog.busy = true
-                if (dialog.editing)
-                    Screenshare.updateStream(dialog.editId, dialog.cfg)
-                else if (dialog.sourceOnly)
-                    Screenshare.changeSource(dialog.editId)
-                else
-                    Screenshare.startStream(dialog.cfg)
-                dialog.close()
+    footer: Rectangle {
+        height: 76
+        color: "transparent"
+        Rectangle { anchors.fill: parent; anchors.margins: 1; radius: 12; color: Theme.panel }
+        Rectangle { width: parent.width - 2; x: 1; height: 12; color: Theme.panel }
+        Rectangle { width: parent.width; height: 1; color: Theme.border }
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: 16
+            spacing: 10
+            Label {
+                Layout.fillWidth: true
+                text: !dialog.editing && dialog.selectedSource !== "" ? Screenshare.previewLabel : ""
+                elide: Text.ElideRight
+                color: Theme.textDim
+                font.pixelSize: 12
+            }
+            Button {
+                id: cancelButton
+                text: I18n.t("app.cancel")
+                Layout.preferredHeight: 38
+                Layout.preferredWidth: 104
+                background: Rectangle {
+                    radius: 6
+                    color: cancelButton.hovered ? Theme.panel3 : "transparent"
+                    border.color: Theme.borderStrong
+                }
+                contentItem: Label { text: cancelButton.text; color: Theme.text; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                onClicked: dialog.close()
+            }
+            Button {
+                id: liveButton
+                Layout.preferredHeight: 38
+                Layout.preferredWidth: Math.max(144, implicitContentWidth + 32)
+                background: Rectangle {
+                    radius: 6
+                    color: !liveButton.enabled ? Theme.panel3 : liveButton.hovered ? Qt.lighter(Theme.accent, 1.15) : Theme.accent
+                }
+                contentItem: Label {
+                    text: liveButton.text
+                    color: liveButton.enabled ? "#09131c" : Theme.textFaint
+                    font.weight: Font.DemiBold
+                    horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+                }
+                enabled: !dialog.busy && (dialog.editing || Screenshare.previewActive)
+                text: dialog.editing ? I18n.t("video.setup.adjust_settings")
+                                     : dialog.sourceOnly ? I18n.t("video.action.change_source") : I18n.t("video.action.go_live")
+                onClicked: {
+                    dialog.busy = true
+                    if (dialog.editing)
+                        Screenshare.updateStream(dialog.editId, dialog.cfg)
+                    else if (dialog.sourceOnly)
+                        Screenshare.changeSource(dialog.editId)
+                    else
+                        Screenshare.startStream(dialog.cfg)
+                    dialog.close()
+                }
             }
         }
-        onRejected: dialog.close()
     }
 }

@@ -2,11 +2,11 @@
 #   .\package.ps1                # compila Release antes
 #   .\package.ps1 -SkipBuild
 param(
-    [string]$Version = '0.2.0',
+    [string]$Version = '0.2.1',
     [switch]$SkipBuild,
     [string]$QtDir = 'C:\Qt\6.11.3\msvc2022_64'
 )
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 $release = Join-Path $here 'build\Release'
 $staging = Join-Path $here 'dist\OpenSpeak'
@@ -17,12 +17,18 @@ if (-not $SkipBuild) {
 }
 
 # 1) Executáveis + dependências do Qt (windeployqt)
-if (Test-Path $staging) { Remove-Item -Recurse -Force $staging }
+if (Test-Path $staging) {
+    $resolvedStaging = (Resolve-Path -LiteralPath $staging).Path
+    if ($resolvedStaging -ne [System.IO.Path]::GetFullPath((Join-Path $here 'dist\OpenSpeak'))) { throw 'Diretório de staging inesperado' }
+    Remove-Item -LiteralPath $resolvedStaging -Recurse -Force
+}
 New-Item -ItemType Directory -Force $staging | Out-Null
 Copy-Item (Join-Path $release 'OpenSpeak.exe'), (Join-Path $release 'openspeak-server.exe') $staging
 $deploy = Join-Path $QtDir 'bin\windeployqt.exe'
 & $deploy --release --no-translations --no-system-d3d-compiler --qmldir (Join-Path $here 'client\qml') (Join-Path $staging 'OpenSpeak.exe') | Out-Null
+if ($LASTEXITCODE) { throw 'windeployqt do cliente falhou' }
 & $deploy --release --no-translations (Join-Path $staging 'openspeak-server.exe') | Out-Null
+if ($LASTEXITCODE) { throw 'windeployqt do servidor falhou' }
 
 # 2) Runtime do Visual C++ ao lado do .exe (dispensa o vc_redist)
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
@@ -38,4 +44,8 @@ $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFile
     Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $iscc) { Write-Error 'Inno Setup 6 não encontrado (winget install JRSoftware.InnoSetup)'; exit 1 }
 & $iscc "/DAppVersion=$Version" (Join-Path $here 'installer\OpenSpeak.iss')
-exit $LASTEXITCODE
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+# 5) Distribuição portátil com as mesmas dependências do instalador.
+Compress-Archive -Path $staging -DestinationPath (Join-Path $here "dist\OpenSpeak-$Version-portable.zip") -Force
+exit 0

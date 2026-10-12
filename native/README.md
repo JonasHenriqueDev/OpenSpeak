@@ -114,6 +114,11 @@ Detalhes do motor:
 - `tst_virtualserver`: mesmos cenários do servidor JS.
 - `tst_engine`: limiares de problemas, layout, filtro de SDP, ida e volta H.264
   (NVENC → FFmpeg) e Opus.
+- `tst_windowthumbnail`: registro e liberação de previews DWM, inclusive quando o
+  cartão é ocultado ou o diálogo fecha. O preview usa o HWND da fonte enumerada
+  através de Qt Multimedia Private; essa integração deve ser revalidada ao atualizar o Qt.
+- `ui_setup`, `ui_source`, `ui_view-menu`: carregamento QML e layout em 900×560,
+  incluindo espaço da grade, largura dos controles de FPS e textos do menu.
 - `tst_mesh_e2e`: dois nós sem servidor (diretório estático em loopback). Cobre
   descoberta, identidade verificada, pedido, vídeo, ban por identidade, troca de sala e
   saída da tailnet.

@@ -27,6 +27,8 @@ struct SourceDescriptor {
     QString id;    // índice da tela, id da câmera, ou índice da janela
     QString label;
     bool testPattern = false;
+    QCapturableWindow window; // Preserve the enumerated window across preview/selection.
+    bool windowSpecified = false;
 };
 
 class VideoSource : public QObject {
@@ -49,6 +51,8 @@ public:
     /// Encaminha cada quadro também para estes sinks (pré-visualização na QML).
     void addPreviewSink(QVideoSink *sink);
     void removePreviewSink(QVideoSink *sink);
+    void clearPreviewSinks() { m_previews.clear(); }
+    void transferPreviewSinksTo(VideoSource &target);
 
     /// Miniatura JPEG pequena em data URL (ThumbnailCapturer do TS).
     QString captureThumbnail(int width = 320) const;

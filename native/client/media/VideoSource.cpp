@@ -36,7 +36,7 @@ QList<SourceDescriptor> VideoSource::availableSources(StreamType type)
         for (int i = 0; i < windows.size(); ++i) {
             const QString title = windows[i].description().trimmed();
             if (!title.isEmpty())
-                out.append({StreamType::Window, QString::number(i), title});
+                out.append({StreamType::Window, QString::number(i), title, false, windows[i], true});
         }
     } else if (type == StreamType::Camera) {
         for (const QCameraDevice &cam : QMediaDevices::videoInputs())
@@ -75,12 +75,13 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
     } else if (desc.type == StreamType::Window) {
         const auto windows = QWindowCapture::capturableWindows();
         const int idx = desc.id.toInt();
-        if (idx < 0 || idx >= windows.size()) {
+        if ((desc.windowSpecified && !desc.window.isValid()) ||
+            (!desc.windowSpecified && (idx < 0 || idx >= windows.size()))) {
             m_error = QStringLiteral("no_available_source");
             return false;
         }
         m_window = std::make_unique<QWindowCapture>();
-        m_window->setWindow(windows[idx]);
+        m_window->setWindow(desc.windowSpecified ? desc.window : windows[idx]);
         m_session.setWindowCapture(m_window.get());
         connect(m_window.get(), &QWindowCapture::errorOccurred, this, [this](auto, const QString &e) {
             emit errorOccurred(e);
@@ -92,7 +93,7 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
         for (const QCameraDevice &cam : QMediaDevices::videoInputs())
             if (QString::fromUtf8(cam.id()) == desc.id)
                 device = cam;
-        if (device.isNull())
+        if (device.isNull() && desc.id.isEmpty())
             device = QMediaDevices::defaultVideoInput();
         if (device.isNull()) {
             m_error = QStringLiteral("no_available_source");
@@ -145,6 +146,13 @@ void VideoSource::addPreviewSink(QVideoSink *sink)
 }
 
 void VideoSource::removePreviewSink(QVideoSink *sink) { m_previews.removeAll(sink); }
+
+void VideoSource::transferPreviewSinksTo(VideoSource &target)
+{
+    for (const auto &sink : std::as_const(m_previews))
+        if (sink) target.addPreviewSink(sink);
+    m_previews.clear();
+}
 
 void VideoSource::onFrame(const QVideoFrame &frame)
 {

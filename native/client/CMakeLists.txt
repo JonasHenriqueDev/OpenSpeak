@@ -8,6 +8,7 @@ add_library(openspeak_engine STATIC
     mesh/PeerDirectory.cpp mesh/PeerDirectory.h
     mesh/MeshConnection.cpp mesh/MeshConnection.h
     media/VideoSource.cpp media/VideoSource.h
+    media/SourceThumbnails.cpp media/SourceThumbnails.h
     media/VideoEncoder.cpp media/VideoEncoder.h
     media/VideoDecoder.cpp media/VideoDecoder.h
     media/AudioCodec.cpp media/AudioCodec.h
@@ -39,7 +40,9 @@ target_link_libraries(openspeak_engine PUBLIC
 target_compile_definitions(openspeak_engine PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
 
 # ---------------------------------------------------------------- app
-qt_add_executable(OpenSpeak WIN32 main.cpp)
+find_package(Qt6 REQUIRED COMPONENTS MultimediaPrivate)
+qt_add_executable(OpenSpeak WIN32 main.cpp WindowThumbnail.cpp WindowThumbnail.h assets/OpenSpeak.rc)
+qt_add_resources(OpenSpeak app_icon PREFIX "/" FILES assets/openspeak.ico)
 set_target_properties(OpenSpeak PROPERTIES OUTPUT_NAME "OpenSpeak")
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -63,7 +66,15 @@ qt_add_qml_module(OpenSpeak
         qml/I18n.js
 )
 
-target_link_libraries(OpenSpeak PRIVATE openspeak_engine Qt6::Quick Qt6::QuickControls2)
+target_link_libraries(OpenSpeak PRIVATE openspeak_engine Qt6::Quick Qt6::QuickControls2 Qt6::MultimediaPrivate dwmapi)
+
+if(OPENSPEAK_BUILD_TESTS)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+    qt_add_executable(tst_windowthumbnail ../tests/client/tst_windowthumbnail.cpp WindowThumbnail.cpp WindowThumbnail.h)
+    target_include_directories(tst_windowthumbnail PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(tst_windowthumbnail PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    target_link_libraries(tst_windowthumbnail PRIVATE Qt6::Quick Qt6::MultimediaPrivate Qt6::Test dwmapi)
+endif()
 
 # Copia as DLLs do Qt ao lado do .exe (executável autônomo).
 find_program(WINDEPLOYQT windeployqt HINTS "${Qt6_DIR}/../../../bin")

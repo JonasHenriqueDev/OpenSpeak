@@ -91,6 +91,31 @@ private slots:
         QCOMPARE(out.value("viewers").toList().size(), 1);
         QVERIFY(!out.value("video").toMap().value("connectionType").toString().isEmpty());
 
+        // Canceling a source preview must keep the stream alive, then switching
+        // sources must preserve the same viewer/session and deliver new frames.
+        QVideoSink localSink, pickerSink;
+        int localFrames = 0, pickerFrames = 0;
+        connect(&localSink, &QVideoSink::videoFrameChanged, this, [&] { ++localFrames; });
+        connect(&pickerSink, &QVideoSink::videoFrameChanged, this, [&] { ++pickerFrames; });
+        ma.attachOwnPreview(id, &localSink);
+        QVERIFY(ma.openPreview({{"type", 1}, {"id", "replacement"}, {"test", true}}, 30));
+        ma.closePreview();
+        QVERIFY(b.streams().contains(id));
+        QVERIFY(ma.openPreview({{"type", 1}, {"id", "replacement"}, {"test", true}}, 30));
+        ma.attachPreview(&pickerSink);
+        QTRY_VERIFY_WITH_TIMEOUT(pickerFrames >= 3, 3000);
+        ma.changeSource(id);
+        const int pickerAfterSwitch = pickerFrames;
+        const int localAfterSwitch = localFrames;
+        QVERIFY(!ma.previewActive());
+        QTRY_COMPARE_WITH_TIMEOUT(int(b.streams().value(id).type), 1, 3000);
+        const int beforeSwitch = frames;
+        QTRY_VERIFY_WITH_TIMEOUT(frames >= beforeSwitch + 15, 10000);
+        QTRY_VERIFY_WITH_TIMEOUT(localFrames >= localAfterSwitch + 15, 3000);
+        QCOMPARE(pickerFrames, pickerAfterSwitch);
+        QCOMPARE(item(mb, id).value("status").toString(), QStringLiteral("playing"));
+        QCOMPARE(b.streams().size(), 1);
+
         // Kick: o espectador vê o erro.
         ma.removeViewer(id, b.ownClid(), false);
         QTRY_COMPARE_WITH_TIMEOUT(item(mb, id).value("errorKey").toString(), QStringLiteral("video.join.error.kicked"), 3000);

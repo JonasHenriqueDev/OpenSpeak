@@ -10,6 +10,8 @@
 #include "PeerDirectory.h"
 #include "ScreenshareManager.h"
 #include "Settings.h"
+#include "SourceThumbnails.h"
+#include "WindowThumbnail.h"
 
 #include <QCommandLineParser>
 #include <QGuiApplication>
@@ -19,15 +21,25 @@
 #include <QQuickStyle>
 #include <QStyleHints>
 #include <QQuickWindow>
+#include <QQuickItem>
 #include <QTimer>
 
 using namespace openspeak;
+
+static QQuickItem *findVisualItem(QQuickItem *root, const QString &name)
+{
+    if (root->objectName() == name) return root;
+    for (auto *child : root->childItems())
+        if (auto *found = findVisualItem(child, name)) return found;
+    return nullptr;
+}
 
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("OpenSpeak"));
     QGuiApplication::setOrganizationName(QStringLiteral("OpenSpeak"));
+    QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/assets/openspeak.ico")));
     QQuickStyle::setStyle(QStringLiteral("FluentWinUI3"));
     QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
 
@@ -42,12 +54,14 @@ int main(int argc, char *argv[])
     QCommandLineOption shotOpt(QStringLiteral("screenshot"), QStringLiteral("Salva capturas da janela (prefixo)."), QStringLiteral("arquivo"));
     QCommandLineOption autoStreamOpt(QStringLiteral("autostream"), QStringLiteral("Inicia um stream de teste (requer --debug)."));
     QCommandLineOption meshPortOpt(QStringLiteral("mesh-port"), QStringLiteral("Porta da malha na tailnet (padrão 9987)."), QStringLiteral("porta"));
-    QCommandLineOption openOpt(QStringLiteral("open"), QStringLiteral("Abre um painel ao iniciar: setup | stats | viewers."), QStringLiteral("painel"));
+    QCommandLineOption openOpt(QStringLiteral("open"), QStringLiteral("Abre um painel ao iniciar: setup | setup-windows | setup-cameras | source | settings | stats | viewers."), QStringLiteral("painel"));
     QCommandLineOption autoJoinOpt(QStringLiteral("autojoin"), QStringLiteral("Assiste ao primeiro stream do canal."));
-    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt});
+    QCommandLineOption uiSmokeOpt(QStringLiteral("ui-smoke-test"), QStringLiteral("Valida o layout QML em 900x560 e encerra (sem conectar)."));
+    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt});
     parser.process(app);
 
     Settings settings(parser.value(profileOpt), parser.isSet(debugOpt));
+    if (parser.isSet(uiSmokeOpt)) settings.setAdvancedMode(true);
     if (parser.isSet(serverOpt)) {
         settings.setServerUrl(parser.value(serverOpt));
         settings.setConnectionMode(QStringLiteral("server"));
@@ -60,17 +74,50 @@ int main(int argc, char *argv[])
     handler.setDirectory(new TailscaleDirectory(meshPort, &handler));
     ScreenshareManager screenshare(&handler, &settings);
     StreamLayout layout;
+    SourceThumbnails sourceThumbnails;
 
     QQmlApplicationEngine engine;
+    qmlRegisterType<WindowThumbnail>("OpenSpeak.Native", 1, 0, "WindowThumbnail");
     engine.rootContext()->setContextProperty(QStringLiteral("Settings"), &settings);
     engine.rootContext()->setContextProperty(QStringLiteral("Server"), &handler);
     engine.rootContext()->setContextProperty(QStringLiteral("Screenshare"), &screenshare);
     engine.rootContext()->setContextProperty(QStringLiteral("StreamLayout"), &layout);
+    engine.rootContext()->setContextProperty(QStringLiteral("SourceThumbnails"), &sourceThumbnails);
     engine.rootContext()->setContextProperty(QStringLiteral("AutoConnect"), parser.isSet(autoOpt));
     engine.rootContext()->setContextProperty(QStringLiteral("DebugOpen"), parser.value(openOpt));
+    engine.rootContext()->setContextProperty(QStringLiteral("UiSmoke"), parser.isSet(uiSmokeOpt));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
                      Qt::QueuedConnection);
     engine.loadFromModule(QStringLiteral("OpenSpeak"), QStringLiteral("Main"));
+
+    if (parser.isSet(uiSmokeOpt)) {
+        auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
+        if (!window) return 1;
+        window->resize(900, 560);
+        QTimer::singleShot(4500, &app, [&app, window, panel = parser.value(openOpt)] {
+            bool valid = !window->grabWindow().isNull();
+            if (panel != "view-menu") {
+                auto *grid = findVisualItem(window->contentItem(), QStringLiteral("sourceGrid"));
+                valid = valid && grid && grid->isVisible() && grid->height() >= 120 && grid->width() >= 200;
+                if (panel == "setup") {
+                    auto *fps = findVisualItem(window->contentItem(), QStringLiteral("fps60"));
+                    auto *settingsPane = findVisualItem(window->contentItem(), QStringLiteral("settingsPane"));
+                    valid = valid && fps && settingsPane && fps->width() >= 30;
+                    if (fps && settingsPane) {
+                        valid = valid && fps->mapToItem(settingsPane, QPointF(fps->width(), 0)).x() <= settingsPane->width() + 1;
+                        qInfo() << "UI layout:" << "grid" << (grid ? grid->size() : QSizeF()) << "FPS" << fps->width()
+                                << "right edge" << fps->mapToItem(settingsPane, QPointF(fps->width(), 0)).x()
+                                << "settings width" << settingsPane->width();
+                    } else qWarning() << "Missing FPS control or settings pane" << fps << settingsPane;
+                }
+            } else {
+                auto *menu = window->findChild<QObject *>(QStringLiteral("viewMenu"));
+                valid = valid && menu && menu->property("visible").toBool() && menu->property("width").toDouble() >= 250;
+            }
+            if (!valid) qCritical("UI smoke test failed: preview grid, FPS controls, or menu do not fit.");
+            app.exit(valid ? 0 : 1);
+        });
+    }
 
     if (parser.isSet(autoStreamOpt) && settings.debug()) {
         QObject::connect(&handler, &ConnectionHandler::connectionChanged, &screenshare, [&] {

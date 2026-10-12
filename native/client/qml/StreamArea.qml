@@ -85,7 +85,10 @@ Rectangle {
         target: Screenshare
         function onItemsChanged() { root.sync() }
     }
-    Component.onCompleted: sync()
+    Component.onCompleted: {
+        sync()
+        if (UiSmoke && DebugOpen === "view-menu") Qt.callLater(() => viewMenu.open())
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -260,7 +263,12 @@ Rectangle {
                     onClicked: viewMenu.open()
                     Menu {
                         id: viewMenu
+                        objectName: "viewMenu"
+                        width: Math.ceil(Math.max(ownText.advanceWidth, inactiveText.advanceWidth)) + 80
+                        x: viewButton.width - width
                         y: -implicitHeight
+                        TextMetrics { id: ownText; font: viewMenu.font; text: I18n.t("video.view_settings.show_own_streams") }
+                        TextMetrics { id: inactiveText; font: viewMenu.font; text: I18n.t("video.view_settings.show_inactive_streams") }
                         MenuItem {
                             text: I18n.t("video.view_settings.show_own_streams")
                             checkable: true

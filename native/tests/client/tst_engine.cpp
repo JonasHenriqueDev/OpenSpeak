@@ -7,8 +7,10 @@
 #include "StreamStats.h"
 #include "VideoDecoder.h"
 #include "VideoEncoder.h"
+#include "SourceThumbnails.h"
 
 #include <QImage>
+#include <QSignalSpy>
 #include <QTest>
 
 using namespace openspeak;
@@ -28,6 +30,43 @@ class TestEngine : public QObject {
     }
 
 private slots:
+    void vanishedSourceDoesNotSelectAnotherDevice()
+    {
+        VideoSource capture;
+        SourceDescriptor window;
+        window.type = StreamType::Window;
+        window.id = "0";
+        window.windowSpecified = true;
+        QVERIFY(!capture.open(window, 5));
+        QCOMPARE(capture.errorString(), QStringLiteral("no_available_source"));
+        SourceDescriptor camera;
+        camera.type = StreamType::Camera;
+        camera.id = "openspeak-nonexistent-camera";
+        QVERIFY(!capture.open(camera, 5));
+        QVERIFY(!capture.isActive());
+    }
+
+    void sourceThumbnails()
+    {
+        SourceThumbnails thumbnails;
+        QSignalSpy ready(&thumbnails, &SourceThumbnails::ready);
+        const QVariantList sources{QVariantMap{{"type", 2}, {"id", "test"}, {"test", true}}};
+        thumbnails.start(sources);
+        QTRY_COMPARE_WITH_TIMEOUT(ready.count(), 1, 3000);
+        QCOMPARE(ready.first()[0].toString(), QStringLiteral("test:2"));
+        const QString image = ready.first()[1].toString();
+        QVERIFY(image.startsWith("data:image/jpeg;base64,"));
+        const auto bytes = QByteArray::fromBase64(image.section(',', 1).toLatin1());
+        QCOMPARE(QImage::fromData(bytes).size(), QSize(320, 180));
+        thumbnails.start(sources);
+        thumbnails.stop();
+        QTest::qWait(300);
+        QCOMPARE(ready.count(), 1); // closing the picker cancels queued captures
+        thumbnails.start({});
+        QTest::qWait(100);
+        QCOMPARE(ready.count(), 1);
+    }
+
     void noIssues()
     {
         StatsSummary s = video();

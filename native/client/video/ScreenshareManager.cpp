@@ -141,7 +141,8 @@ QVariantList ScreenshareManager::sources(int type) const
 {
     QVariantList out;
     for (const SourceDescriptor &d : VideoSource::availableSources(StreamType(type)))
-        out.append(QVariantMap{{"type", int(d.type)}, {"id", d.id}, {"label", d.label}});
+        out.append(QVariantMap{{"type", int(d.type)}, {"id", d.id}, {"label", d.label},
+                               {"window", QVariant::fromValue(d.window)}});
     return out;
 }
 
@@ -153,7 +154,17 @@ bool ScreenshareManager::openPreview(const QVariantMap &source, int fps)
     d.id = source.value("id").toString();
     d.label = source.value("label").toString();
     d.testPattern = source.value("test").toBool();
+    d.window = source.value("window").value<QCapturableWindow>();
+    d.windowSpecified = d.type == StreamType::Window && source.contains("window");
     auto src = std::make_unique<VideoSource>();
+    auto *candidate = src.get();
+    connect(candidate, &VideoSource::errorOccurred, this, [this, candidate](const QString &error) {
+        if (m_preview.get() != candidate) return;
+        emit errorOccurred(error);
+        QTimer::singleShot(0, this, [this, candidate] {
+            if (m_preview.get() == candidate) closePreview();
+        });
+    });
     if (!src->open(d, fps)) {
         emit errorOccurred(QStringLiteral("video.error.") + src->errorString());
         return false;
@@ -202,6 +213,7 @@ void ScreenshareManager::startStream(const QVariantMap &config)
         cfg.name = QStringLiteral("Stream de %1").arg(m_handler->clientName(m_handler->ownClid()));
     // A captura passa a pertencer ao stream (guardada até o servidor responder).
     const int token = m_nextToken++;
+    m_preview->clearPreviewSinks();
     m_pendingSources[token] = std::move(m_preview);
     emit previewChanged();
 
@@ -366,12 +378,15 @@ void ScreenshareManager::changeSource(const QString &id)
         return;
     OwnStream &own = *it->second;
     OwnStream *p = &own;
+    m_preview->clearPreviewSinks(); // picker sinks should not survive the dialog
+    own.source->transferPreviewSinksTo(*m_preview); // local tile and fullscreen
     own.source->disconnect(this);
     own.source->close();
     own.source = std::move(m_preview);
     emit previewChanged();
     own.config.type = own.source->type();
     configureEncoder(own);
+    own.encoder->requestKeyFrame();
     connect(own.source.get(), &VideoSource::frameAvailable, this, [p](const QVideoFrame &f) { p->encoder->pushFrame(f); });
     connect(own.source.get(), &VideoSource::ended, this, [this, id] { stopStream(id); });
     startAudioFor(own); // o áudio acompanha a nova fonte

@@ -45,12 +45,16 @@ Rectangle {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 8
                 spacing: 10
-                Icon { name: "logo"; color: Theme.accent }
-                Label { text: "OpenSpeak"; font.weight: Font.Bold; color: Theme.text }
-                Rectangle { width: 1; height: 20; color: Theme.borderStrong }
                 Icon { name: "server"; size: 16; color: Theme.textDim }
-                Label { text: Server.serverName; color: Theme.textDim }
-                Item { Layout.fillWidth: true }
+                Label {
+                    text: Server.serverName; color: Theme.textDim
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                    font.pixelSize: 12
+                    ToolTip.visible: serverHover.hovered
+                    ToolTip.text: text
+                    HoverHandler { id: serverHover }
+                }
                 Rectangle { width: 8; height: 8; radius: 4; color: Theme.online }
                 Label {
                     text: Server.clientName(Server.ownClid)
@@ -191,15 +195,22 @@ Rectangle {
 
     // Depuração (--open): abre um painel/diálogo assim que houver um stream.
     property bool debugOpened: false
-    Component.onCompleted: if (DebugOpen === "setup") Qt.callLater(() => openSetup("", false))
+    Component.onCompleted: {
+        if (UiSmoke && DebugOpen === "source") Qt.callLater(() => openSetup("ui-smoke", true))
+        if (DebugOpen.indexOf("setup") === 0) Qt.callLater(() => {
+            openSetup("", false)
+        })
+    }
     Connections {
         target: Screenshare
-        enabled: !root.debugOpened && (DebugOpen === "stats" || DebugOpen === "viewers")
+        enabled: !root.debugOpened && (DebugOpen === "stats" || DebugOpen === "viewers" || DebugOpen === "source" || DebugOpen === "settings")
         function onItemsChanged() {
             const items = Screenshare.items
             if (items.length > 0 && items[0].status === "live" || items.length > 0 && items[0].status === "playing") {
                 root.debugOpened = true
-                root.openPanel(DebugOpen, items[0].streamIdentifier)
+                if (DebugOpen === "source" || DebugOpen === "settings")
+                    root.openSetup(items[0].streamIdentifier, DebugOpen === "source")
+                else root.openPanel(DebugOpen, items[0].streamIdentifier)
             }
         }
     }

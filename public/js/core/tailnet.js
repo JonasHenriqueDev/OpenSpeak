@@ -26,6 +26,26 @@ export function tailnetSdp(sdp) {
   return sdp.split(/\r?\n/).filter(line => !line.startsWith('a=candidate:') || tailnetCandidate(line)).join('\r\n');
 }
 
+// Browsers hide host IPs behind mDNS names, which do not resolve across a
+// tailnet. Advertise the user's Tailscale address for those host sockets.
+export function advertiseTailnetCandidate(candidate, address) {
+  if (!candidate) return candidate;
+  if (!isTailnetAddress(address)) throw new Error('Informe o IP Tailscale deste PC.');
+  const fields = candidate.replace(/^a=/, '').trim().split(/\s+/);
+  if (fields[fields.indexOf('typ') + 1] !== 'host') return null;
+  if (/^[\w-]+\.local$/i.test(fields[4] || '')) fields[4] = address;
+  if (!isTailnetAddress(fields[4] || '')) return null;
+  return fields.join(' ');
+}
+
+export function advertiseTailnetSdp(sdp, address) {
+  return sdp.split(/\r?\n/).flatMap(line => {
+    if (!line.startsWith('a=candidate:')) return [line];
+    const candidate = advertiseTailnetCandidate(line, address);
+    return candidate ? [`a=${candidate}`] : [];
+  }).join('\r\n');
+}
+
 export function privateEntryUrl(serverUrl, nickname, profile = '') {
   if (!isTailnetServer(serverUrl)) throw new Error('Servidor Tailscale inválido');
   const server = new URL(serverUrl);

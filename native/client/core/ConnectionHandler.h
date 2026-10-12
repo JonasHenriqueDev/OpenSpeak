@@ -61,12 +61,16 @@ class ConnectionHandler : public QObject {
     Q_PROPERTY(bool hasStreamingP2P READ hasStreamingP2P NOTIFY connectionChanged)
     Q_PROPERTY(QVariantList tree READ tree NOTIFY changed)
     Q_PROPERTY(bool meshMode READ meshMode NOTIFY connectionChanged)
+    Q_PROPERTY(bool reconnecting READ reconnecting NOTIFY changed)
     Q_PROPERTY(QString tailnetStatus READ tailnetStatus NOTIFY tailnetChanged)
     Q_PROPERTY(QString tailnetName READ tailnetName NOTIFY tailnetChanged)
     Q_PROPERTY(QString tailnetIdentity READ tailnetIdentity NOTIFY tailnetChanged)
     Q_PROPERTY(int tailnetOnline READ tailnetOnline NOTIFY tailnetChanged)
 public:
     explicit ConnectionHandler(QObject *parent = nullptr);
+    ~ConnectionHandler() override { m_connection.close(); }
+    bool reconnecting() const { return m_reconnecting; }
+    bool cloudMode() const { return m_cloudMode; }
 
     ServerConnection *connection() { return &m_connection; }
 
@@ -76,6 +80,7 @@ public:
 
     Q_INVOKABLE void connectTailnet(const QString &nickname);
     Q_INVOKABLE void connectTo(const QString &url, const QString &nickname, const QString &uid);
+    Q_INVOKABLE void connectCloud(const QString &nickname, const QString &uid, const QString &code);
     Q_INVOKABLE void disconnectFromServer();
     Q_INVOKABLE void moveTo(int cid);
     Q_INVOKABLE QString clientName(int clid) const;
@@ -117,12 +122,14 @@ private:
     void onNotification(const QString &cmd, const QJsonObject &args);
     void reset();
     void login();
+    void applyView(const QJsonObject &data);
 
     ConnectionRouter m_connection;
     WebSocketConnection *m_ws = nullptr;
     MeshConnection *m_mesh = nullptr;
     PeerDirectory *m_directory = nullptr;
     bool m_loggedIn = false;
+    bool m_reconnecting = false, m_cloudMode = false;
     QString m_serverName;
     QStringList m_capabilities;
     QJsonArray m_iceServers;

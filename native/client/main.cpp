@@ -57,7 +57,9 @@ int main(int argc, char *argv[])
     QCommandLineOption openOpt(QStringLiteral("open"), QStringLiteral("Abre um painel ao iniciar: setup | setup-windows | setup-cameras | source | settings | stats | viewers."), QStringLiteral("painel"));
     QCommandLineOption autoJoinOpt(QStringLiteral("autojoin"), QStringLiteral("Assiste ao primeiro stream do canal."));
     QCommandLineOption uiSmokeOpt(QStringLiteral("ui-smoke-test"), QStringLiteral("Valida o layout QML em 900x560 e encerra (sem conectar)."));
-    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt});
+    QCommandLineOption cloudOpt(QStringLiteral("cloud"), QStringLiteral("Conecta à sala web usando OPENSPEAK_ROOM_CODE do ambiente."));
+    QCommandLineOption quitOpt(QStringLiteral("quit-after"), QStringLiteral("Encerra o teste após N segundos (requer --debug)."), QStringLiteral("segundos"));
+    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt, cloudOpt, quitOpt});
     parser.process(app);
 
     Settings settings(parser.value(profileOpt), parser.isSet(debugOpt));
@@ -73,6 +75,9 @@ int main(int argc, char *argv[])
     const quint16 meshPort = parser.isSet(meshPortOpt) ? quint16(parser.value(meshPortOpt).toUInt()) : MeshConnection::DefaultPort;
     handler.setDirectory(new TailscaleDirectory(meshPort, &handler));
     ScreenshareManager screenshare(&handler, &settings);
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &handler, &ConnectionHandler::disconnectFromServer);
+    if (parser.isSet(quitOpt) && settings.debug())
+        QTimer::singleShot(qBound(1, parser.value(quitOpt).toInt(), 3600) * 1000, &app, &QCoreApplication::quit);
     StreamLayout layout;
     SourceThumbnails sourceThumbnails;
 
@@ -83,7 +88,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("Screenshare"), &screenshare);
     engine.rootContext()->setContextProperty(QStringLiteral("StreamLayout"), &layout);
     engine.rootContext()->setContextProperty(QStringLiteral("SourceThumbnails"), &sourceThumbnails);
-    engine.rootContext()->setContextProperty(QStringLiteral("AutoConnect"), parser.isSet(autoOpt));
+    engine.rootContext()->setContextProperty(QStringLiteral("AutoConnect"), parser.isSet(autoOpt) && !parser.isSet(cloudOpt));
     engine.rootContext()->setContextProperty(QStringLiteral("DebugOpen"), parser.value(openOpt));
     engine.rootContext()->setContextProperty(QStringLiteral("UiSmoke"), parser.isSet(uiSmokeOpt));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
@@ -142,6 +147,18 @@ int main(int argc, char *argv[])
             if (handler.isConnected() && !handler.streams().isEmpty())
                 screenshare.joinStream(handler.streams().firstKey());
         });
+    }
+    if (parser.isSet(cloudOpt)) {
+        auto *directory = handler.directory();
+        auto *cloudTimer = new QTimer(&app);
+        cloudTimer->setInterval(500);
+        QObject::connect(cloudTimer, &QTimer::timeout, &app, [&, directory, cloudTimer] {
+            if (directory->status() != PeerDirectory::Status::Running) return;
+            cloudTimer->stop();
+            handler.connectCloud(settings.nickname(), settings.uid(), QString::fromUtf8(qgetenv("OPENSPEAK_ROOM_CODE")));
+            qunsetenv("OPENSPEAK_ROOM_CODE");
+        });
+        cloudTimer->start();
     }
     if (parser.isSet(shotOpt)) {
         const QString prefix = parser.value(shotOpt);

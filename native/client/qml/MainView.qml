@@ -55,7 +55,8 @@ Rectangle {
                     ToolTip.text: text
                     HoverHandler { id: serverHover }
                 }
-                Rectangle { width: 8; height: 8; radius: 4; color: Theme.online }
+                Label { visible: Server.reconnecting; text: "Reconectando…"; color: Theme.textDim }
+                Rectangle { width: 8; height: 8; radius: 4; color: Server.reconnecting ? Theme.textDim : Theme.online }
                 Label {
                     text: Server.clientName(Server.ownClid)
                     color: Theme.text

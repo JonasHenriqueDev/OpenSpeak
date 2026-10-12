@@ -12,7 +12,7 @@ import { SetupStreamDialog } from './ui/SetupStreamDialog.js';
 import { ViewersPanel } from './ui/ViewersPanel.js';
 import { StatsPanel } from './ui/StatsPanel.js';
 import { Toasts } from './ui/Toasts.js';
-import { isTailnetServer, privateEntryUrl } from './core/tailnet.js';
+import { isTailnetServer, isTailnetAddress, privateEntryUrl } from './core/tailnet.js';
 
 const deployment = window.OpenSpeakConfig || {};
 deployment.tailscaleOnly ||= location.hostname.endsWith('.ts.net');
@@ -45,7 +45,9 @@ function defaultServerUrl() {
 
 function renderLogin(message = '') {
   const nick = h('input.input', { value: entryParams.get('nickname')?.slice(0, 32) || settings.get('nickname'), placeholder: 'Ex.: Jonas', maxLength: 32, required: true });
-  const server = h('input.input', { value: settings.get('serverUrl') || defaultServerUrl() });
+  const server = h('input.input', { value: deployment.cloudSignaling ? defaultServerUrl() : settings.get('serverUrl') || defaultServerUrl() });
+  const accessCode = h('input.input', { type: 'password', autocomplete: 'off', placeholder: 'Código privado da sala', required: !!deployment.cloudSignaling });
+  const tailnetIp = h('input.input', { value: settings.get('tailnetIp') || '', placeholder: '100.x.x.x deste PC', required: !!deployment.cloudSignaling });
   const status = h('div.login-status', message);
   const submit = h('button.btn.primary.wide', { type: 'submit' }, t('app.connect'));
   const form = h('form.login-card', {
@@ -54,20 +56,25 @@ function renderLogin(message = '') {
         ev.preventDefault();
         const nickname = nick.value.trim();
         if (!nickname) return;
-        if (deployment.tailscaleOnly && !isTailnetServer(server.value.trim())) {
+        if (deployment.cloudSignaling) {
+          if (!isTailnetAddress(tailnetIp.value.trim())) { status.textContent = 'Informe o IP deste PC mostrado no Tailscale.'; return; }
+          deployment.tailnetIp = tailnetIp.value.trim();
+          settings.set('tailnetIp', deployment.tailnetIp);
+        }
+        if (deployment.tailscaleOnly && !deployment.cloudSignaling && !isTailnetServer(server.value.trim())) {
           status.textContent = 'Conecte o Tailscale e informe o endereço wss://…ts.net/ws da sua rede.';
           return;
         }
         settings.set('nickname', nickname);
         settings.set('serverUrl', server.value.trim());
-        if (deployment.tailscaleOnly && new URL(server.value.trim()).hostname !== location.hostname) {
+        if (deployment.tailscaleOnly && !deployment.cloudSignaling && new URL(server.value.trim()).hostname !== location.hostname) {
           location.assign(privateEntryUrl(server.value.trim(), nickname, entryParams.get('profile')));
           return;
         }
         submit.disabled = true;
         status.textContent = t('app.connecting');
         try {
-          await startSession(server.value.trim(), nickname);
+          await startSession(server.value.trim(), nickname, accessCode.value);
         } catch (err) {
           submit.disabled = false;
           status.textContent = errorText(err);
@@ -76,9 +83,11 @@ function renderLogin(message = '') {
     },
   },
   h('div.login-logo', icon('logo', 'big'), h('h1', 'OpenSpeak')),
-  deployment.tailscaleOnly ? h('p.login-status', 'Tailscale obrigatório: conecte este PC à mesma tailnet do servidor. A sessão abre no endereço privado da rede.') : null,
+  deployment.tailscaleOnly ? h('p.login-status', deployment.cloudSignaling ? 'Tailscale obrigatório na mesma tailnet. O Vercel negocia as conexões; vídeo e áudio usam a rede P2P.' : 'Tailscale obrigatório: conecte este PC à mesma tailnet do servidor. A sessão abre no endereço privado da rede.') : null,
   h('label.field', h('span.field-label', t('app.nickname')), nick),
-  h('label.field', h('span.field-label', t('app.server')), server),
+  deployment.cloudSignaling ? null : h('label.field', h('span.field-label', t('app.server')), server),
+  deployment.cloudSignaling ? h('label.field', h('span.field-label', 'IP Tailscale deste PC'), tailnetIp, h('small.muted', 'Copie o endereço 100.x.x.x do aplicativo Tailscale.')) : null,
+  deployment.cloudSignaling ? h('label.field', h('span.field-label', 'Código da sala'), accessCode) : null,
   submit,
   status);
   replaceChildren(root, h('div.login', form));
@@ -89,11 +98,12 @@ function renderLogin(message = '') {
 
 // ============================================================== sessão
 
-async function startSession(url, nickname) {
+async function startSession(url, nickname, accessCode) {
   const handler = new ConnectionHandler();
-  await handler.connect(url, { nickname, uid: settings.get('uid') });
+  await handler.connect(url, { nickname, uid: settings.get('uid'), accessCode });
   if (deployment.tailscaleOnly) handler.iceServers = [];
   const manager = new ScreenshareManager(handler, { contacts, settings });
+  window.addEventListener('pagehide', () => handler.disconnect(), { once: true });
   new App(handler, manager).mount();
 }
 
@@ -143,6 +153,8 @@ class App {
           this.sidePanel)));
 
     hd.on('changed', () => this.render());
+    hd.on('reconnecting', () => { this.statusBar.textContent = 'Reconectando…'; });
+    hd.on('resumed', () => this.render());
     hd.on('streamupdated', () => this.area.render());
     hd.on('disconnected', () => {
       this.#closePopover();
@@ -167,6 +179,7 @@ class App {
     if (this.panel?.kind === 'viewers') this.panel.view.render();
     const own = this.handler.ownClient;
     const ch = own ? this.handler.channels.get(own.cid) : null;
+    if (this.handler.reconnecting) { this.statusBar.textContent = 'Reconectando…'; return; }
     replaceChildren(this.statusBar,
       h('span.online-dot'), own?.nickname ?? '', ch ? h('span.muted', ` — ${ch.name}`) : null);
   }

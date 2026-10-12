@@ -91,6 +91,7 @@ int ConnectionHandler::tailnetOnline() const
 
 void ConnectionHandler::connectTailnet(const QString &nickname)
 {
+    m_cloudMode = false;
     if (!m_mesh) {
         emit connectFailed(QStringLiteral("tailnet_unavailable"));
         return;
@@ -104,11 +105,30 @@ void ConnectionHandler::connectTailnet(const QString &nickname)
 
 void ConnectionHandler::connectTo(const QString &url, const QString &nickname, const QString &uid)
 {
+    m_cloudMode = false;
+    m_ws->setCloudAccessCode({});
     m_pendingNickname = nickname;
     m_pendingUid = uid;
     m_connection.setBackend(m_ws);
     emit connectionChanged();
     m_ws->open(QUrl(url));
+}
+
+void ConnectionHandler::connectCloud(const QString &nickname, const QString &uid, const QString &code)
+{
+    if (!m_directory || m_directory->status() != PeerDirectory::Status::Running || m_directory->self().address.isNull()) {
+        emit connectFailed(QStringLiteral("Conecte o Tailscale antes de entrar na sala web."));
+        return;
+    }
+    if (code.trimmed().isEmpty()) { emit connectFailed(QStringLiteral("Informe o código da sala.")); return; }
+    m_cloudMode = true;
+    m_reconnecting = false;
+    m_pendingNickname = nickname;
+    m_pendingUid = uid;
+    m_ws->setCloudAccessCode(code.trimmed());
+    m_connection.setBackend(m_ws);
+    emit connectionChanged();
+    m_ws->open(QUrl(QStringLiteral("wss://openspeak-dun.vercel.app/ws")));
 }
 
 void ConnectionHandler::login()
@@ -120,7 +140,15 @@ void ConnectionHandler::login()
             m_connection.close();
             return;
         }
-        const QJsonObject &d = r.data;
+        applyView(r.data);
+    });
+}
+
+void ConnectionHandler::applyView(const QJsonObject &d)
+{
+        const bool wasLoggedIn = m_loggedIn;
+        const bool changedIdentity = d.value("restarted").toBool() || (m_loggedIn && m_ownClid != d.value("clid").toInt());
+        const auto previous = m_streams;
         m_ownClid = d.value("clid").toInt();
         const QJsonObject server = d.value("server").toObject();
         m_serverName = server.value("name").toString();
@@ -144,10 +172,13 @@ void ConnectionHandler::login()
             const StreamInfo s = StreamInfo::fromJson(v.toObject());
             m_streams.insert(s.id, s);
         }
+        for (auto it = previous.begin(); it != previous.end(); ++it)
+            if (changedIdentity || !m_streams.contains(it.key())) emit streamRemoved(it.key(), int(LeaveReason::Left));
+        for (auto it = m_streams.begin(); it != m_streams.end(); ++it)
+            if (!previous.contains(it.key()) && m_loggedIn) emit streamAdded(it.key());
         m_loggedIn = true;
-        emit connectionChanged();
+        if (!wasLoggedIn) emit connectionChanged();
         emit changed();
-    });
 }
 
 void ConnectionHandler::disconnectFromServer() { m_connection.close(); }
@@ -230,6 +261,8 @@ QVariantList ConnectionHandler::tree() const
 
 void ConnectionHandler::onNotification(const QString &cmd, const QJsonObject &args)
 {
+    if (cmd == "cloudview") { applyView(args); return; }
+    if (cmd == "cloudconnection") { m_reconnecting = args.value("reconnecting").toBool(); emit changed(); return; }
     if (cmd == QLatin1String("notifycliententerview") || cmd == QLatin1String("notifyclientupdated")) {
         const ClientInfo c = clientFromJson(args.value("client").toObject());
         m_clients.insert(c.clid, c);
@@ -275,6 +308,7 @@ void ConnectionHandler::onNotification(const QString &cmd, const QJsonObject &ar
 
 void ConnectionHandler::reset()
 {
+    m_reconnecting = false;
     m_loggedIn = false;
     m_ownClid = 0;
     m_channels.clear();

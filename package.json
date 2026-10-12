@@ -1,6 +1,6 @@
 {
   "name": "openspeak",
-  "version": "0.1.0",
+  "version": "0.2.3",
   "description": "Voz + transmissão de vídeo P2P no estilo TeamSpeak (servidor de sinalização + cliente WebRTC)",
   "type": "module",
   "main": "server/index.js",
@@ -12,6 +12,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "ioredis": "^5.11.1",
     "ws": "^8.18.0"
   }
 }

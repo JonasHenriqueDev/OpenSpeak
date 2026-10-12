@@ -1,7 +1,7 @@
 # OpenSpeak nativo (Qt 6 + libdatachannel + FFmpeg)
 
 Aplicativo Windows (`OpenSpeak.exe`) e servidor (`openspeak-server.exe`) em C++.
-A interface usa QML com o estilo FluentWinUI3. O motor de transmissão P2P
+A interface usa QML com tema próprio e seleção de fontes em grade. O motor de transmissão P2P
 reproduz a arquitetura do TeamSpeak 6 (ver `../docs/ANALISE_TEAMSPEAK_P2P.md`).
 Usa o mesmo protocolo do cliente web, então clientes nativos e do navegador
 assistem uns aos outros.
@@ -63,6 +63,11 @@ servidor para configurar.
    espectadores. Bans e contatos usam essa identidade.
 
 ### Servidor dedicado (opcional)
+
+Para usar Windows e navegador sem servidor em um PC, escolha **Sala web • Windows
+e navegadores** e use o mesmo código da sala do Vercel. A mídia continua na
+tailnet, e o Vercel faz somente a sinalização. A opção Tailnet permanece
+independente do Vercel. Veja [WEB-TAILSCALE.md](../WEB-TAILSCALE.md).
 
 Em "Servidor dedicado (avançado)" na tela de entrada, o app usa um servidor central,
 compatível também com o cliente web:

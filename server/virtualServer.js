@@ -44,7 +44,7 @@ export class VirtualServer {
    * @param {string} [options.name]
    * @param {object[]} [options.iceServers]
    */
-  constructor({ send, name = 'OpenSpeak', iceServers = [] }) {
+  constructor({ send, name = 'OpenSpeak', iceServers = [], idPrefix = '' }) {
     this.send = send;
     this.name = name;
     this.iceServers = iceServers;
@@ -53,6 +53,7 @@ export class VirtualServer {
     this.streams = new Map(); // streamIdentifier -> stream
     this.nextClid = 1;
     this.nextStreamId = 1;
+    this.idPrefix = idPrefix;
     let cid = 1;
     for (const ch of DEFAULT_CHANNELS) {
       this.channels.set(cid, { cid, order: cid, ...ch });
@@ -67,6 +68,33 @@ export class VirtualServer {
     const clid = this.nextClid++;
     this.clients.set(clid, { clid, loggedIn: false, nickname: '', uid: '', cid: 0, inputMuted: false, outputMuted: false });
     return clid;
+  }
+
+  snapshot() {
+    return {
+      nextClid: this.nextClid, nextStreamId: this.nextStreamId, idPrefix: this.idPrefix,
+      clients: [...this.clients],
+      streams: [...this.streams].map(([id, s]) => [id, { ...s,
+        viewers: [...s.viewers], pending: [...s.pending], banned: [...s.banned] }]),
+    };
+  }
+
+  restore(state) {
+    if (!state) return;
+    this.nextClid = state.nextClid;
+    this.nextStreamId = state.nextStreamId;
+    this.idPrefix = state.idPrefix || '';
+    this.clients = new Map(state.clients);
+    this.streams = new Map(state.streams.map(([id, s]) => [id, { ...s,
+      viewers: new Set(s.viewers), pending: new Map(s.pending), banned: new Set(s.banned) }]));
+  }
+
+  view(clid) {
+    if (!this.clients.get(clid)?.loggedIn) fail(ReturnCode.NOT_LOGGED_IN);
+    return { clid, server: { name: this.name, capabilityExtensions: [...CAPABILITIES] },
+      iceServers: this.iceServers, channels: [...this.channels.values()],
+      clients: [...this.clients.values()].filter(c => c.loggedIn).map(c => this.#publicClient(c)),
+      streams: [...this.streams.values()].map(s => this.#publicStream(s)) };
   }
 
   disconnect(clid) {
@@ -144,7 +172,7 @@ export class VirtualServer {
       const owned = [...this.streams.values()].filter(s => s.ownerClid === client.clid);
       if (owned.length >= MAX_STREAMS_PER_CLIENT) fail(ReturnCode.STREAM_LIMIT);
       const stream = {
-        streamIdentifier: `s${this.nextStreamId++}`,
+        streamIdentifier: `${this.idPrefix}s${this.nextStreamId++}`,
         ownerClid: client.clid,
         cid: client.cid,
         mode,

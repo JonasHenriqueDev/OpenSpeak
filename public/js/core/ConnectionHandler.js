@@ -3,12 +3,13 @@
 
 import { EventEmitter } from './EventEmitter.js';
 import { ServerConnection } from './ServerConnection.js';
+import { CloudConnection } from './CloudConnection.js';
 import { Capability } from './protocol.js';
 
 export class ConnectionHandler extends EventEmitter {
   constructor() {
     super();
-    this.connection = new ServerConnection();
+    this.connection = globalThis.OpenSpeakConfig?.cloudSignaling ? new CloudConnection() : new ServerConnection();
     this.serverName = '';
     this.capabilities = [];
     this.iceServers = [];
@@ -31,9 +32,17 @@ export class ConnectionHandler extends EventEmitter {
     return this.clients.get(this.ownClid) ?? null;
   }
 
-  async connect(url, { nickname, uid }) {
+  async connect(url, { nickname, uid, accessCode }) {
     await this.connection.connect(url);
-    const data = await this.connection.sendCommand('login', { nickname, uid });
+    let data;
+    try { data = await this.connection.sendCommand('login', { nickname, uid, accessCode }); }
+    catch (err) { this.connection.disconnect(); throw err; }
+    this.applyView(data);
+    this.emit('connected');
+    this.emit('changed');
+  }
+
+  applyView(data) {
     this.ownClid = data.clid;
     this.serverName = data.server.name;
     this.capabilities = data.server.capabilityExtensions ?? [];
@@ -41,8 +50,6 @@ export class ConnectionHandler extends EventEmitter {
     this.channels = new Map(data.channels.map(c => [c.cid, c]));
     this.clients = new Map(data.clients.map(c => [c.clid, c]));
     this.streams = new Map(data.streams.map(s => [s.streamIdentifier, s]));
-    this.emit('connected');
-    this.emit('changed');
   }
 
   disconnect() {
@@ -63,6 +70,16 @@ export class ConnectionHandler extends EventEmitter {
 
   #bind() {
     const c = this.connection;
+    c.on('reconnecting', () => { this.reconnecting = true; this.emit('reconnecting'); });
+    c.on('resumed', data => {
+      this.reconnecting = false;
+      const changedIdentity = data.restarted || this.ownClid !== data.clid;
+      for (const [id, stream] of this.streams) {
+        if (changedIdentity || !data.streams.some(s => s.streamIdentifier === id)) this.emit('streamremoved', stream);
+      }
+      this.applyView(data);
+      this.emit('changed'); this.emit('resumed');
+    });
     c.on('disconnected', info => {
       this.emit('disconnected', info);
     });

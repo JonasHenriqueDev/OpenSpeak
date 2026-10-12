@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "outputDirectory": "public",
+  "buildCommand": "node scripts/build-cloud.mjs",
+  "functions": { "api/ws.js": { "maxDuration": 300 } },
+  "rewrites": [{ "source": "/ws", "destination": "/api/ws" }]
+}

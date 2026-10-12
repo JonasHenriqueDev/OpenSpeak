@@ -52,6 +52,7 @@ public:
     explicit WebSocketConnection(QObject *parent = nullptr);
 
     void open(const QUrl &url);
+    void setCloudAccessCode(const QString &code);
     void close() override;
     bool isConnected() const override;
     void sendCommand(const QString &cmd, const QJsonObject &args = {}, Callback callback = {}) override;
@@ -70,6 +71,12 @@ private:
     QHash<int, Pending> m_pending;
     int m_nextId = 1;
     bool m_wasOpen = false;
+    bool m_cloud = false, m_stopped = false;
+    QString m_accessCode, m_resumeToken;
+    QJsonObject m_loginArgs;
+    int m_resumeClid = 0, m_retryMs = 1000;
+    QUrl m_url;
+    QTimer m_retry, m_heartbeat;
 };
 
 /// Encaminha para o backend ativo (o motor guarda um ponteiro estável).

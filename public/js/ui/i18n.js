@@ -182,7 +182,7 @@ const STRINGS = {
   'video.stream.stats.video.scalability_mode': 'Modo de escalabilidade',
   'video.stream.stats.no_viewers': 'Sem espectadores: as estatísticas aparecem quando alguém assistir.',
   'video.stream.stats.connection.host': 'Direta (LAN)',
-  'video.stream.stats.connection.srflx': 'Direta (NAT/STUN)',
+  'video.stream.stats.connection.srflx': 'Direta (P2P)',
   'video.stream.stats.connection.relay': 'Retransmitida (TURN)',
 
   'video.streams': 'Nenhum stream | 1 stream | {count} streams',

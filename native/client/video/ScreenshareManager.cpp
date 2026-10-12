@@ -663,6 +663,10 @@ void ScreenshareManager::onClientJoined(const QJsonObject &a)
         return;
     OwnStream &own = *it->second;
     const int clid = a.value("clid").toInt();
+    if (m_handler->cloudMode() && (!m_handler->directory() || m_handler->directory()->self().address.isNull())) {
+        m_conn->sendCommand(QStringLiteral("removeclientfromstream"), {{"streamIdentifier", id}, {"clid", clid}, {"reason", int(LeaveReason::Failed)}});
+        return;
+    }
     removeSession(own, clid);
     own.viewers.insert(clid);
     QStringList codecs;
@@ -675,7 +679,7 @@ void ScreenshareManager::onClientJoined(const QJsonObject &a)
             m_conn->sendCommand(QStringLiteral("streamsignaling"), {{"streamIdentifier", id}, {"clid", clid}, {"payload", payload}});
         },
         [encoder] { encoder->requestKeyFrame(); }, this);
-    if (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")) && m_handler->directory())
+    if ((m_handler->cloudMode() || (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")))) && m_handler->directory())
         session->setBindAddress(m_handler->directory()->self().address.toString());
     if (!session->remoteSupportsH264()) {
         qCWarning(lcShare) << "espectador" << clid << "não decodifica H.264";
@@ -759,11 +763,15 @@ void ScreenshareManager::onJoinResponse(const QJsonObject &a)
         return;
     }
     it->status = InStatus::Connecting;
+    if (m_handler->cloudMode() && (!m_handler->directory() || m_handler->directory()->self().address.isNull())) {
+        setInboundError(*it, QStringLiteral("video.join.error.connection_lost"));
+        return;
+    }
     const int owner = it->ownerClid;
     auto *session = new SessionInbound(id, owner, m_handler->iceServers(), [this, id, owner](const QJsonObject &payload) {
         m_conn->sendCommand(QStringLiteral("streamsignaling"), {{"streamIdentifier", id}, {"clid", owner}, {"payload", payload}});
     }, this);
-    if (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")) && m_handler->directory())
+    if ((m_handler->cloudMode() || (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")))) && m_handler->directory())
         session->setBindAddress(m_handler->directory()->self().address.toString());
     session->setVolume(it->volume);
     it->session = session;

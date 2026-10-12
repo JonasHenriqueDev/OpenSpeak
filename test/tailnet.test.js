@@ -1,11 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isTailnetAddress, isTailnetServer, tailnetCandidate, tailnetSdp, privateEntryUrl } from '../public/js/core/tailnet.js';
+import { isTailnetAddress, isTailnetServer, tailnetCandidate, tailnetSdp, privateEntryUrl, advertiseTailnetCandidate, advertiseTailnetSdp } from '../public/js/core/tailnet.js';
 
 test('private deployment accepts only authenticated Tailscale HTTPS endpoints', () => {
   assert.ok(isTailnetServer('wss://desktop.example.ts.net/ws'));
   for (const url of ['ws://desktop.example.ts.net/ws', 'wss://example.com/ws', 'wss://a.ts.net.example.com/ws', 'wss://user:secret@a.ts.net/ws', 'invalid'])
     assert.equal(isTailnetServer(url), false);
+});
+
+test('browser mDNS advertisements use the supplied tailnet IP without exposing LAN or relay routes', () => {
+  const candidate = 'candidate:1 1 udp 123 browser.local 4000 typ host';
+  assert.equal(advertiseTailnetCandidate(candidate, '100.75.12.74'), candidate.replace('browser.local', '100.75.12.74'));
+  assert.equal(advertiseTailnetCandidate(candidate.replace('browser.local', '192.168.0.1'), '100.75.12.74'), null);
+  assert.equal(advertiseTailnetCandidate(candidate.replace('host', 'relay'), '100.75.12.74'), null);
+  assert.throws(() => advertiseTailnetCandidate(candidate, '8.8.8.8'));
+  assert.equal(advertiseTailnetSdp(`v=0\r\na=${candidate}\r\n`, '100.75.12.74'), `v=0\r\na=${candidate.replace('browser.local', '100.75.12.74')}\r\n`);
 });
 
 test('public entry keeps nickname and profile when opening the private HTTPS client', () => {

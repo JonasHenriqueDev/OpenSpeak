@@ -9,3 +9,4 @@ native/*.log
 *.log
 web-dist/
 .vercel/
+.env*

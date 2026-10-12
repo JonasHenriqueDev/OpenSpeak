@@ -1,71 +1,51 @@
-# Web + Windows pela tailnet
+# OpenSpeak 0.2.3: Windows e navegador
 
-A página do Vercel é a entrada pública. Ao conectar, ela abre a interface no
-endereço privado HTTPS do servidor Tailscale. Isso evita a conexão entre a página
-pública e a rede privada, que alguns navegadores bloqueiam. O site privado serve
-o mesmo cliente web do projeto. Nenhum vídeo passa pelo Vercel.
+Todos os computadores devem estar conectados à mesma tailnet, com tráfego entre eles permitido nas regras do Tailscale. Não há TURN nem STUN neste modo.
 
-Todos os PCs devem executar Tailscale e pertencer à mesma tailnet (com acesso
-permitido pelas regras dela). Um PC hospeda o servidor de sinalização e precisa
-permanecer ligado enquanto o grupo usa o app. O modo de descoberta automática
-da malha do app nativo continua disponível; para interagir com o navegador, os
-apps nativos devem conectar ao servidor dedicado comum.
+## Duas formas de entrar
 
-## Hospedar
+**Tailnet, somente apps Windows:** a opção Entrar usa descoberta e sinalização diretas entre apps, na porta 9987 da interface Tailscale. Funciona sem Vercel, Redis ou servidor dedicado. Cada app controla seus próprios streams. Fechar um app encerra seus streams; os demais continuam conectados entre si.
 
-Gere a release com `native/package.ps1` e execute:
+**Sala web, Windows e navegadores:** abra https://openspeak-dun.vercel.app/ e informe apelido, IP Tailscale do próprio PC e código privado da sala. No Windows, selecione **Sala web • Windows e navegadores** e informe o mesmo código. Todos usam a sala comum no Vercel; nenhum Windows precisa hospedar um servidor. Dois navegadores podem negociar entre si mesmo sem apps Windows abertos.
 
-```powershell
-.\native\start-tailnet-server.ps1
-```
+Os dois modos possuem listas de participantes independentes. Para encontrar alguém no navegador, entre em Sala web no Windows, em vez de Entrar na tailnet. O código é configurado no ambiente do Vercel, nunca incluído no JavaScript, salvo no histórico de URLs ou persistido nas preferências dos clientes.
 
-Esse script abre o servidor em `127.0.0.1:9988`, sem STUN/TURN, e configura
-Tailscale Serve em HTTPS. Se a tailnet ainda não tiver HTTPS/Serve habilitado,
-o próprio Tailscale informa a página para habilitar. Não é usado Tailscale Funnel.
-Nenhuma tarefa de inicialização do Windows é criada automaticamente.
+## Caminho dos dados
 
-No navegador, abra a página do Vercel e conecte. No `.exe`, selecione
-**Servidor dedicado (avançado)** e use `wss://<nome-do-pc>.<tailnet>.ts.net/ws`.
+Vercel recebe comandos, presença, miniaturas públicas e mensagens SDP/ICE. Redis guarda o estado temporário da sala e distribui notificações entre instâncias. O vídeo e o áudio usam WebRTC entre participantes pela tailnet. Se o Tailscale usar DERP, a mídia passa pelo relay criptografado do Tailscale. Vercel e Redis não recebem o fluxo de vídeo/áudio.
 
-## Publicar a entrada
+O navegador mascara IPs locais com mDNS. Como esses nomes não resolvem entre máquinas da tailnet, o cliente anuncia o endereço Tailscale informado no login para seus candidatos host mascarados, preservando portas e credenciais ICE. IPs de LAN, candidatos públicos e TURN não são anunciados nesse modo. O endereço precisa pertencer ao PC que está executando o navegador.
+
+## Reconexão e fechamento
+
+As funções do Vercel têm duração máxima de 300 segundos no Hobby. Os clientes reconectam automaticamente e retomam o mesmo participante, sem recriar as conexões de mídia ativas. A retomada tem tolerância de 90 segundos. Depois disso, a sessão entra novamente e os streams antigos são removidos: uma transmissão encerrada não é recriada sem uma nova ação do usuário.
+
+Ao desconectar normalmente, o cliente envia logout. Em quedas abruptas, os outros clientes removem a presença expirada durante a próxima atualização. Não há serviço OpenSpeak, tarefa agendada ou processo de servidor iniciado automaticamente. O Tailscale continua sendo um aplicativo separado.
+
+## Publicar
+
+Instale as dependências com npm ci. Vincule o projeto do Vercel na raiz do repositório e configure REDIS_URL (integração Upstash) e OPENSPEAK_ROOM_CODE como segredos de produção. Publique a raiz, não a antiga pasta web-dist:
 
 ```powershell
-.\scripts\build-web.ps1 -ServerUrl 'wss://<nome-do-pc>.<tailnet>.ts.net/ws'
+npx vercel deploy --prod --scope jonashenriquedevs-projects
 ```
 
-Publique a pasta `web-dist` no Vercel. Ela contém apenas HTML, CSS e JavaScript;
-não há funções, Redis, servidor TURN ou mídia no Vercel. Para atualização via CLI:
+scripts/build-cloud.mjs configura o cliente hospedado para sinalização cloud. api/ws.js usa WebSockets e Redis com commit atômico, sem estado compartilhado apenas em memória. Uma nova sessão invalida o socket anterior. A sala tem limite de 32 participantes e cada socket aceita até 180 comandos por minuto.
 
-```powershell
-cd web-dist
-npx vercel --prod --scope jonashenriquedevs-projects
-```
+Vercel Hobby e Upstash Free foram selecionados. Gratuidade depende das cotas, incluindo os 500 mil comandos mensais do Redis. Não há contratação de plano pago. WebSockets no Vercel estão em beta: https://vercel.com/docs/functions/websockets
 
-## Testar no mesmo PC
+## Testes e release
 
-```powershell
-.\OpenSpeak-Portable-0.2.2.exe --local-test
-```
+npm test verifica protocolo, estado distribuído, autenticação, retomada e candidatos. native/build.ps1 compila e testa malha, mídia, interface e retomada do transporte nativo. native/package.ps1 gera instalador, ZIP e portátil de um único executável, com as mesmas funções do app instalado.
 
-Isso abre Emissor e Espectador com configurações separadas e um servidor de teste
-local na porta 19988. Feche as duas janelas para encerrar o servidor e limpar os
-arquivos temporários. Não use duas cópias desse teste simultaneamente.
+O portátil extrai dependências numa pasta temporária própria e remove essa pasta ao sair. --local-test abre dois clientes e um servidor de teste temporário em loopback; ele termina ao fechar ambos. Não é necessário para a sala web.
 
-Para testar o navegador, transmita uma janela ou o padrão de teste no nativo e
-assista no web; depois faça o inverso. Fones ajudam a evitar eco. Em um único PC,
-esses testes verificam protocolo, captura, decodificação e troca de fonte, mas
-não verificam CGNAT real ou o caminho entre máquinas diferentes.
+Um teste no mesmo PC verifica interoperabilidade e reprodução, mas não substitui um teste em dois PCs diferentes para confirmar regras de tailnet e CGNAT/DERP.
 
-## Limites
+### Estado da validação desta pré-release
 
-- Sem Tailscale, a sessão privada não abre. Sem TURN, não há fallback pela internet.
-- O Tailscale pode usar DERP se a conexão direta falhar; nesse caso a mídia passa
-  pelo relay criptografado do Tailscale, nunca pelo Vercel.
-- O nativo usa seu endereço Tailscale para mídia em servidores ts.net. O web usa
-  candidatos host da tailnet/mDNS e não configura STUN/TURN. O navegador decide
-  quais interfaces expor. A interoperabilidade web/nativo deve ser testada também
-  em dois PCs; navegador/navegador entre PCs pode ser limitado por mDNS.
-- As configurações do portátil são as mesmas do app instalado, no perfil do
-  Windows; o arquivo único não transporta automaticamente seus dados para outro PC.
-- A extração usa o PowerShell incluído no Windows. Políticas corporativas que
-  bloqueiam PowerShell podem impedir a abertura do pacote de arquivo único.
+Passaram 29 testes JavaScript e 9 suítes nativas, incluindo mídia P2P e malha Windows em loopback. O portátil de um único exe também passou no teste de abertura sem Qt instalado no PATH.
+
+Windows para navegador e navegador para navegador reproduziram vídeo em 1280x720 no mesmo PC. No teste entre navegador Windows e navegador Linux, a sala e as miniaturas funcionaram, mas o vídeo permaneceu conectando. Essa rota entre PCs ainda precisa de correção e não deve ser considerada validada nesta versão. O anúncio de candidatos mDNS pelo IP informado é experimental.
+
+Para testar Windows com Windows sem Vercel, use **Entrar** na tailnet nos dois apps. Não selecione Sala web para esse teste.

@@ -1,0 +1,10 @@
+native
+test
+docs
+web-dist
+outputs
+work
+*.log
+*.pem
+.env*
+node_modules

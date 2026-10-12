@@ -44,13 +44,22 @@ Rectangle {
         message = I18n.t("app.connecting")
         Server.connectTo(Settings.serverUrl, nick, Settings.uid)
     }
+    function enterCloud() {
+        const nick = nickField.text.trim()
+        if (!nick.length || !tailnetReady || !cloudCode.text.trim().length) return
+        Settings.nickname = nick
+        Settings.connectionMode = "cloud"
+        busy = true
+        message = I18n.t("app.connecting")
+        Server.connectCloud(nick, Settings.uid, cloudCode.text)
+    }
     function tryAuto() {
         if (!AutoConnect || autoTried || !Settings.nickname.length)
             return
         if (Settings.connectionMode === "server") {
             autoTried = true
             enterServer()
-        } else if (tailnetReady) {
+        } else if (Settings.connectionMode !== "cloud" && tailnetReady) {
             autoTried = true
             enterTailnet()
         }
@@ -63,10 +72,17 @@ Rectangle {
     Pane {
         anchors.centerIn: parent
         width: Math.min(440, parent.width - 32)
+        height: Math.min(implicitHeight, root.height - 32)
         padding: 28
         background: Rectangle { radius: 12; color: Theme.panel; border.color: Theme.border }
 
-        ColumnLayout {
+        contentItem: Flickable {
+          implicitHeight: loginContents.implicitHeight
+          contentHeight: loginContents.implicitHeight
+          contentWidth: width
+          clip: true
+          ColumnLayout {
+            id: loginContents
             width: parent.width
             spacing: 14
 
@@ -148,6 +164,37 @@ Rectangle {
 
             // ---------------------------------------- servidor dedicado (avançado)
             Button {
+                Layout.fillWidth: true
+                text: "Sala web • Windows e navegadores"
+                onClicked: cloudBox.visible = !cloudBox.visible
+            }
+            ColumnLayout {
+                id: cloudBox
+                Layout.fillWidth: true
+                visible: Settings.connectionMode === "cloud"
+                spacing: 8
+                Label {
+                    Layout.fillWidth: true
+                    text: "Vercel negocia a conexão. Vídeo e áudio usam sua tailnet."
+                    wrapMode: Text.WordWrap
+                    color: Theme.textDim
+                }
+                TextField {
+                    id: cloudCode
+                    Layout.fillWidth: true
+                    placeholderText: "Código privado da sala"
+                    echoMode: TextInput.Password
+                    onAccepted: root.enterCloud()
+                }
+                Button {
+                    Layout.fillWidth: true
+                    text: "Entrar na sala web"
+                    enabled: !root.busy && root.tailnetReady && nickField.text.trim().length > 0 && cloudCode.text.trim().length > 0
+                    onClicked: root.enterCloud()
+                }
+            }
+
+            Button {
                 flat: true
                 text: (serverBox.visible ? "▾  " : "▸  ") + I18n.t("app.dedicated_server")
                 onClicked: serverBox.visible = !serverBox.visible
@@ -179,6 +226,7 @@ Rectangle {
                 color: Theme.textDim
                 visible: text.length > 0
             }
+          }
         }
     }
 }

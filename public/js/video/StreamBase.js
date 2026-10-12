@@ -10,7 +10,7 @@
 // O lado de saída (transmissor) é sempre quem oferta, então não há "glare".
 
 import { EventEmitter } from '../core/EventEmitter.js';
-import { tailnetCandidate, tailnetSdp } from '../core/tailnet.js';
+import { tailnetCandidate, tailnetSdp, advertiseTailnetCandidate, advertiseTailnetSdp } from '../core/tailnet.js';
 
 export const SessionState = Object.freeze({
   NEW: 'new',
@@ -58,6 +58,7 @@ export class StreamBase extends EventEmitter {
 
   createPeerConnection() {
     this.tailscaleOnly = globalThis.OpenSpeakConfig?.tailscaleOnly === true;
+    this.tailnetIp = globalThis.OpenSpeakConfig?.tailnetIp;
     const pc = new RTCPeerConnection({
       iceServers: this.tailscaleOnly ? [] : this.iceServers,
       bundlePolicy: 'max-bundle',
@@ -66,7 +67,12 @@ export class StreamBase extends EventEmitter {
     pc.addEventListener('icecandidate', ev => {
       if (pc !== this.pc) return;
       if (this.tailscaleOnly && ev.candidate && !tailnetCandidate(ev.candidate.candidate)) return;
-      this.sendToPeer({ type: 'ice', candidate: ev.candidate ? ev.candidate.toJSON() : null });
+      let candidate = ev.candidate ? ev.candidate.toJSON() : null;
+      if (candidate && this.tailnetIp) {
+        candidate.candidate = advertiseTailnetCandidate(candidate.candidate, this.tailnetIp);
+        if (!candidate.candidate) return;
+      }
+      this.sendToPeer({ type: 'ice', candidate });
     });
     pc.addEventListener('connectionstatechange', () => {
       if (pc === this.pc) this.#onConnectionChange();
@@ -128,7 +134,7 @@ export class StreamBase extends EventEmitter {
       const offer = await this.pc.createOffer({ iceRestart });
       offer.sdp = this.transformLocalSdp(offer.sdp, 'offer');
       await this.pc.setLocalDescription(offer);
-      this.sendToPeer({ type: 'offer', sdp: this.tailscaleOnly ? tailnetSdp(this.pc.localDescription.sdp) : this.pc.localDescription.sdp, isReconnect });
+      this.sendToPeer({ type: 'offer', sdp: this.localSignalingSdp(), isReconnect });
     } catch (err) {
       this._negotiating = false;
       console.error(`${this.tag} StartOfferAnswer: falha ao criar oferta`, err);
@@ -169,6 +175,11 @@ export class StreamBase extends EventEmitter {
   /** Gancho para ajustes de SDP (ex.: Opus estéreo). */
   transformLocalSdp(sdp) {
     return sdp;
+  }
+
+  localSignalingSdp() {
+    const sdp = this.pc.localDescription.sdp;
+    return this.tailnetIp ? advertiseTailnetSdp(sdp, this.tailnetIp) : this.tailscaleOnly ? tailnetSdp(sdp) : sdp;
   }
 
   reconnect() {
@@ -219,7 +230,7 @@ export class StreamBase extends EventEmitter {
     const answer = await this.pc.createAnswer();
     answer.sdp = this.transformLocalSdp(answer.sdp, 'answer');
     await this.pc.setLocalDescription(answer);
-    this.sendToPeer({ type: 'answer', sdp: this.tailscaleOnly ? tailnetSdp(this.pc.localDescription.sdp) : this.pc.localDescription.sdp });
+    this.sendToPeer({ type: 'answer', sdp: this.localSignalingSdp() });
   }
 
   async #onAnswer({ sdp }) {

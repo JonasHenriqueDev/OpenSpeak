@@ -68,7 +68,7 @@ export class CloudConnection extends EventEmitter {
       this.socket.send(JSON.stringify({ type: 'cmd', id, cmd, args }));
     });
     if (cmd === 'login') {
-      this.auth = { nickname: args.nickname, uid: args.uid, accessCode: args.accessCode };
+      this.auth = { nickname: args.nickname, uid: args.uid };
       this.resume = { clid: result.clid, token: result.resumeToken };
       clearInterval(this.heartbeat);
       this.heartbeat = setInterval(() => {

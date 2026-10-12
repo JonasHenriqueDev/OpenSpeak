@@ -57,7 +57,7 @@ int main(int argc, char *argv[])
     QCommandLineOption openOpt(QStringLiteral("open"), QStringLiteral("Abre um painel ao iniciar: setup | setup-windows | setup-cameras | source | settings | stats | viewers."), QStringLiteral("painel"));
     QCommandLineOption autoJoinOpt(QStringLiteral("autojoin"), QStringLiteral("Assiste ao primeiro stream do canal."));
     QCommandLineOption uiSmokeOpt(QStringLiteral("ui-smoke-test"), QStringLiteral("Valida o layout QML em 900x560 e encerra (sem conectar)."));
-    QCommandLineOption cloudOpt(QStringLiteral("cloud"), QStringLiteral("Conecta à sala web usando OPENSPEAK_ROOM_CODE do ambiente."));
+    QCommandLineOption cloudOpt(QStringLiteral("cloud"), QStringLiteral("Conecta à sala web pública."));
     QCommandLineOption quitOpt(QStringLiteral("quit-after"), QStringLiteral("Encerra o teste após N segundos (requer --debug)."), QStringLiteral("segundos"));
     parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt, cloudOpt, quitOpt});
     parser.process(app);
@@ -155,8 +155,7 @@ int main(int argc, char *argv[])
         QObject::connect(cloudTimer, &QTimer::timeout, &app, [&, directory, cloudTimer] {
             if (directory->status() != PeerDirectory::Status::Running) return;
             cloudTimer->stop();
-            handler.connectCloud(settings.nickname(), settings.uid(), QString::fromUtf8(qgetenv("OPENSPEAK_ROOM_CODE")));
-            qunsetenv("OPENSPEAK_ROOM_CODE");
+            handler.connectCloud(settings.nickname(), settings.uid());
         });
         cloudTimer->start();
     }

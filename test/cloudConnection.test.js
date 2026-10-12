@@ -14,6 +14,7 @@ test('cloud client resumes after socket rotation and stops reconnecting after lo
     ws.on('message', raw => {
       const msg = JSON.parse(raw);
       if (msg.cmd === 'login') {
+        assert.equal(msg.args.accessCode, undefined);
         resumed ||= msg.args.resumeClid === 7 && msg.args.resumeToken === 'test-token';
         ws.send(JSON.stringify({ type: 'res', id: msg.id, return_code: 'ok', data: { clid: 7, resumeToken: 'test-token' } }));
       } else if (msg.cmd === 'logout') loggedOut = true;
@@ -24,7 +25,7 @@ test('cloud client resumes after socket rotation and stops reconnecting after lo
   const client = new CloudConnection();
   try {
     await client.connect(`ws://127.0.0.1:${server.address().port}`);
-    await client.sendCommand('login', { nickname: 'QA', uid: 'qa', accessCode: 'test-code' });
+    await client.sendCommand('login', { nickname: 'QA', uid: 'qa' });
     const recovery = new Promise(resolve => client.on('resumed', resolve));
     [...wss.clients][0].close();
     const view = await recovery;

@@ -65,7 +65,7 @@ servidor para configurar.
 ### Servidor dedicado (opcional)
 
 Para usar Windows e navegador sem servidor em um PC, escolha **Sala web • Windows
-e navegadores** e use o mesmo código da sala do Vercel. A mídia continua na
+e navegadores**. A entrada não pede código. A mídia continua na
 tailnet, e o Vercel faz somente a sinalização. A opção Tailnet permanece
 independente do Vercel. Veja [WEB-TAILSCALE.md](../WEB-TAILSCALE.md).
 

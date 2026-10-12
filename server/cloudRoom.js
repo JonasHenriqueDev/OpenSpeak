@@ -11,15 +11,12 @@ const reject = (code, message) => { throw new CommandError(code, message); };
 // GET + atomic compare/commit/publish. No instance owns a room; reconnects can
 // land anywhere, and concurrent commands retry against the latest snapshot.
 export class CloudRoom {
-  constructor(store, accessCode, now = Date.now) {
+  constructor(store, now = Date.now) {
     this.store = store;
-    this.accessCode = accessCode;
     this.now = now;
   }
 
   async execute(session, cmd, args = {}) {
-    if (cmd === 'login' && (!this.accessCode || !equal(args.accessCode, this.accessCode)))
-      reject('access_denied', 'Código da sala inválido.');
     for (let attempt = 0; attempt < 8; attempt++) {
       const before = await this.store.read();
       const state = before ? JSON.parse(before) : { sessions: {}, revision: 0 };

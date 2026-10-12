@@ -69,7 +69,7 @@ WebSocketConnection::WebSocketConnection(QObject *parent) : ServerConnection(par
     });
 }
 
-void WebSocketConnection::setCloudAccessCode(const QString &code) { m_cloud = !code.isEmpty(); m_accessCode = code; }
+void WebSocketConnection::setCloudMode(bool enabled) { m_cloud = enabled; }
 void WebSocketConnection::open(const QUrl &url) {
     m_url = url; m_stopped = false; m_retryMs = 1000;
     m_resumeToken.clear(); m_retry.stop(); m_heartbeat.stop();
@@ -83,7 +83,7 @@ void WebSocketConnection::close() {
         m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
         m_ws.flush();
     }
-    m_resumeToken.clear(); m_accessCode.clear(); m_loginArgs = {};
+    m_resumeToken.clear(); m_loginArgs = {};
     m_ws.close(QWebSocketProtocol::CloseCodeNormal, QStringLiteral("bye"));
 }
 
@@ -109,7 +109,6 @@ void WebSocketConnection::sendCommand(const QString &cmd, const QJsonObject &arg
     timer->start(CommandTimeoutMs);
     QJsonObject outgoing = args;
     if (m_cloud && cmd == "login") {
-        outgoing.insert("accessCode", m_accessCode);
         m_loginArgs = outgoing;
         callback = [this, next = std::move(callback)](const CommandResult &r) {
             if (r.ok()) {

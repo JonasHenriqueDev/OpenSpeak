@@ -106,7 +106,7 @@ void ConnectionHandler::connectTailnet(const QString &nickname)
 void ConnectionHandler::connectTo(const QString &url, const QString &nickname, const QString &uid)
 {
     m_cloudMode = false;
-    m_ws->setCloudAccessCode({});
+    m_ws->setCloudMode(false);
     m_pendingNickname = nickname;
     m_pendingUid = uid;
     m_connection.setBackend(m_ws);
@@ -114,18 +114,17 @@ void ConnectionHandler::connectTo(const QString &url, const QString &nickname, c
     m_ws->open(QUrl(url));
 }
 
-void ConnectionHandler::connectCloud(const QString &nickname, const QString &uid, const QString &code)
+void ConnectionHandler::connectCloud(const QString &nickname, const QString &uid)
 {
     if (!m_directory || m_directory->status() != PeerDirectory::Status::Running || m_directory->self().address.isNull()) {
         emit connectFailed(QStringLiteral("Conecte o Tailscale antes de entrar na sala web."));
         return;
     }
-    if (code.trimmed().isEmpty()) { emit connectFailed(QStringLiteral("Informe o código da sala.")); return; }
     m_cloudMode = true;
     m_reconnecting = false;
     m_pendingNickname = nickname;
     m_pendingUid = uid;
-    m_ws->setCloudAccessCode(code.trimmed());
+    m_ws->setCloudMode(true);
     m_connection.setBackend(m_ws);
     emit connectionChanged();
     m_ws->open(QUrl(QStringLiteral("wss://openspeak-dun.vercel.app/ws")));

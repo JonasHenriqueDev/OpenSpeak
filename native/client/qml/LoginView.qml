@@ -46,12 +46,12 @@ Rectangle {
     }
     function enterCloud() {
         const nick = nickField.text.trim()
-        if (!nick.length || !tailnetReady || !cloudCode.text.trim().length) return
+        if (!nick.length || !tailnetReady) return
         Settings.nickname = nick
         Settings.connectionMode = "cloud"
         busy = true
         message = I18n.t("app.connecting")
-        Server.connectCloud(nick, Settings.uid, cloudCode.text)
+        Server.connectCloud(nick, Settings.uid)
     }
     function tryAuto() {
         if (!AutoConnect || autoTried || !Settings.nickname.length)
@@ -179,17 +179,10 @@ Rectangle {
                     wrapMode: Text.WordWrap
                     color: Theme.textDim
                 }
-                TextField {
-                    id: cloudCode
-                    Layout.fillWidth: true
-                    placeholderText: "Código privado da sala"
-                    echoMode: TextInput.Password
-                    onAccepted: root.enterCloud()
-                }
                 Button {
                     Layout.fillWidth: true
                     text: "Entrar na sala web"
-                    enabled: !root.busy && root.tailnetReady && nickField.text.trim().length > 0 && cloudCode.text.trim().length > 0
+                    enabled: !root.busy && root.tailnetReady && nickField.text.trim().length > 0
                     onClicked: root.enterCloud()
                 }
             }

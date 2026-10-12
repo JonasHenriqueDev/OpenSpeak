@@ -6,7 +6,7 @@ import { createRedisRoomStore } from '../server/redisRoomStore.js';
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-  res.end(JSON.stringify({ service: 'OpenSpeak signaling', configured: !!(process.env.REDIS_URL && process.env.OPENSPEAK_ROOM_CODE) }));
+  res.end(JSON.stringify({ service: 'OpenSpeak signaling', configured: !!process.env.REDIS_URL, roomAccess: 'public' }));
 });
 const wss = new WebSocketServer({ server, maxPayload: 160 * 1024 });
 const sockets = new Map();
@@ -17,7 +17,7 @@ function getRoom() {
       const ws = sockets.get(clid);
       if (ws?.readyState === ws.OPEN) ws.send(JSON.stringify(message));
     }
-  }), process.env.OPENSPEAK_ROOM_CODE);
+  }));
   return room;
 }
 wss.on('connection', ws => {
@@ -36,7 +36,7 @@ wss.on('connection', ws => {
       try {
         if (msg.cmd !== 'login' && !session.clid) throw new CommandError('not_logged_in', 'Autenticação necessária.');
         if (msg.cmd === 'login' && session.clid) throw new CommandError('invalid_args', 'Já conectado');
-        if (!process.env.REDIS_URL || !process.env.OPENSPEAK_ROOM_CODE)
+        if (!process.env.REDIS_URL)
           throw new CommandError('not_configured', 'Sala ainda não configurada pelo administrador.');
         const result = await getRoom().execute(session, msg.cmd, msg.args);
         session = result.session;

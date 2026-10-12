@@ -80,7 +80,7 @@ public:
 
     Q_INVOKABLE void connectTailnet(const QString &nickname);
     Q_INVOKABLE void connectTo(const QString &url, const QString &nickname, const QString &uid);
-    Q_INVOKABLE void connectCloud(const QString &nickname, const QString &uid, const QString &code);
+    Q_INVOKABLE void connectCloud(const QString &nickname, const QString &uid);
     Q_INVOKABLE void disconnectFromServer();
     Q_INVOKABLE void moveTo(int cid);
     Q_INVOKABLE QString clientName(int clid) const;

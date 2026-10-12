@@ -13,6 +13,7 @@ import { ViewersPanel } from './ui/ViewersPanel.js';
 import { StatsPanel } from './ui/StatsPanel.js';
 import { Toasts } from './ui/Toasts.js';
 import { isTailnetServer, isTailnetAddress, privateEntryUrl } from './core/tailnet.js';
+import { detectTailnetAddress } from './core/detectTailnet.js';
 
 const deployment = window.OpenSpeakConfig || {};
 deployment.tailscaleOnly ||= location.hostname.endsWith('.ts.net');
@@ -46,8 +47,20 @@ function defaultServerUrl() {
 function renderLogin(message = '') {
   const nick = h('input.input', { value: entryParams.get('nickname')?.slice(0, 32) || settings.get('nickname'), placeholder: 'Ex.: Jonas', maxLength: 32, required: true });
   const server = h('input.input', { value: deployment.cloudSignaling ? defaultServerUrl() : settings.get('serverUrl') || defaultServerUrl() });
-  const accessCode = h('input.input', { type: 'password', autocomplete: 'off', placeholder: 'Código privado da sala', required: !!deployment.cloudSignaling });
   const tailnetIp = h('input.input', { value: settings.get('tailnetIp') || '', placeholder: '100.x.x.x deste PC', required: !!deployment.cloudSignaling });
+  const ipHint = h('small.muted', 'Tentando detectar o IP Tailscale…');
+  let detecting = false;
+  const detectIp = async () => {
+    if (detecting) return;
+    detecting = true;
+    const initial = tailnetIp.value;
+    ipHint.textContent = 'Tentando detectar o IP Tailscale…';
+    const detected = await detectTailnetAddress();
+    detecting = false;
+    if (!document.contains(tailnetIp)) return;
+    if (detected && tailnetIp.value === initial) tailnetIp.value = detected;
+    ipHint.textContent = detected ? 'IP Tailscale detectado pelo navegador.' : 'O navegador não revelou o IP. Copie o endereço deste PC no Tailscale.';
+  };
   const status = h('div.login-status', message);
   const submit = h('button.btn.primary.wide', { type: 'submit' }, t('app.connect'));
   const form = h('form.login-card', {
@@ -74,7 +87,7 @@ function renderLogin(message = '') {
         submit.disabled = true;
         status.textContent = t('app.connecting');
         try {
-          await startSession(server.value.trim(), nickname, accessCode.value);
+          await startSession(server.value.trim(), nickname);
         } catch (err) {
           submit.disabled = false;
           status.textContent = errorText(err);
@@ -86,21 +99,22 @@ function renderLogin(message = '') {
   deployment.tailscaleOnly ? h('p.login-status', deployment.cloudSignaling ? 'Tailscale obrigatório na mesma tailnet. O Vercel negocia as conexões; vídeo e áudio usam a rede P2P.' : 'Tailscale obrigatório: conecte este PC à mesma tailnet do servidor. A sessão abre no endereço privado da rede.') : null,
   h('label.field', h('span.field-label', t('app.nickname')), nick),
   deployment.cloudSignaling ? null : h('label.field', h('span.field-label', t('app.server')), server),
-  deployment.cloudSignaling ? h('label.field', h('span.field-label', 'IP Tailscale deste PC'), tailnetIp, h('small.muted', 'Copie o endereço 100.x.x.x do aplicativo Tailscale.')) : null,
-  deployment.cloudSignaling ? h('label.field', h('span.field-label', 'Código da sala'), accessCode) : null,
+  deployment.cloudSignaling ? h('label.field', h('span.field-label', 'IP Tailscale deste PC'), tailnetIp, ipHint) : null,
+  deployment.cloudSignaling ? h('button.btn.ghost', { type: 'button', on: { click: detectIp } }, 'Detectar IP automaticamente') : null,
   submit,
   status);
   replaceChildren(root, h('div.login', form));
   nick.focus();
+  if (deployment.cloudSignaling) void detectIp();
   if (!message && entryParams.get('autoconnect') === '1' && location.hostname.endsWith('.ts.net') && nick.value.trim())
     queueMicrotask(() => form.requestSubmit());
 }
 
 // ============================================================== sessão
 
-async function startSession(url, nickname, accessCode) {
+async function startSession(url, nickname) {
   const handler = new ConnectionHandler();
-  await handler.connect(url, { nickname, uid: settings.get('uid'), accessCode });
+  await handler.connect(url, { nickname, uid: settings.get('uid') });
   if (deployment.tailscaleOnly) handler.iceServers = [];
   const manager = new ScreenshareManager(handler, { contacts, settings });
   window.addEventListener('pagehide', () => handler.disconnect(), { once: true });

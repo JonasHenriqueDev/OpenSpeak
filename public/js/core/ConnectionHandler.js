@@ -32,10 +32,10 @@ export class ConnectionHandler extends EventEmitter {
     return this.clients.get(this.ownClid) ?? null;
   }
 
-  async connect(url, { nickname, uid, accessCode }) {
+  async connect(url, { nickname, uid }) {
     await this.connection.connect(url);
     let data;
-    try { data = await this.connection.sendCommand('login', { nickname, uid, accessCode }); }
+    try { data = await this.connection.sendCommand('login', { nickname, uid }); }
     catch (err) { this.connection.disconnect(); throw err; }
     this.applyView(data);
     this.emit('connected');

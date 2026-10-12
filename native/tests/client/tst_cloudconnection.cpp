@@ -22,6 +22,7 @@ private slots:
                 const auto args = msg.value("args").toObject();
                 if (msg.value("cmd") == "logout") { logout = true; return; }
                 if (msg.value("cmd") != "login") return;
+                QVERIFY(!args.contains("accessCode"));
                 resumed |= args.value("resumeClid").toInt() == 7 && args.value("resumeToken").toString() == "qa-token";
                 const QJsonObject reply{{"type", "res"}, {"id", msg.value("id")}, {"return_code", "ok"},
                     {"data", QJsonObject{{"clid", 7}, {"resumeToken", "qa-token"}}}};
@@ -29,7 +30,7 @@ private slots:
             });
         });
         WebSocketConnection client;
-        client.setCloudAccessCode("qa-code");
+        client.setCloudMode(true);
         QSignalSpy connected(&client, &ServerConnection::connected);
         QSignalSpy notifications(&client, &ServerConnection::notification);
         client.open(QUrl(QString("ws://127.0.0.1:%1").arg(server.serverPort())));

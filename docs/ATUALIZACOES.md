@@ -10,10 +10,11 @@ não são oferecidos pelo link web.
 
 ## App instalado
 
-Ao abrir, o app consulta o GitHub e pergunta se deseja atualizar quando encontra
-uma versão mais nova no canal escolhido. **Atualizar agora** baixa e valida o
-instalador, fecha o app e o reabre após instalar. **Agora não** mantém o app
-aberto e adia o aviso até a próxima abertura. Não baixa nem instala sem aceitar.
+Ao abrir, o app consulta o GitHub antes de liberar a conexão. Quando encontra
+uma versão mais nova no canal escolhido, baixa e valida o instalador, instala e
+reabre automaticamente, sem perguntar. A tela inicial mostra o estado da
+verificação e do download. Se já está atualizado ou a consulta/download falha,
+a entrada é liberada normalmente.
 
 No botão com ícone de download na barra da janela:
 
@@ -21,10 +22,10 @@ No botão com ícone de download na barra da janela:
   as consultas periódicas; a verificação ao abrir ocorre sempre.
 - **Receber pré-releases**: desabilitado por padrão. Desligado recebe somente
   releases estáveis. Ligado recebe a versão mais nova entre releases e pré-releases.
-- **Verificar agora**: consulta manual. Uma nova versão gera um aviso por
-  abertura, evitando repetir a pergunta depois de **Agora não**.
-- **Baixar atualização**: apenas baixa e valida. Fechar o app não instala
-  atualizações; use **Aplicar e reiniciar** para autorizar a instalação.
+- **Verificar agora**: consulta manual. Atualizações encontradas durante o uso
+  ficam para a próxima abertura, sem interromper conexões ou transmissões.
+- **Baixar atualização**: apenas baixa e valida. Para antecipar uma atualização
+  durante o uso, escolha **Aplicar e reiniciar**.
 - **Aplicar e reiniciar**: pede confirmação antes de encerrar conexões existentes.
 
 O instalador pode pedir elevação pelo UAC porque a instalação usa Program Files.

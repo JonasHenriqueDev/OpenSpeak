@@ -1,13 +1,15 @@
 #include "UpdatePolicy.h"
 #include "AutoUpdater.h"
 #include <QTest>
-#include <QSignalSpy>
+#include <QStandardPaths>
+#include <QScopeGuard>
+#include <QDir>
 #include <QTemporaryDir>
 #include <QFile>
 #include <QCryptographicHash>
 using namespace openspeak;
 namespace openspeak {
-class TestUpdaterConsent : public QObject {
+class TestUpdaterStartup : public QObject {
     Q_OBJECT
     static QJsonObject release(QString tag, bool pre = false, QString digest = QStringLiteral("sha256:") + QString(64, 'a')) {
         const auto version = tag.mid(1);
@@ -17,41 +19,60 @@ class TestUpdaterConsent : public QObject {
             {"browser_download_url", "https://github.com/JonasHenriqueDev/OpenSpeak/releases/download/" + tag + "/" + name}}}}};
     }
 private slots:
-    void asksOncePerLaunchWithoutDownloadingOrInstalling() {
-        Settings settings(QStringLiteral("update-consent-test"), true);
-        settings.setAutomaticUpdates(true);
+    void installsVerifiedStartupUpdateWithoutPromptEvenWhenPeriodicChecksAreOff() {
+        QStandardPaths::setTestModeEnabled(true);
+        Settings settings(QStringLiteral("update-startup-test"), true);
+        settings.setAutomaticUpdates(false);
         settings.setPrereleaseUpdates(false);
-        const QJsonDocument document(release("v99.0.0"));
-        AutoUpdater updater(&settings);
-        QSignalSpy prompt(&updater, &AutoUpdater::updateAvailable);
-        updater.handleReleaseDocument(document);
-        QCOMPARE(prompt.count(), 1);
-        QCOMPARE(updater.newVersion(), QStringLiteral("99.0.0"));
-        QVERIFY(updater.available());
-        QVERIFY(!updater.busy());
-        QVERIFY(!updater.ready());
-        QVERIFY(updater.m_reply.isNull());
-        QVERIFY(!updater.m_manualInstall);
-        updater.handleReleaseDocument(document);
-        QCOMPARE(prompt.count(), 1); // "Agora não" is respected during this launch.
-        AutoUpdater reopened(&settings);
-        QSignalSpy reopenedPrompt(&reopened, &AutoUpdater::updateAvailable);
-        reopened.handleReleaseDocument(document);
-        QCOMPARE(reopenedPrompt.count(), 1);
+        class InstalledUpdater : public AutoUpdater {
+        public:
+            using AutoUpdater::AutoUpdater;
+            bool installed() const override { return true; }
+            void installNow() override { ++installations; }
+            int installations = 0;
+        };
+        const QByteArray bytes(123, 'v');
+        const QString digest = "sha256:" + QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+        const QString directory = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/updates";
+        QVERIFY(QDir().mkpath(directory));
+        const QString cached = directory + "/OpenSpeak-Setup-99.0.0.exe";
+        const auto cleanup = qScopeGuard([&] { QFile::remove(cached); });
+        QFile file(cached);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write(bytes), qint64(bytes.size())); file.close();
+        InstalledUpdater startup(&settings);
+        QVERIFY(startup.startupBusy());
+        startup.handleReleaseDocument(QJsonDocument(release("v99.0.0", false, digest)));
+        QCOMPARE(startup.installations, 1);
+        QVERIFY(startup.ready());
+        QCOMPARE(startup.m_readyFile, cached);
+        QVERIFY(startup.m_reply.isNull()); // Validated cache, no redundant download.
+        QVERIFY(startup.startupBusy()); // Login stays blocked until restart.
+        InstalledUpdater duringUse(&settings);
+        duringUse.m_startupBusy = false;
+        duringUse.handleReleaseDocument(QJsonDocument(release("v99.0.0", false, digest)));
+        QCOMPARE(duringUse.installations, 0); // Never interrupt an active session.
+        QVERIFY(!duringUse.ready());
+        QVERIFY(duringUse.available());
     }
-    void checksStartupOfferEvenWithoutPeriodicChecks() {
+    void releasesLoginWhenUpToDateOrStartupFails() {
         Settings settings(QStringLiteral("update-startup-test"), true);
         settings.setAutomaticUpdates(false);
         settings.setPrereleaseUpdates(false);
         AutoUpdater updater(&settings);
-        QSignalSpy prompt(&updater, &AutoUpdater::updateAvailable);
         updater.handleReleaseDocument(QJsonDocument(release("v" + updater.version())));
-        QCOMPARE(prompt.count(), 0);
         QVERIFY(!updater.available());
-        updater.handleReleaseDocument(QJsonDocument(QJsonArray{release("v100.0.0-beta.1", true), release("v99.0.0")}));
-        QCOMPARE(prompt.count(), 1);
-        QCOMPARE(updater.newVersion(), QStringLiteral("99.0.0"));
-        QVERIFY(!updater.m_manualInstall);
+        QVERIFY(!updater.startupBusy());
+        AutoUpdater failed(&settings);
+        failed.fail(QStringLiteral("Network unavailable"));
+        QVERIFY(!failed.startupBusy());
+        QVERIFY(!failed.busy());
+        QVERIFY(!failed.m_installAfterDownload);
+        AutoUpdater portable(&settings);
+        portable.handleReleaseDocument(QJsonDocument(QJsonArray{release("v100.0.0-beta.1", true), release("v99.0.0")}));
+        QCOMPARE(portable.newVersion(), QStringLiteral("99.0.0"));
+        QVERIFY(!portable.startupBusy());
+        QVERIFY(!portable.m_manualInstall);
     }
     void corruptedDownloadsAreRejected() {
         QTemporaryDir directory;
@@ -91,5 +112,5 @@ private slots:
     }
 };
 }
-QTEST_GUILESS_MAIN(openspeak::TestUpdaterConsent)
+QTEST_GUILESS_MAIN(openspeak::TestUpdaterStartup)
 #include "tst_updates.moc"

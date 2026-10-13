@@ -119,8 +119,11 @@ int main(int argc, char *argv[])
                 auto *address = findVisualItem(window->contentItem(), QStringLiteral("serverAddress"));
                 valid = valid && connectButton && connectButton->isVisible() && address && address->isVisible()
                     && advanced && advanced->isVisible() == (panel == "login-advanced");
-            } else if (panel == "updates" || panel == "update-prompt") {
-                auto *dialog = window->findChild<QObject *>(panel == "updates" ? QStringLiteral("updatesDialog") : QStringLiteral("updatePrompt"));
+            } else if (panel == "startup") {
+                auto *startup = findVisualItem(window->contentItem(), QStringLiteral("startupScreen"));
+                valid = valid && startup && startup->isVisible() && startup->width() >= 800;
+            } else if (panel == "updates") {
+                auto *dialog = window->findChild<QObject *>(QStringLiteral("updatesDialog"));
                 valid = valid && dialog && dialog->property("visible").toBool()
                     && dialog->property("width").toDouble() >= 400
                     && dialog->property("height").toDouble() < window->height();
@@ -176,6 +179,7 @@ int main(int argc, char *argv[])
         auto *cloudTimer = new QTimer(&app);
         cloudTimer->setInterval(500);
         QObject::connect(cloudTimer, &QTimer::timeout, &app, [&, directory, cloudTimer] {
+            if (updater.startupBusy()) return;
             if (directory->status() != PeerDirectory::Status::Running) return;
             cloudTimer->stop();
             handler.connectCloud(settings.nickname(), settings.uid());

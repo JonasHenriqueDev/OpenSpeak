@@ -42,13 +42,18 @@ AutoUpdater::AutoUpdater(Settings *settings, QObject *parent)
 QString AutoUpdater::version() const { return QStringLiteral(OPENSPEAK_VERSION); }
 bool AutoUpdater::installed() const { return QFileInfo::exists(QCoreApplication::applicationDirPath() + QStringLiteral("/unins000.exe")); }
 void AutoUpdater::setStatus(const QString &status, bool busy) { m_status = status; m_busy = busy; emit changed(); }
+void AutoUpdater::fail(const QString &status) {
+    m_startupBusy = false;
+    m_installAfterDownload = false;
+    setStatus(status);
+}
 void AutoUpdater::settingsChanged() {
     if (m_previousAuto == m_settings->automaticUpdates() && m_previousPre == m_settings->prereleaseUpdates()) return;
     m_previousAuto = m_settings->automaticUpdates(); m_previousPre = m_settings->prereleaseUpdates();
     ++m_generation;
     if (m_reply) m_reply->abort();
     m_readyFile.clear(); m_offer = {}; m_busy = false; m_installAfterDownload = false;
-    if (m_previousAuto) check();
+    if (m_previousAuto || m_startupBusy) check();
     else setStatus(QStringLiteral("Verificação periódica desativada. O app verifica ao abrir."));
 }
 void AutoUpdater::check() {
@@ -68,11 +73,11 @@ void AutoUpdater::check() {
     connect(reply, &QNetworkReply::finished, this, [this, reply, payload, generation] {
         reply->deleteLater();
         if (generation != m_generation) return;
-        if (reply->error() != QNetworkReply::NoError) { setStatus(QStringLiteral("Não foi possível verificar atualizações. Tente novamente mais tarde.")); return; }
+        if (reply->error() != QNetworkReply::NoError) { fail(QStringLiteral("Não foi possível verificar atualizações. Tente novamente mais tarde.")); return; }
         payload->append(reply->readAll());
         const auto doc = QJsonDocument::fromJson(*payload);
         if (doc.isNull() || (!doc.isArray() && !doc.isObject())) {
-            setStatus(QStringLiteral("O GitHub retornou uma resposta inválida. Tente novamente mais tarde.")); return;
+            fail(QStringLiteral("O GitHub retornou uma resposta inválida. Tente novamente mais tarde.")); return;
         }
         handleReleaseDocument(doc);
     });
@@ -80,15 +85,18 @@ void AutoUpdater::check() {
 void AutoUpdater::handleReleaseDocument(const QJsonDocument &doc) {
         m_offer = selectInstallerRelease(doc.isArray() ? doc.array() : QJsonArray{doc.object()}, m_settings->prereleaseUpdates());
         if (m_offer.isEmpty()) {
-            setStatus(QStringLiteral("Não há um instalador verificado disponível neste canal.")); return;
+            fail(QStringLiteral("Não há um instalador verificado disponível neste canal.")); return;
         }
         if (compareReleaseVersions(m_offer.value("version").toString(), version()) <= 0) {
-            m_offer = {}; setStatus(QStringLiteral("OpenSpeak %1 está atualizado neste canal.").arg(version())); return;
+            m_offer = {}; m_startupBusy = false;
+            setStatus(QStringLiteral("OpenSpeak %1 está atualizado neste canal.").arg(version())); return;
         }
         setStatus(QStringLiteral("Nova versão %1 disponível.").arg(m_offer.value("version").toString()));
-        if (m_promptedVersion != newVersion()) {
-            m_promptedVersion = newVersion();
-            emit updateAvailable();
+        if (m_startupBusy && installed()) downloadAndInstall();
+        else {
+            m_startupBusy = false;
+            setStatus(installed() ? QStringLiteral("Nova versão %1 disponível. Será instalada na próxima abertura.").arg(newVersion())
+                : QStringLiteral("Nova versão %1 disponível. Na versão portátil, use a página de downloads.").arg(newVersion()));
         }
 }
 void AutoUpdater::downloadUpdate() {
@@ -101,9 +109,9 @@ void AutoUpdater::downloadUpdate() {
         if (m_installAfterDownload) installNow();
         return;
     }
-    if (!QDir().mkpath(cachePath())) { m_installAfterDownload = false; setStatus(QStringLiteral("Não foi possível criar a pasta de atualização.")); return; }
+    if (!QDir().mkpath(cachePath())) { fail(QStringLiteral("Não foi possível criar a pasta de atualização.")); return; }
     auto output = std::make_shared<QSaveFile>(file);
-    if (!output->open(QIODevice::WriteOnly)) { m_installAfterDownload = false; setStatus(QStringLiteral("Não foi possível salvar o instalador.")); return; }
+    if (!output->open(QIODevice::WriteOnly)) { fail(QStringLiteral("Não foi possível salvar o instalador.")); return; }
     const auto offer = m_offer;
     const int generation = m_generation;
     auto hash = std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256);
@@ -122,8 +130,7 @@ void AutoUpdater::downloadUpdate() {
         read();
         if (reply->error() != QNetworkReply::NoError || *count != qint64(offer.value("size").toDouble())
             || QString::fromLatin1(hash->result().toHex()) != offer.value("sha256").toString() || !output->commit()) {
-            m_installAfterDownload = false;
-            output->cancelWriting(); setStatus(QStringLiteral("Download não validado. Nenhuma atualização será instalada.")); return;
+            output->cancelWriting(); fail(QStringLiteral("Download não validado. Nenhuma atualização será instalada.")); return;
         }
         m_readyFile = file;
         setStatus(QStringLiteral("Versão %1 pronta. Use Aplicar e reiniciar para instalar.").arg(offer.value("version").toString()));
@@ -139,6 +146,7 @@ void AutoUpdater::downloadAndInstall() {
 void AutoUpdater::installNow() {
     if (!ready()) return;
     m_manualInstall = true;
+    setStatus(QStringLiteral("Instalando atualização e reiniciando o OpenSpeak…"), true);
     QCoreApplication::quit();
 }
 void AutoUpdater::installOnExit() {

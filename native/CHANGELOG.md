@@ -1,10 +1,11 @@
-# OpenSpeak 1.0.2 — confirmação de atualização ao abrir
+# OpenSpeak 1.0.2 — atualização automática ao abrir
 
-- Verifica o canal selecionado em toda abertura e pergunta antes de baixar e
-  instalar uma versão nova. **Agora não** adia o aviso até a próxima abertura.
-- **Atualizar agora** baixa, valida o SHA-256 e reinicia o app para instalar.
+- Verifica o canal selecionado em toda abertura, antes de conectar. Uma versão
+  nova é baixada, validada pelo SHA-256 e instalada com reinício automático.
+- Tela inicial mostra o estado da verificação e do download, sem pedir confirmação.
+- Falhas na consulta ou no download liberam a entrada normalmente.
 - A opção de verificação periódica controla somente as consultas a cada 6 horas.
-  Fechar o aplicativo não instala atualizações sem confirmação.
+  Atualizações encontradas durante o uso ficam para a próxima abertura.
 
 # OpenSpeak 1.0.1 — conexão via servidor e ping
 

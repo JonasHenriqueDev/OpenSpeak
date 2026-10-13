@@ -100,53 +100,13 @@ ApplicationWindow {
                 text: Settings.prereleaseUpdates ? "Canal pré: releases estáveis e versões de teste mais novas." : "Canal estável: recebe somente releases, sem pré-releases." }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: Updater.status }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
-                text: Updater.installed ? "O app verifica ao abrir e pergunta antes de atualizar. A instalação preserva suas configurações e pode solicitar permissão de administrador." : "O app verifica ao abrir. Na versão portátil, baixe o novo instalador ou pacote na página de downloads." }
+                text: Updater.installed ? "Ao abrir, o app baixa e instala atualizações automaticamente antes de conectar. A instalação preserva suas configurações e pode solicitar permissão de administrador." : "O app verifica ao abrir. Na versão portátil, baixe o novo instalador ou pacote na página de downloads." }
             RowLayout {
                 Button { text: "Verificar agora"; enabled: !Updater.busy; onClicked: Updater.check() }
                 Button { text: "Baixar atualização"; visible: Updater.installed && Updater.available && !Updater.ready; enabled: !Updater.busy; onClicked: Updater.downloadUpdate() }
                 Button { text: "Aplicar e reiniciar"; visible: Updater.ready; onClicked: installDialog.open() }
             }
             Button { text: "Página de downloads"; flat: true; onClicked: Qt.openUrlExternally("https://github.com/JonasHenriqueDev/OpenSpeak/releases") }
-        }
-    }
-    Connections {
-        target: Updater
-        function onUpdateAvailable() { updatePrompt.open() }
-        function onChanged() { if (!Updater.available && !UiSmoke) updatePrompt.close() }
-    }
-    Dialog {
-        id: updatePrompt
-        objectName: "updatePrompt"
-        title: "Nova versão disponível"
-        anchors.centerIn: parent
-        width: Math.min(460, window.width - 40)
-        modal: true
-        contentItem: ColumnLayout {
-            spacing: 16
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: "OpenSpeak " + (Updater.newVersion || "1.0.2") + " está disponível. Deseja atualizar agora?"
-            }
-            Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                color: Theme.textDim
-                text: Updater.installed ? "Após o download, o app será fechado e reaberto. Suas configurações serão preservadas; conexões e transmissões atuais serão encerradas. O Windows pode solicitar permissão de administrador." : "Versão portátil: abra a página de downloads para baixar a nova versão."
-            }
-            RowLayout {
-                Layout.alignment: Qt.AlignRight
-                Button { text: "Agora não"; onClicked: updatePrompt.close() }
-                Button {
-                    text: Updater.installed ? "Atualizar agora" : "Abrir downloads"
-                    highlighted: true
-                    onClicked: {
-                        updatePrompt.close()
-                        if (Updater.installed) { updatesDialog.open(); Updater.downloadAndInstall() }
-                        else Qt.openUrlExternally("https://github.com/JonasHenriqueDev/OpenSpeak/releases")
-                    }
-                }
-            }
         }
     }
     Dialog {
@@ -160,7 +120,7 @@ ApplicationWindow {
     }
     Component.onCompleted: {
         if (DebugOpen === "updates") Qt.callLater(() => updatesDialog.open())
-        if (DebugOpen === "update-prompt") Qt.callLater(() => updatePrompt.open())
+
     }
     // Delegate resizing to Windows so edge drags retain native behavior.
     Repeater {
@@ -188,8 +148,25 @@ ApplicationWindow {
     }
 
     Loader {
+        id: mainLoader
         anchors.fill: parent
+        active: (UiSmoke && DebugOpen !== "startup") || (!UiSmoke && !Updater.startupBusy)
         sourceComponent: Server.connected || (UiSmoke && DebugOpen.indexOf("login") !== 0) ? mainView : loginView
+    }
+    Rectangle {
+        objectName: "startupScreen"
+        anchors.fill: parent
+        color: Theme.background
+        visible: UiSmoke ? DebugOpen === "startup" : Updater.startupBusy
+        ColumnLayout {
+            anchors.centerIn: parent
+            width: Math.min(420, parent.width - 40)
+            spacing: 20
+            Icon { Layout.alignment: Qt.AlignHCenter; name: "logo"; size: 54; color: Theme.accent }
+            Label { Layout.alignment: Qt.AlignHCenter; text: "OpenSpeak"; font.pixelSize: 26; color: Theme.text }
+            BusyIndicator { Layout.alignment: Qt.AlignHCenter; running: parent.parent.visible }
+            Label { Layout.fillWidth: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; text: Updater.status; color: Theme.textDim }
+        }
     }
 
     Component {

@@ -1,3 +1,12 @@
+# OpenSpeak nativo 0.2.6
+
+- Opção "Sem áudio do Discord" na transmissão de tela: o áudio do app do Discord
+  (estável, PTB ou Canary, com todos os processos filhos) fica fora da transmissão.
+  O Discord é detectado a cada segundo; se abrir, fechar ou reiniciar, a captura é
+  recriada sozinha. O Windows só exclui uma árvore de processos, então enquanto a opção
+  estiver ativa as transmissões assistidas ficam sem som, para não vazarem para a sua.
+  As estatísticas de áudio mostram o que está sendo capturado.
+
 # OpenSpeak nativo 0.2.5
 
 - Captura de janela sem a borda amarela do Windows.Graphics.Capture (Windows 10 não

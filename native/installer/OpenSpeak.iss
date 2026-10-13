@@ -2,7 +2,7 @@
 ; Gerado por native/package.ps1 — que monta native/dist/OpenSpeak antes.
 
 #ifndef AppVersion
-  #define AppVersion "0.2.5"
+  #define AppVersion "0.2.6"
 #endif
 #define AppName "OpenSpeak"
 #define AppExe "OpenSpeak.exe"

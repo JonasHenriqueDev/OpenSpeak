@@ -1,4 +1,4 @@
-# OpenSpeak 0.2.5: Windows e navegador
+# OpenSpeak 0.2.6: Windows e navegador
 
 Todos os computadores devem estar conectados à mesma tailnet, com tráfego entre eles permitido nas regras do Tailscale. Não há TURN nem STUN neste modo.
 

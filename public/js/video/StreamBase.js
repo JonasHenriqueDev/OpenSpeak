@@ -11,6 +11,7 @@
 
 import { EventEmitter } from '../core/EventEmitter.js';
 import { tailnetCandidate, tailnetSdp, advertiseTailnetCandidate, advertiseTailnetSdp } from '../core/tailnet.js';
+import { RELAY_CLID } from '../core/protocol.js';
 
 export const SessionState = Object.freeze({
   NEW: 'new',
@@ -57,8 +58,10 @@ export class StreamBase extends EventEmitter {
   }
 
   createPeerConnection() {
-    this.tailscaleOnly = globalThis.OpenSpeakConfig?.tailscaleOnly === true;
-    this.tailnetIp = globalThis.OpenSpeakConfig?.tailnetIp;
+    // A sessão com o relay do servidor (SFU) segue a rota normal, nunca a da tailnet.
+    const relay = this.peerClid === RELAY_CLID;
+    this.tailscaleOnly = !relay && globalThis.OpenSpeakConfig?.tailscaleOnly === true;
+    this.tailnetIp = relay ? undefined : globalThis.OpenSpeakConfig?.tailnetIp;
     const pc = new RTCPeerConnection({
       iceServers: this.tailscaleOnly ? [] : this.iceServers,
       bundlePolicy: 'max-bundle',

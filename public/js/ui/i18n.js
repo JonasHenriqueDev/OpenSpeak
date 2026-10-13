@@ -56,6 +56,7 @@ const STRINGS = {
   'video.bitrate': 'Bitrate',
   'video.bitrate.info': 'Quantidade de dados enviada por segundo. Valores maiores melhoram a qualidade mas exigem mais banda.',
   'video.error.no_available_source': 'Nenhuma fonte disponível',
+  'video.error.sfu_connection_lost': 'A conexão com o servidor (SFU) caiu; a transmissão foi encerrada',
   'video.error.streaming_not_supported_on_os': 'Transmissão não suportada neste sistema/navegador',
   'video.error.permission': 'Permissão de captura negada',
   'video.fps': 'FPS',

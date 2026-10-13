@@ -1,6 +1,6 @@
 # Configura e compila o OpenSpeak nativo.
 #   .\build.ps1                 # Release completo (servidor + cliente + testes)
-#   .\build.ps1 -ServerOnly     # só servidor e testes (sem libdatachannel/FFmpeg)
+#   .\build.ps1 -ServerOnly     # só servidor e testes (sem FFmpeg; relay SFU se houver libdatachannel)
 #   .\build.ps1 -Config Debug
 param(
     [string]$Config = 'Release',

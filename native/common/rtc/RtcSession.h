@@ -1,5 +1,7 @@
 #pragma once
-// Base de uma sessão P2P (com::teamspeak::video::StreamBase), sobre libdatachannel.
+// Base de uma sessão WebRTC (com::teamspeak::video::StreamBase), sobre libdatachannel.
+// Usada pelo cliente (P2P e sessão com o servidor no modo SFU) e pelo relay do
+// servidor (native/server/Sfu*), que é um par como outro qualquer (clid 0).
 //
 // Sinalização via `streamsignaling`, mesmo payload do cliente web e do TS:
 //   {type:'offer', sdp, isReconnect} | {type:'answer', sdp}
@@ -11,6 +13,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 #include <QTimer>
 
 #include <rtc/rtc.hpp>
@@ -29,6 +32,12 @@ public:
 
     using SignalFn = std::function<void(const QJsonObject &payload)>;
 
+    /// Transporte ICE (lado servidor do SFU).
+    struct Transport {
+        quint16 udpMuxPort = 0; // != 0: todas as sessões numa única porta UDP (ICE UDP mux)
+        QString publicIp;       // anunciado no lugar do IP dos candidatos host (NAT 1:1)
+    };
+
     RtcSession(QString streamId, int peerClid, QJsonArray iceServers, bool inbound, SignalFn send, QObject *parent = nullptr);
     ~RtcSession() override;
 
@@ -36,6 +45,7 @@ public:
     void onSignalingMessage(const QJsonObject &payload);
     void close();
     void setBindAddress(const QString &address) { m_bindAddress = address; }
+    void setTransport(const Transport &transport) { m_transport = transport; }
 
     QString streamId() const { return m_streamId; }
     int peerClid() const { return m_peerClid; }
@@ -83,6 +93,8 @@ private:
     int m_peerClid = 0;
     QJsonArray m_iceServers;
     QString m_bindAddress;
+    Transport m_transport;
+    QSet<QString> m_announced; // candidatos já anunciados (dedup após reescrever o IP)
     bool m_inbound = false;
     SignalFn m_send;
     State m_state = State::New;

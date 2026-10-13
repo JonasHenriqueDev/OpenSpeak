@@ -1,7 +1,10 @@
-// openspeak-server: servidor de sinalização (equivalente ao server/index.js).
+// openspeak-server: servidor de sinalização (equivalente ao server/index.js)
+// e, se compilado com libdatachannel, relay de mídia para o modo SFU.
 //
 //   openspeak-server [--port 9988] [--name OpenSpeak] [--web <pasta do cliente web>]
-//   OPENSPEAK_ICE='[{"urls":"stun:..."}]' define os iceServers anunciados.
+//                    [--rtc-port 10000] [--public-ip <ip>] [--no-sfu]
+//   OPENSPEAK_ICE='[{"urls":"stun:..."}]' define os iceServers anunciados
+//   (e usados pelo próprio relay para descobrir o endereço público).
 
 #include "ServerHost.h"
 
@@ -42,14 +45,21 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName(QStringLiteral("openspeak-server"));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Servidor de sinalização OpenSpeak (STREAM_P2P)"));
+    parser.setApplicationDescription(QStringLiteral("Servidor OpenSpeak (STREAM_P2P e, com o relay de mídia, STREAM_SFU)"));
     parser.addHelpOption();
     QCommandLineOption portOpt(QStringLiteral("port"), QStringLiteral("Porta (padrão 9988)."), QStringLiteral("porta"), QStringLiteral("9988"));
     QCommandLineOption nameOpt(QStringLiteral("name"), QStringLiteral("Nome do servidor."), QStringLiteral("nome"), QStringLiteral("OpenSpeak"));
     QCommandLineOption webOpt(QStringLiteral("web"), QStringLiteral("Pasta do cliente web a servir (opcional)."), QStringLiteral("pasta"));
     QCommandLineOption noWebOpt(QStringLiteral("no-web"), QStringLiteral("Não servir o cliente web."));
     QCommandLineOption hostOpt(QStringLiteral("host"), QStringLiteral("Interface de escuta (padrão 0.0.0.0)."), QStringLiteral("ip"), QStringLiteral("0.0.0.0"));
-    parser.addOptions({portOpt, nameOpt, webOpt, noWebOpt, hostOpt});
+    QCommandLineOption rtcPortOpt(QStringLiteral("rtc-port"),
+                                  QStringLiteral("Porta UDP única do relay SFU (ICE UDP mux, padrão 10000; 0 = portas efêmeras)."),
+                                  QStringLiteral("porta"), QStringLiteral("10000"));
+    QCommandLineOption publicIpOpt(QStringLiteral("public-ip"),
+                                   QStringLiteral("IP público anunciado nos candidatos do relay (NAT 1:1, ex.: VM na nuvem)."),
+                                   QStringLiteral("ip"));
+    QCommandLineOption noSfuOpt(QStringLiteral("no-sfu"), QStringLiteral("Desativa o relay de mídia (só STREAM_P2P)."));
+    parser.addOptions({portOpt, nameOpt, webOpt, noWebOpt, hostOpt, rtcPortOpt, publicIpOpt, noSfuOpt});
     parser.process(app);
 
     ServerHost::Options options;
@@ -60,6 +70,18 @@ int main(int argc, char *argv[])
     options.iceServers = iceServersFromEnv();
     if (!parser.isSet(noWebOpt))
         options.webRoot = parser.isSet(webOpt) ? parser.value(webOpt) : defaultWebRoot();
+    options.sfu = ServerHost::sfuAvailable() && !parser.isSet(noSfuOpt);
+    bool portOk = false;
+    const uint rtcPort = parser.value(rtcPortOpt).toUInt(&portOk);
+    if (!portOk || rtcPort > 65535) { qCritical("--rtc-port inválida"); return 1; }
+    options.rtcPort = quint16(rtcPort);
+    if (parser.isSet(publicIpOpt)) {
+        const QHostAddress ip(parser.value(publicIpOpt));
+        if (ip.isNull() || ip.protocol() != QAbstractSocket::IPv4Protocol) { qCritical("--public-ip deve ser um IPv4"); return 1; }
+        options.publicIp = ip.toString();
+    }
+    if (!ServerHost::sfuAvailable() && (parser.isSet(rtcPortOpt) || parser.isSet(publicIpOpt)))
+        qWarning("compilado sem o relay SFU: --rtc-port/--public-ip ignorados");
 
     ServerHost host(options);
     if (!host.start())
@@ -67,5 +89,11 @@ int main(int argc, char *argv[])
     qInfo().noquote() << QStringLiteral("[openspeak] servidor \"%1\" em ws://localhost:%2/ws").arg(options.name).arg(host.port());
     if (!options.webRoot.isEmpty())
         qInfo().noquote() << QStringLiteral("[openspeak] cliente web: http://localhost:%1 (%2)").arg(host.port()).arg(options.webRoot);
+    if (host.sfuEnabled())
+        qInfo().noquote() << QStringLiteral("[openspeak] relay SFU: UDP %1%2")
+                                 .arg(options.rtcPort ? QString::number(options.rtcPort) : QStringLiteral("(portas efêmeras)"),
+                                      options.publicIp.isEmpty() ? QString() : QStringLiteral(", anunciando %1").arg(options.publicIp));
+    else
+        qInfo().noquote() << QStringLiteral("[openspeak] relay SFU desativado (só P2P)");
     return app.exec();
 }

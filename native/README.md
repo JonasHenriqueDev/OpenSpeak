@@ -76,6 +76,10 @@ compatível também com o cliente web:
 openspeak-server.exe --port 9988
 ```
 
+O mesmo servidor também faz o **relay de mídia (SFU)**: no modo "Servidor" do diálogo
+de transmissão, o transmissor envia **um** fluxo ao servidor, que repassa os pacotes
+RTP a cada espectador sem transcodificar (veja [Servidor com SFU](#servidor-com-sfu)).
+
 Opções do app:
 - `--profile nome`: configurações separadas.
 - `--server ws://host:9988/ws`: força o modo servidor.
@@ -84,6 +88,78 @@ Opções do app:
 - `--autoconnect`
 - `--debug`: habilita a fonte "Padrão de teste".
 
+## Servidor com SFU
+
+No modo P2P cada espectador custa um upload inteiro ao transmissor. No modo
+**Servidor (SFU)** o transmissor manda um fluxo só ao `openspeak-server`, que o
+repassa a cada espectador. O servidor é um par WebRTC como outro qualquer, com o
+clid reservado `0`:
+
+1. `setupstream` com `mode: 2` (só aceito quando o servidor anuncia `STREAM_SFU`).
+2. O transmissor cria **uma** sessão de saída para o clid `0` e oferta; o servidor
+   responde (`server/SfuIngest.*`).
+3. Ao aceitar um espectador, o servidor responde com `peerClid: 0` e oferta a ele
+   (`server/SfuEgress.*`); o espectador responde. O dono continua recebendo
+   `notifystreamclientjoined` só para a lista de espectadores.
+4. `server/SfuForwarder.*` repassa o RTP cru: troca PT/SSRC, remove header
+   extensions, mantém seq/timestamp contínuos se o transmissor reconectar, pede
+   keyframe (PLI, no máximo 1 a cada 500 ms) quando um espectador entra ou pede, e
+   envia REMB ao transmissor com o mínimo das estimativas dos espectadores (piso de
+   300 kbps, limitado ao bitrate do stream).
+
+Escopo desta fase: codec fixo **H.264 (Constrained Baseline, packetization-mode=1) +
+Opus**, uma qualidade só (sem simulcast), pensado para 1 transmissor e até ~4
+espectadores. Privacidade, pedidos, limite, kick e ban funcionam como no P2P. O
+servidor Node/Vercel continua só P2P (não anuncia `STREAM_SFU`).
+
+Opções do `openspeak-server`:
+- `--rtc-port 10000`: porta **UDP única** de todas as sessões do relay (ICE UDP mux).
+  Libere-a no firewall (UDP). `0` usa portas efêmeras.
+- `--public-ip <ip>`: IP anunciado no lugar do IP da interface nos candidatos do
+  relay. Necessário com NAT 1:1 (VM na nuvem com IP privado `10.0.0.x` e IP público
+  fixo); sem ele os clientes só recebem o `10.0.0.x` e não conectam.
+- `--no-sfu`: só P2P.
+- `OPENSPEAK_ICE='[{"urls":"stun:..."}]'`: STUN anunciado aos clientes e usado pelo
+  próprio relay (padrão: `stun:stun.l.google.com:19302`).
+
+### Linux (Ubuntu 24.04, x86_64) — só o servidor
+
+O servidor não depende de FFmpeg nem de nada do Windows. O relay SFU precisa da
+libdatachannel; sem ela o servidor compila só com P2P. Qt ≥ 6.8 é obrigatório (o
+`qt6-*` do apt do Ubuntu 24.04 é 6.4, antigo demais para o `QHttpServer` usado), então
+use o [aqtinstall](https://github.com/miurahr/aqtinstall):
+
+```bash
+sudo apt install build-essential cmake ninja-build git curl zip unzip tar pkg-config python3-pip libgl1-mesa-dev
+pip install aqtinstall
+aqt install-qt linux desktop 6.8.3 linux_gcc_64 -m qthttpserver qtwebsockets -O ~/Qt
+
+git clone https://github.com/microsoft/vcpkg ~/vcpkg && ~/vcpkg/bootstrap-vcpkg.sh
+# Só libdatachannel (o FFmpeg fica na feature "client", desligada aqui).
+cmake -S native -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH=$HOME/Qt/6.8.3/gcc_64 \
+  -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake \
+  -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON \
+  -DOPENSPEAK_BUILD_CLIENT=OFF
+cmake --build build
+ctest --test-dir build --output-on-failure   # tst_virtualserver
+```
+
+Rodando numa VM (ex.: Oracle Cloud, IP privado `10.0.0.5`, público `203.0.113.10`):
+
+```bash
+./build/openspeak-server --port 9988 --rtc-port 10000 --public-ip 203.0.113.10 --no-web
+```
+
+Na VCN/security list e no firewall da VM, libere **TCP 9988** (sinalização) e
+**UDP 10000** (mídia). No Ubuntu da Oracle as regras do `iptables` vêm restritivas:
+
+```bash
+sudo iptables -I INPUT -p tcp --dport 9988 -j ACCEPT
+sudo iptables -I INPUT -p udp --dport 10000 -j ACCEPT
+sudo netfilter-persistent save
+```
+
 ## Arquitetura (C++ ↔ TeamSpeak 6)
 
 | TeamSpeak 6 (`TeamSpeak.dll`) | OpenSpeak nativo |
@@ -91,13 +167,14 @@ Opções do app:
 | comandos `setupstream`, `streamsignaling`… | `server/VirtualServer.*` + `server/ServerHost.*` (servidor dedicado) **ou** `client/mesh/MeshConnection.*` (malha na tailnet, sem servidor) |
 | — | `client/mesh/PeerDirectory.*` (descoberta + identidade via Tailscale) |
 | `ScreenshareManager` | `client/video/ScreenshareManager.*` |
-| `StreamBase` / `StreamP2P` | `client/rtc/RtcSession.*` (libdatachannel) |
+| `StreamBase` / `StreamP2P` | `common/rtc/RtcSession.*` (libdatachannel, comum ao cliente e ao relay) |
+| SFU (`STREAM_SFU`) | `server/SfuRelay.*`, `SfuIngest.*`, `SfuEgress.*`, `SfuForwarder.*` (relay sem transcodificação) |
 | `SessionOutbound` / `SessionInbound` | `client/rtc/SessionOutbound.*` / `SessionInbound.*` |
 | `ScalableSharedVideoTransformer` (single-encoding) | `client/media/VideoEncoder.*`: **um** encoder H.264 para todos os espectadores |
 | `DesktopCapturer` / `CameraCapturer` | `client/media/VideoSource.*` (QScreenCapture / QWindowCapture / QCamera) |
 | `ProcessAudioCapturer` | `client/media/AudioCapture.*` (WASAPI *process loopback*) |
 | NVENC / AMF / QSV / OpenH264 | mesma ordem de preferência via FFmpeg |
-| estatísticas + detecção de problemas | `client/video/StreamStats.*` (limiares idênticos) + `client/rtc/RtpStatsHandler.*` |
+| estatísticas + detecção de problemas | `client/video/StreamStats.*` (limiares idênticos) + `common/rtc/RtpStatsHandler.*` |
 | layout grade/foco | `client/video/Layout.*` |
 | UI | `client/qml/*.qml` |
 
@@ -113,10 +190,13 @@ Detalhes do motor:
   estéreo, 48 kHz.
 - **Interop com navegador:** ofertas do Chrome são filtradas para H.264 + Opus (sem
   RTX/RED/FEC/transport-cc). A reconexão recria a PeerConnection nos dois lados.
+- **Modo SFU:** o encoder segue a estimativa da sessão com o servidor, que por sua
+  vez segue o REMB que o relay calcula sobre os espectadores.
 
 ## Testes
 
-- `tst_virtualserver`: mesmos cenários do servidor JS.
+- `tst_virtualserver`: mesmos cenários do servidor JS, mais o modo SFU com um relay
+  falso (capability, `peerClid: 0`, roteamento do clid 0 e permissões).
 - `tst_engine`: limiares de problemas, layout, filtro de SDP, ida e volta H.264
   (NVENC → FFmpeg) e Opus.
 - `tst_windowthumbnail`: registro e liberação de previews DWM, inclusive quando o
@@ -130,11 +210,16 @@ Detalhes do motor:
 - `tst_p2p_e2e`: servidor + transmissor + espectador no mesmo processo, com P2P real
   via ICE local. Valida quadros 1280×720 decodificados, estatísticas, kick e fim do
   stream.
+- `tst_sfu_e2e`: servidor com relay real (porta UDP única) + transmissor + dois
+  espectadores. Valida que os dois decodificam 1280×720 a partir de um único envio,
+  kick de um sem afetar o outro e fim do stream.
 
 ## Limitações conhecidas
 
 - O app nativo negocia só **H.264** (o libdatachannel 0.24 não tem depacketizador AV1).
-- **SFU** não implementado (o modo aparece desabilitado, como no TS sem `STREAM_SFU`).
+- **SFU** só no servidor nativo, sem simulcast/SVC nem TURN. O relay não pede
+  retransmissão (NACK) ao transmissor: perdas no trecho transmissor → servidor só se
+  recuperam com keyframe.
 - Sem sincronização fina áudio/vídeo (o TS tem `VideoAudioSyncBuffer`); os dois
   fluxos são de baixa latência independentes.
 - Câmera e captura de áudio por janela ainda não foram testadas em uso real.

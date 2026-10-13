@@ -2,8 +2,10 @@
 // Servidor virtual: canais, clientes e registro de streams.
 // Porta em C++ de server/virtualServer.js. Não toca em mídia: guarda o estado,
 // aplica privacidade/limites e repassa `streamsignaling` entre os pares.
+// No modo SFU a mídia é do StreamRelay injetado (clid 0 na sinalização).
 
 #include "Protocol.h"
+#include "StreamRelay.h"
 
 #include <QHash>
 #include <QJsonArray>
@@ -39,6 +41,9 @@ public:
 
     QString name() const { return m_name; }
     int streamCount() const { return int(m_streams.size()); }
+
+    /// Habilita STREAM_SFU. O relay deve viver mais que o VirtualServer.
+    void setRelay(StreamRelay *relay);
 
 private:
     struct Client {
@@ -108,6 +113,9 @@ private:
     void stopStream(QString id, LeaveReason reason);
     void detachFromStreams(const Client &c, LeaveReason reason);
     void notifyAttendees(const Stream &s);
+    bool isSfu(const Stream &s) const { return m_relay && s.mode == int(StreamMode::SFU); }
+    void onRelaySignal(const QString &id, int clid, const QJsonObject &payload);
+    void onRelayFailed(const QString &id, int clid);
 
     QJsonObject publicClient(const Client &c) const;
     QJsonObject publicStream(const Stream &s) const;
@@ -116,6 +124,7 @@ private:
     void broadcastToChannel(int cid, const QString &cmd, const QJsonObject &args, int exceptClid = 0);
 
     SendFn m_send;
+    StreamRelay *m_relay = nullptr;
     QString m_name;
     QJsonArray m_iceServers;
     std::map<int, Client> m_clients;

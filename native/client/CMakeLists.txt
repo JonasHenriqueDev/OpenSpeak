@@ -16,9 +16,6 @@ add_library(openspeak_engine STATIC
     media/AudioCodec.cpp media/AudioCodec.h
     media/AudioCapture.cpp media/AudioCapture.h
     media/AudioPlayer.cpp media/AudioPlayer.h
-    rtc/RtpStatsHandler.cpp rtc/RtpStatsHandler.h
-    rtc/SdpFilter.cpp rtc/SdpFilter.h
-    rtc/RtcSession.cpp rtc/RtcSession.h
     rtc/SessionOutbound.cpp rtc/SessionOutbound.h
     rtc/SessionInbound.cpp rtc/SessionInbound.h
     video/Presets.h
@@ -27,15 +24,10 @@ add_library(openspeak_engine STATIC
     video/ScreenshareManager.cpp video/ScreenshareManager.h
 )
 target_include_directories(openspeak_engine PUBLIC core media mesh rtc video)
-if(TARGET LibDataChannel::LibDataChannelStatic)
-    set(OPENSPEAK_LDC LibDataChannel::LibDataChannelStatic)
-else()
-    set(OPENSPEAK_LDC LibDataChannel::LibDataChannel)
-endif()
 target_link_libraries(openspeak_engine PUBLIC
     openspeak_common
+    openspeak_rtc
     Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::WebSockets
-    ${OPENSPEAK_LDC}
     openspeak_ffmpeg
     ole32 mmdevapi d3d11 dxgi dwmapi gdi32 user32
 )

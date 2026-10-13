@@ -10,6 +10,9 @@ export const LeaveReason = Object.freeze({
 
 export const Capability = Object.freeze({ STREAM_P2P: 'STREAM_P2P', STREAM_SFU: 'STREAM_SFU' });
 
+// clid reservado do servidor como par WebRTC nos streams SFU (`streamsignaling`/`peerClid`).
+export const RELAY_CLID = 0;
+
 // Presets (bitrate em bps). width/height -1 = resolução da fonte.
 export const QUALITY_PRESETS = Object.freeze([
   { id: '360', label: 'video.preset.360', bitrate: 500_000, width: 640, height: 360, fps: 30, audioBitrate: 64_000 },

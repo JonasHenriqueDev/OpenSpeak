@@ -37,6 +37,10 @@ inline const QString Internal = QStringLiteral("internal_error");
 
 // Extensões anunciadas em capabilityExtensions (TS: STREAM_P2P / STREAM_SFU).
 inline const QString CapStreamP2P = QStringLiteral("STREAM_P2P");
+inline const QString CapStreamSFU = QStringLiteral("STREAM_SFU"); // só com relay de mídia (servidor nativo)
+
+/// clid reservado do servidor como par WebRTC nos streams SFU (`streamsignaling`/`peerClid`).
+constexpr int RelayClid = 0;
 
 constexpr int MaxStreamsPerClient = 3;
 constexpr int MaxThumbnailBytes = 256 * 1024;

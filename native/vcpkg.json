@@ -6,11 +6,19 @@
       "name": "libdatachannel",
       "default-features": false,
       "features": ["srtp"]
-    },
-    {
-      "name": "ffmpeg",
-      "default-features": false,
-      "features": ["avcodec", "swscale", "swresample", "nvcodec", "amf", "qsv", "openh264", "dav1d", "opus"]
     }
-  ]
+  ],
+  "default-features": ["client"],
+  "features": {
+    "client": {
+      "description": "Cliente desktop: FFmpeg para codificar/decodificar vídeo. Um build só do servidor (relay SFU) dispensa.",
+      "dependencies": [
+        {
+          "name": "ffmpeg",
+          "default-features": false,
+          "features": ["avcodec", "swscale", "swresample", "nvcodec", "amf", "qsv", "openh264", "dav1d", "opus"]
+        }
+      ]
+    }
+  }
 }

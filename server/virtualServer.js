@@ -269,7 +269,8 @@ export class VirtualServer {
         stream.viewers.add(clid);
         this.send(clid, {
           type: 'notify', cmd: 'notifyrespondjoinstreamrequest',
-          args: { streamIdentifier: stream.streamIdentifier, accepted: true, ownerClid: stream.ownerClid },
+          // peerClid: com quem o espectador negocia (aqui sempre o dono; o SFU só existe no servidor nativo).
+          args: { streamIdentifier: stream.streamIdentifier, accepted: true, ownerClid: stream.ownerClid, peerClid: stream.ownerClid },
         });
         this.send(stream.ownerClid, {
           type: 'notify', cmd: 'notifystreamclientjoined',

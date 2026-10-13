@@ -223,6 +223,37 @@ private slots:
         QVERIFY(stereo.contains("maxaveragebitrate=256000"));
     }
 
+    void sdpSfuHelpers()
+    {
+        // Modo SFU: só H.264 Constrained Baseline com packetization-mode=1.
+        const QString offer = QStringLiteral(
+            "v=0\r\ns=-\r\nm=video 9 UDP/TLS/RTP/SAVPF 102 104 106\r\n"
+            "a=rtpmap:102 H264/90000\r\na=rtcp-fb:102 nack\r\na=fmtp:102 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f\r\n"
+            "a=rtpmap:104 H264/90000\r\na=fmtp:104 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640c1f\r\n"
+            "a=rtpmap:106 H264/90000\r\na=rtcp-fb:106 nack\r\na=fmtp:106 level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f\r\n");
+        const QString out = sdp::keepH264ConstrainedBaseline(offer);
+        QVERIFY(out.contains("m=video 9 UDP/TLS/RTP/SAVPF 106\r\n"));
+        QVERIFY(!out.contains("a=rtpmap:102"));
+        QVERIFY(!out.contains("640c1f"));
+        QVERIFY(out.contains("a=rtcp-fb:106 nack"));
+        // Sem nenhuma variante compatível, não mexe.
+        QCOMPARE(sdp::keepH264ConstrainedBaseline(QStringLiteral("v=0\r\nm=video 9 X 96\r\na=rtpmap:96 H264/90000\r\n")),
+                 QStringLiteral("v=0\r\nm=video 9 X 96\r\na=rtpmap:96 H264/90000\r\n"));
+
+        // NAT 1:1: candidato host IPv4 passa a anunciar o IP público.
+        const QString host = QStringLiteral("candidate:1 1 UDP 2122317823 10.0.0.5 10000 typ host");
+        QCOMPARE(sdp::advertiseHostIp(host, "203.0.113.10"), QStringLiteral("candidate:1 1 UDP 2122317823 203.0.113.10 10000 typ host"));
+        const QString srflx = QStringLiteral("a=candidate:2 1 UDP 1686052607 203.0.113.10 10000 typ srflx raddr 10.0.0.5 rport 10000");
+        QCOMPARE(sdp::advertiseHostIp(srflx, "203.0.113.10"), srflx);
+        const QString v6 = QStringLiteral("candidate:3 1 UDP 2122317823 fe80::1 10000 typ host");
+        QCOMPARE(sdp::advertiseHostIp(v6, "203.0.113.10"), v6);
+        const QString sdpText = QStringLiteral("v=0\r\nm=video 9 X 96\r\na=candidate:1 1 UDP 2122317823 172.17.0.1 10000 typ host\r\n");
+        QVERIFY(sdp::advertiseHostIp(sdpText, "203.0.113.10").contains("a=candidate:1 1 UDP 2122317823 203.0.113.10 10000 typ host\r\n"));
+        // Duas interfaces viram o mesmo candidato: a chave ignora fundação/prioridade.
+        QCOMPARE(sdp::candidateKey(QStringLiteral("candidate:1 1 UDP 2122317823 203.0.113.10 10000 typ host")),
+                 sdp::candidateKey(QStringLiteral("candidate:9 1 udp 2122252543 203.0.113.10 10000 typ host")));
+    }
+
     void encodeDecodeRoundTrip()
     {
         // Alimenta o encoder durante sua inicialização e decodifica a saída.

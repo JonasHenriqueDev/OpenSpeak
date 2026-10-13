@@ -4,7 +4,7 @@
 import { h, replaceChildren } from './dom.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
-import { Severity } from '../core/protocol.js';
+import { Severity, RELAY_CLID } from '../core/protocol.js';
 import { formatBitrate, formatBytes } from '../video/StatsCollector.js';
 
 const ms = v => `${Math.round(1000 * (v || 0))}ms`;
@@ -105,7 +105,7 @@ export class StatsPanel {
       header.push(h('label.field.inline', h('span.field-label', t('video.stream.stats.viewer')),
         h('select.input', { on: { change: ev => { this.viewerClid = Number(ev.target.value); this.render(); } } },
           [...own.sessions.keys()].map(clid => h('option', { value: String(clid), selected: clid === this.viewerClid },
-            this.handler.clientName(clid))))));
+            clid === RELAY_CLID ? t('video.mode.server') : this.handler.clientName(clid))))));
     }
     if (!collector) {
       replaceChildren(this.el, header, h('p.muted', own ? t('video.stream.stats.no_viewers') : t('video.stream.ended')));

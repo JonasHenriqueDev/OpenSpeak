@@ -9,9 +9,17 @@ set_tests_properties(tst_cloudconnection PROPERTIES TIMEOUT 15)
 
 # Ponta a ponta: servidor + transmissor + espectador nativos no mesmo processo.
 qt_add_executable(tst_p2p_e2e tst_p2p_e2e.cpp)
-target_link_libraries(tst_p2p_e2e PRIVATE openspeak_engine openspeak_server_core Qt6::Test)
+target_link_libraries(tst_p2p_e2e PRIVATE openspeak_engine openspeak_server_host Qt6::Test)
 add_test(NAME tst_p2p_e2e COMMAND tst_p2p_e2e)
 set_tests_properties(tst_p2p_e2e PROPERTIES TIMEOUT 120)
+
+# Ponta a ponta no modo SFU: servidor com relay real + 1 transmissor + 2 espectadores.
+if(OPENSPEAK_BUILD_SFU)
+    qt_add_executable(tst_sfu_e2e tst_sfu_e2e.cpp)
+    target_link_libraries(tst_sfu_e2e PRIVATE openspeak_engine openspeak_server_host Qt6::Test)
+    add_test(NAME tst_sfu_e2e COMMAND tst_sfu_e2e)
+    set_tests_properties(tst_sfu_e2e PROPERTIES TIMEOUT 120)
+endif()
 
 # Malha descentralizada (sem servidor): dois nós em loopback.
 qt_add_executable(tst_mesh_e2e tst_mesh_e2e.cpp)

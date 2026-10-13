@@ -1,12 +1,13 @@
 // Orquestrador central (com::teamspeak::video::ScreenshareManager).
 //
-// - Streams próprios: captura compartilhada + uma SessionOutbound por espectador.
+// - Streams próprios: captura compartilhada + uma SessionOutbound por espectador
+//   (P2P) ou uma só, com o servidor (SFU, clid 0), que repassa aos espectadores.
 // - Streams assistidos: uma SessionInbound por stream.
 // - Pedidos de entrada, privacidade, limite de espectadores, kick/ban.
 // - Roteia `notifystreamsignaling` para a sessão correta.
 
 import { EventEmitter } from '../core/EventEmitter.js';
-import { StreamAccess, StreamMode, LeaveReason, Severity } from '../core/protocol.js';
+import { StreamAccess, StreamMode, LeaveReason, Severity, RELAY_CLID } from '../core/protocol.js';
 import { SharedVideoSource } from './SharedVideoSource.js';
 import { SessionOutbound } from './SessionOutbound.js';
 import { SessionInbound } from './SessionInbound.js';
@@ -64,8 +65,10 @@ export class ScreenshareManager extends EventEmitter {
    * @param {{config:object, quality:object, source?:SharedVideoSource, deviceId?:string}} o
    */
   async startStream({ config, quality, source }) {
-    if (!this.handler.hasStreamingP2P) throw new Error('streaming_not_supported_by_server');
-    if (config.mode !== StreamMode.P2P) throw new Error('mode_not_supported');
+    const sfu = config.mode === StreamMode.SFU;
+    if (!sfu && config.mode !== StreamMode.P2P) throw new Error('mode_not_supported');
+    if (sfu && !this.handler.hasStreamingSFU) throw new Error('mode_not_supported');
+    if (!sfu && !this.handler.hasStreamingP2P) throw new Error('streaming_not_supported_by_server');
     source ??= await SharedVideoSource.open({ type: config.type, audio: config.audio, quality });
     let streamIdentifier;
     try {
@@ -92,6 +95,8 @@ export class ScreenshareManager extends EventEmitter {
     };
     this.ownStreams.set(streamIdentifier, own);
     source.on('ended', () => this.stopStream(streamIdentifier).catch(() => {}));
+    // SFU: um único envio, para o servidor, que repassa aos espectadores.
+    if (sfu) this.#addOutbound(own, RELAY_CLID, ['video/H264']);
     this.#scheduleThumbnails(own);
     this.emit('ownstreamstarted', own);
     this.emit('changed');
@@ -100,7 +105,8 @@ export class ScreenshareManager extends EventEmitter {
 
   async updateStream(streamIdentifier, { config, quality }) {
     const own = this.#own(streamIdentifier);
-    if (config) own.config = { ...own.config, ...config };
+    // O modo não muda com o stream no ar.
+    if (config) own.config = { ...own.config, ...config, mode: own.config.mode };
     if (quality) {
       own.quality = { ...own.quality, ...quality };
       await own.source.applyQuality(own.quality);
@@ -177,6 +183,7 @@ export class ScreenshareManager extends EventEmitter {
     const view = {
       streamIdentifier,
       ownerClid: info.ownerClid,
+      peerClid: info.ownerClid,
       status: InboundStatus.WAITING,
       error: null,
       session: null,
@@ -283,26 +290,46 @@ export class ScreenshareManager extends EventEmitter {
     const own = this.ownStreams.get(streamIdentifier);
     if (!own) return;
     own.viewers.add(clid);
-    own.sessions.get(clid)?.session.close();
+    if (own.config.mode === StreamMode.SFU) {
+      // A mídia sai pelo relay do servidor; aqui só a lista de espectadores.
+      this.emit('changed');
+      return;
+    }
+    console.info(`[screenshare] ResolveJoinRequest - adicionando espectador ${clid} ao stream ${streamIdentifier}`);
+    await this.#addOutbound(own, clid, codecs);
+  }
+
+  /** Sessão de saída para um espectador (P2P) ou para o servidor (SFU, peerClid 0). */
+  async #addOutbound(own, peerClid, codecs) {
+    const { streamIdentifier } = own;
+    const relay = peerClid === RELAY_CLID;
+    own.sessions.get(peerClid)?.session.close();
     const session = new SessionOutbound({
       streamIdentifier,
-      peerClid: clid,
+      peerClid,
       iceServers: this.handler.iceServers,
-      sendSignaling: payload => this.connection.sendCommand('streamsignaling', { streamIdentifier, clid, payload }),
+      sendSignaling: payload => this.connection.sendCommand('streamsignaling', { streamIdentifier, clid: peerClid, payload }),
       source: own.source,
       remoteCodecs: codecs,
-      preferredCodec: this.settings.preferredCodec,
+      // SFU: codec fixo (H.264) e uma camada só; o servidor repassa sem transcodificar.
+      preferredCodec: relay ? 'video/H264' : this.settings.preferredCodec,
+      scalability: !relay,
       encoding: { bitrate: own.config.bitrate, audioBitrate: own.quality.audioBitrate, quality: own.quality },
     });
     const stats = new StatsCollector(session, () => own.quality);
-    own.sessions.set(clid, { session, stats });
+    own.sessions.set(peerClid, { session, stats });
     session.on('statechange', () => this.emit('changed'));
     session.on('failed', () => {
+      if (relay) {
+        // Sem o servidor não há para quem transmitir: encerra o stream.
+        this.emit('error', 'video.error.sfu_connection_lost');
+        this.stopStream(streamIdentifier).catch(() => {});
+        return;
+      }
       // SessionOutbound::OnConnectionStatusChanged -> RemoveOutboundStream
-      this.connection.sendCommand('removeclientfromstream', { streamIdentifier, clid, reason: LeaveReason.FAILED }).catch(() => {});
+      this.connection.sendCommand('removeclientfromstream', { streamIdentifier, clid: peerClid, reason: LeaveReason.FAILED }).catch(() => {});
     });
     stats.on('stats', () => this.emit('stats', streamIdentifier));
-    console.info(`[screenshare] ResolveJoinRequest - adicionando espectador ${clid} ao stream ${streamIdentifier}`);
     try {
       await session.start();
       stats.start();
@@ -348,7 +375,7 @@ export class ScreenshareManager extends EventEmitter {
     }
   }
 
-  #onJoinResponse({ streamIdentifier, accepted, reason }) {
+  #onJoinResponse({ streamIdentifier, accepted, reason, peerClid }) {
     const view = this.inbound.get(streamIdentifier);
     if (!view) return;
     if (!accepted) {
@@ -356,11 +383,13 @@ export class ScreenshareManager extends EventEmitter {
       return;
     }
     view.status = InboundStatus.CONNECTING;
+    // P2P: negocia com o dono; SFU: com o servidor (0). Servidores antigos não mandam peerClid.
+    view.peerClid = peerClid ?? view.ownerClid;
     const session = new SessionInbound({
       streamIdentifier,
-      peerClid: view.ownerClid,
+      peerClid: view.peerClid,
       iceServers: this.handler.iceServers,
-      sendSignaling: payload => this.connection.sendCommand('streamsignaling', { streamIdentifier, clid: view.ownerClid, payload }),
+      sendSignaling: payload => this.connection.sendCommand('streamsignaling', { streamIdentifier, clid: view.peerClid, payload }),
     });
     view.session = session;
     view.stats = new StatsCollector(session, () => this.handler.streams.get(streamIdentifier)?.quality ?? null);
@@ -389,7 +418,7 @@ export class ScreenshareManager extends EventEmitter {
     }
     const view = this.inbound.get(streamIdentifier);
     if (view?.session) {
-      if (clid === view.ownerClid) view.session.onSignalingMessage(payload);
+      if (clid === view.peerClid) view.session.onSignalingMessage(payload);
       return;
     }
     // Oferta chegou antes da resposta de entrada ser processada: guarda.

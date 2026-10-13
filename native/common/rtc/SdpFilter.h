@@ -17,4 +17,17 @@ QString filterCodecs(const QString &sdp, const QSet<QString> &allowedVideo, cons
 /// Garante Opus estéreo e bitrate máximo no fmtp (áudio do sistema).
 QString opusStereo(const QString &sdp, int maxAverageBitrate);
 
+/// Modo SFU: entre as variantes de H.264 da oferta, fica só com
+/// packetization-mode=1 + Constrained Baseline (o que o relay anuncia aos
+/// espectadores). Sem nenhuma compatível, devolve o SDP como veio.
+QString keepH264ConstrainedBaseline(const QString &sdp);
+
+/// Troca o IP dos candidatos host IPv4 por `ip` (NAT 1:1). Aceita um candidato
+/// avulso ("candidate:..."/"a=candidate:...") ou um SDP inteiro.
+QString advertiseHostIp(const QString &text, const QString &ip);
+
+/// Identifica um candidato por transporte, endereço, porta e tipo (ignora
+/// fundação e prioridade), para descartar repetidos.
+QString candidateKey(const QString &candidate);
+
 } // namespace openspeak::sdp

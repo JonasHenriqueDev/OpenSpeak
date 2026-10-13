@@ -4,6 +4,7 @@ import { h, replaceChildren } from './dom.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
 import { SessionState } from '../video/StreamBase.js';
+import { StreamMode, RELAY_CLID } from '../core/protocol.js';
 
 const STATE_CLASS = {
   [SessionState.CONNECTED]: 'ok',
@@ -62,7 +63,8 @@ export class ViewersPanel {
         h('h4', t('video.viewers.active'), h('span.count',
           own.config.viewerLimit ? `${viewers.length}/${own.config.viewerLimit}` : String(viewers.length))),
         viewers.length ? viewers.map(clid => {
-          const session = own.sessions.get(clid)?.session;
+          // SFU: não há sessão por espectador; mostra a conexão com o servidor.
+          const session = own.sessions.get(own.config.mode === StreamMode.SFU ? RELAY_CLID : clid)?.session;
           const codec = session?.activeCodec?.replace('video/', '') ?? '';
           return h('div.viewer-row',
             h('span.state-dot', { class: STATE_CLASS[session?.state] ?? 'pending', title: session?.state ?? '' }),

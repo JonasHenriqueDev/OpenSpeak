@@ -180,6 +180,7 @@ class App {
       if (this.panel?.kind === 'stats' && this.panel.streamIdentifier === id) this.panel.view.refresh();
     });
     this.manager.on('joinrequest', (own, req) => this.#joinRequestToast(own, req));
+    this.manager.on('error', key => toasts.show({ kind: 'error', text: t(key) }));
     this.manager.on('ownstreamstopped', own => {
       if (this.panel?.streamIdentifier === own.streamIdentifier) this.closePanel();
     });

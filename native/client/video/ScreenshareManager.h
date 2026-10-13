@@ -1,7 +1,8 @@
 #pragma once
 // Orquestrador central (com::teamspeak::video::ScreenshareManager), exposto à QML.
 //  - Streams próprios: uma captura + UM encoder compartilhado + uma
-//    SessionOutbound por espectador (single-encoding).
+//    SessionOutbound por espectador (single-encoding). No modo SFU, uma única
+//    SessionOutbound com o servidor (clid 0), que repassa aos espectadores.
 //  - Streams assistidos: uma SessionInbound por stream.
 //  - Pedidos de entrada, privacidade, limite, kick/ban, miniaturas, estatísticas.
 
@@ -90,6 +91,7 @@ private:
         QString name;
         StreamType type = StreamType::Screen;
         StreamAccess access = StreamAccess::Public;
+        StreamMode mode = StreamMode::P2P;
         int bitrate = 3'000'000;
         int viewerLimit = 0;
         bool audio = true;
@@ -113,7 +115,7 @@ private:
         QString audioLabel;            // como o áudio está sendo capturado (estatísticas)
         bool excludingDiscord = false; // o Discord (e não o OpenSpeak) está fora da captura
         std::unique_ptr<OpusEncoder> opus;
-        QMap<int, SessionOutbound *> sessions;
+        QMap<int, SessionOutbound *> sessions; // por espectador (P2P) ou só RelayClid (SFU)
         std::mutex sinkMutex;           // protege `sinks` (thread do encoder/áudio)
         QList<SessionOutbound *> sinks;
         QMap<int, JoinReq> joinRequests;
@@ -122,11 +124,13 @@ private:
         bool paused = false;
         QTimer thumbTimer;
         QMap<int, History> history;
+        bool sfu() const { return config.mode == StreamMode::SFU; }
     };
     enum class InStatus { Waiting, Connecting, Playing, Reconnecting, Error };
     struct InboundView {
         QString id;
         int ownerClid = 0;
+        int peerClid = 0; // com quem a sessão negocia: o dono (P2P) ou o servidor (SFU)
         InStatus status = InStatus::Waiting;
         QString errorKey;
         SessionInbound *session = nullptr;
@@ -141,6 +145,7 @@ private:
     bool maybeAutoAccept(OwnStream &own, const JoinReq &req);
     bool viewerLimitReached(const OwnStream &own) const;
     void onClientJoined(const QJsonObject &a);
+    SessionOutbound *addOutbound(OwnStream &own, int peerClid, const QStringList &codecs);
     void onClientLeft(const QJsonObject &a);
     void onJoinResponse(const QJsonObject &a);
     void onSignaling(const QJsonObject &a);

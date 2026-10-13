@@ -53,6 +53,37 @@ VirtualServer::VirtualServer(SendFn send, QString name, QJsonArray iceServers)
     }
 }
 
+void VirtualServer::setRelay(StreamRelay *relay)
+{
+    m_relay = relay;
+    if (m_relay)
+        m_relay->setCallbacks([this](const QString &id, int clid, const QJsonObject &payload) { onRelaySignal(id, clid, payload); },
+                              [this](const QString &id, int clid) { onRelayFailed(id, clid); });
+}
+
+void VirtualServer::onRelaySignal(const QString &id, int clid, const QJsonObject &payload)
+{
+    // O relay só fala com quem ainda participa do stream.
+    auto it = m_streams.find(id);
+    if (it == m_streams.end() || !isSfu(it->second))
+        return;
+    const Stream &s = it->second;
+    if (s.ownerClid != clid && !s.viewers.contains(clid))
+        return;
+    notify(clid, QStringLiteral("notifystreamsignaling"), {{"streamIdentifier", id}, {"clid", RelayClid}, {"payload", payload}});
+}
+
+void VirtualServer::onRelayFailed(const QString &id, int clid)
+{
+    auto it = m_streams.find(id);
+    if (it == m_streams.end() || !isSfu(it->second))
+        return;
+    if (clid == it->second.ownerClid)
+        stopStream(id, LeaveReason::StreamStopped); // perdemos o transmissor
+    else
+        removeViewer(it->second, clid, LeaveReason::Failed);
+}
+
 const QHash<QString, VirtualServer::Handler> &VirtualServer::handlers()
 {
     static const QHash<QString, Handler> map = {
@@ -125,6 +156,9 @@ QJsonObject VirtualServer::cmdLogin(Client &client, const QJsonObject &args)
     broadcast(QStringLiteral("notifycliententerview"), {{"client", publicClient(client)}}, client.clid);
 
     QJsonArray channels, clients, streams;
+    QJsonArray caps{CapStreamP2P};
+    if (m_relay)
+        caps.append(CapStreamSFU);
     for (const auto &[cid, ch] : m_channels)
         channels.append(QJsonObject{{"cid", ch.cid}, {"order", ch.order}, {"name", ch.name}, {"description", ch.description}});
     for (const auto &[id, c] : m_clients)
@@ -134,7 +168,7 @@ QJsonObject VirtualServer::cmdLogin(Client &client, const QJsonObject &args)
         streams.append(publicStream(s));
     return {
         {"clid", client.clid},
-        {"server", QJsonObject{{"name", m_name}, {"capabilityExtensions", QJsonArray{CapStreamP2P}}}},
+        {"server", QJsonObject{{"name", m_name}, {"capabilityExtensions", caps}}},
         {"iceServers", m_iceServers},
         {"channels", channels},
         {"clients", clients},
@@ -171,8 +205,10 @@ QJsonObject VirtualServer::cmdClientUpdate(Client &client, const QJsonObject &ar
 QJsonObject VirtualServer::cmdSetupStream(Client &client, const QJsonObject &args)
 {
     const int mode = args.contains("mode") ? args.value("mode").toInt() : int(StreamMode::P2P);
-    if (mode != int(StreamMode::P2P))
-        fail(rc::ModeNotSupported, QStringLiteral("o servidor só suporta STREAM_P2P"));
+    if (mode == int(StreamMode::SFU) && !m_relay)
+        fail(rc::ModeNotSupported, QStringLiteral("o servidor não tem relay de mídia (STREAM_SFU)"));
+    if (mode != int(StreamMode::P2P) && mode != int(StreamMode::SFU))
+        fail(rc::ModeNotSupported);
     const auto owned = std::count_if(m_streams.begin(), m_streams.end(),
                                      [&](const auto &p) { return p.second.ownerClid == client.clid; });
     if (owned >= MaxStreamsPerClient)
@@ -188,6 +224,8 @@ QJsonObject VirtualServer::cmdSetupStream(Client &client, const QJsonObject &arg
     applyConfig(s, args);
     const QString id = s.id;
     m_streams[id] = std::move(s);
+    if (isSfu(m_streams[id]))
+        m_relay->openStream(id, client.clid, m_streams[id].bitrate);
     broadcast(QStringLiteral("notifystreamstarted"), {{"stream", publicStream(m_streams[id])}});
     return {{"streamIdentifier", id}};
 }
@@ -201,6 +239,8 @@ QJsonObject VirtualServer::cmdUpdateStream(Client &client, const QJsonObject &ar
         s.paused = args.value("paused").toBool();
     if (s.access != int(StreamAccess::Public))
         s.thumbnail.clear();
+    if (isSfu(s))
+        m_relay->updateStream(s.id, s.bitrate);
     broadcast(QStringLiteral("notifystreamupdated"),
               {{"stream", publicStream(s)}, {"accessChanged", accessBefore != s.access}});
     return {};
@@ -293,11 +333,17 @@ QJsonObject VirtualServer::cmdRespondJoinStreamRequest(Client &client, const QJs
         const QJsonArray codecs = req->second.codecs;
         s.pending.erase(req);
         s.viewers.append(clid);
+        // peerClid = com quem o espectador negocia: o dono (P2P) ou o relay (SFU).
+        const bool sfu = isSfu(s);
         notify(clid, QStringLiteral("notifyrespondjoinstreamrequest"),
-               {{"streamIdentifier", s.id}, {"accepted", true}, {"ownerClid", s.ownerClid}});
+               {{"streamIdentifier", s.id}, {"accepted", true}, {"ownerClid", s.ownerClid},
+                {"peerClid", sfu ? RelayClid : s.ownerClid}});
+        // O dono é avisado também no SFU (lista de espectadores), mas não abre sessão.
         notify(s.ownerClid, QStringLiteral("notifystreamclientjoined"),
                {{"streamIdentifier", s.id}, {"clid", clid}, {"codecs", codecs}});
         notifyAttendees(s);
+        if (sfu)
+            m_relay->addViewer(s.id, clid);
     } else {
         s.pending.erase(req);
         const bool doBan = args.value("ban").toBool();
@@ -348,7 +394,17 @@ QJsonObject VirtualServer::cmdStreamSignaling(Client &client, const QJsonObject 
         fail(rc::InvalidArgs);
     if (QJsonDocument(payload).toJson(QJsonDocument::Compact).size() > MaxSignalingBytes)
         fail(rc::PayloadTooLarge);
-    // Só pares legítimos conversam: dono <-> espectador aceito.
+    if (target == RelayClid) {
+        // SFU: dono ou espectador aceito <-> relay do servidor.
+        if (!isSfu(s) || (s.ownerClid != client.clid && !s.viewers.contains(client.clid)))
+            fail(rc::PermissionDenied);
+        m_relay->signaling(s.id, client.clid, payload);
+        return {};
+    }
+    // Só pares legítimos conversam: dono <-> espectador aceito (no SFU não há
+    // mídia direta entre eles).
+    if (isSfu(s))
+        fail(rc::PermissionDenied);
     const bool ownerToViewer = s.ownerClid == client.clid && s.viewers.contains(target);
     const bool viewerToOwner = s.ownerClid == target && s.viewers.contains(client.clid);
     if (!ownerToViewer && !viewerToOwner)
@@ -421,6 +477,8 @@ void VirtualServer::removeViewer(Stream &s, int clid, LeaveReason reason)
     const bool wasPending = s.pending.erase(clid) > 0;
     if (!wasViewer && !wasPending)
         return;
+    if (wasViewer && isSfu(s))
+        m_relay->removeViewer(s.id, clid);
     const QJsonObject args{{"streamIdentifier", s.id}, {"clid", clid}, {"reason", int(reason)}, {"wasPending", wasPending}};
     notify(s.ownerClid, QStringLiteral("notifystreamclientleft"), args);
     if (clid != s.ownerClid && m_clients.count(clid))
@@ -431,7 +489,12 @@ void VirtualServer::removeViewer(Stream &s, int clid, LeaveReason reason)
 
 void VirtualServer::stopStream(QString id, LeaveReason reason)
 {
-    m_streams.erase(id);
+    auto it = m_streams.find(id);
+    if (it == m_streams.end())
+        return;
+    if (isSfu(it->second))
+        m_relay->closeStream(id);
+    m_streams.erase(it);
     broadcast(QStringLiteral("notifystreamstopped"), {{"streamIdentifier", id}, {"reason", int(reason)}});
 }
 

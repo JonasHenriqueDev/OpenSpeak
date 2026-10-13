@@ -6,6 +6,29 @@
 
 using namespace openspeak;
 
+/// Relay falso: registra as chamadas e expõe os callbacks (sem mídia).
+class FakeRelay : public StreamRelay {
+public:
+    QStringList calls;
+    SignalFn signal;
+    FailFn failed;
+
+    void setCallbacks(SignalFn s, FailFn f) override
+    {
+        signal = std::move(s);
+        failed = std::move(f);
+    }
+    void openStream(const QString &id, int owner, int bitrate) override { calls << QStringLiteral("open %1 %2 %3").arg(id).arg(owner).arg(bitrate); }
+    void updateStream(const QString &id, int bitrate) override { calls << QStringLiteral("update %1 %2").arg(id).arg(bitrate); }
+    void closeStream(const QString &id) override { calls << QStringLiteral("close %1").arg(id); }
+    void addViewer(const QString &id, int clid) override { calls << QStringLiteral("add %1 %2").arg(id).arg(clid); }
+    void removeViewer(const QString &id, int clid) override { calls << QStringLiteral("remove %1 %2").arg(id).arg(clid); }
+    void signaling(const QString &id, int from, const QJsonObject &payload) override
+    {
+        calls << QStringLiteral("signal %1 %2 %3").arg(id).arg(from).arg(payload.value("type").toString());
+    }
+};
+
 class TestVirtualServer : public QObject {
     Q_OBJECT
 
@@ -50,6 +73,8 @@ private slots:
         inbox.clear();
         server = std::make_unique<VirtualServer>([this](int clid, const QJsonObject &m) { inbox[clid].append(m); });
     }
+
+    void cleanup() { server.reset(); } // antes dos relays falsos (locais a cada teste)
 
     void fullFlow()
     {
@@ -157,10 +182,149 @@ private slots:
         QCOMPARE(notes(viewer, "notifystreamthumbnail")[0].value("thumbnail").toString(), thumb);
     }
 
-    void sfuRejected()
+    void sfuRejectedWithoutRelay()
     {
         const int host = login("host");
         QCOMPARE(expectError(host, "setupstream", {{"mode", 2}}), rc::ModeNotSupported);
+        QCOMPARE(expectError(host, "setupstream", {{"mode", 7}}), rc::ModeNotSupported);
+        // Sem relay, só STREAM_P2P é anunciado.
+        const int other = server->connect();
+        const QJsonObject view = server->handle(other, "login", {{"nickname", "x"}, {"uid", "uid-x"}});
+        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), QJsonArray{CapStreamP2P});
+    }
+
+    // ------------------------------------------------------------ modo SFU
+
+    void sfuCapabilityAndSetup()
+    {
+        FakeRelay relay;
+        server->setRelay(&relay);
+        const int host = server->connect();
+        const QJsonObject view = server->handle(host, "login", {{"nickname", "host"}, {"uid", "uid-host"}});
+        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapStreamSFU}));
+
+        const QString sid = setup(host, {{"mode", int(StreamMode::SFU)}, {"bitrate", 2'000'000}});
+        QCOMPARE(relay.calls, QStringList{QStringLiteral("open %1 %2 2000000").arg(sid).arg(host)});
+        server->handle(host, "updatestream", {{"streamIdentifier", sid}, {"bitrate", 1'000'000}});
+        QCOMPARE(relay.calls.last(), QStringLiteral("update %1 1000000").arg(sid));
+
+        // P2P continua disponível e não toca no relay.
+        relay.calls.clear();
+        setup(host);
+        QVERIFY(relay.calls.isEmpty());
+    }
+
+    void sfuJoinUsesRelayPeer()
+    {
+        FakeRelay relay;
+        server->setRelay(&relay);
+        const int host = login("host"), viewer = login("viewer");
+        const QString sid = setup(host, {{"mode", int(StreamMode::SFU)}, {"access", int(StreamAccess::Private)}});
+        const QString p2p = setup(host);
+        relay.calls.clear();
+
+        server->handle(viewer, "joinstreamrequest", {{"streamIdentifier", sid}});
+        QVERIFY(relay.calls.isEmpty()); // pedido pendente ainda não é espectador
+        server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", sid}, {"clid", viewer}, {"accept", true}});
+        const QJsonObject resp = notes(viewer, "notifyrespondjoinstreamrequest")[0];
+        QCOMPARE(resp.value("peerClid").toInt(-1), RelayClid);
+        QCOMPARE(resp.value("ownerClid").toInt(), host);
+        // O dono continua sabendo quem assiste (lista de espectadores).
+        QCOMPARE(notes(host, "notifystreamclientjoined")[0].value("clid").toInt(), viewer);
+        QCOMPARE(relay.calls, QStringList{QStringLiteral("add %1 %2").arg(sid).arg(viewer)});
+
+        // P2P: peerClid = dono.
+        server->handle(viewer, "joinstreamrequest", {{"streamIdentifier", p2p}});
+        server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", p2p}, {"clid", viewer}, {"accept", true}});
+        QCOMPARE(notes(viewer, "notifyrespondjoinstreamrequest")[1].value("peerClid").toInt(), host);
+    }
+
+    void sfuSignalingRoutesThroughRelay()
+    {
+        FakeRelay relay;
+        server->setRelay(&relay);
+        const int host = login("host"), viewer = login("viewer"), stranger = login("stranger");
+        const QString sid = setup(host, {{"mode", int(StreamMode::SFU)}});
+        const QJsonObject offer{{"type", "offer"}, {"sdp", "v=0"}};
+
+        // Transmissor -> relay.
+        server->handle(host, "streamsignaling", {{"streamIdentifier", sid}, {"clid", RelayClid}, {"payload", offer}});
+        QCOMPARE(relay.calls.last(), QStringLiteral("signal %1 %2 offer").arg(sid).arg(host));
+
+        // Quem não foi aceito não fala com o relay.
+        server->handle(viewer, "joinstreamrequest", {{"streamIdentifier", sid}});
+        QCOMPARE(expectError(viewer, "streamsignaling", {{"streamIdentifier", sid}, {"clid", RelayClid}, {"payload", offer}}),
+                 rc::PermissionDenied);
+        QCOMPARE(expectError(stranger, "streamsignaling", {{"streamIdentifier", sid}, {"clid", RelayClid}, {"payload", offer}}),
+                 rc::PermissionDenied);
+
+        server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", sid}, {"clid", viewer}, {"accept", true}});
+        const QJsonObject answer{{"type", "answer"}, {"sdp", "v=0"}};
+        server->handle(viewer, "streamsignaling", {{"streamIdentifier", sid}, {"clid", RelayClid}, {"payload", answer}});
+        QCOMPARE(relay.calls.last(), QStringLiteral("signal %1 %2 answer").arg(sid).arg(viewer));
+
+        // No SFU dono e espectador não trocam sinalização diretamente.
+        QCOMPARE(expectError(host, "streamsignaling", {{"streamIdentifier", sid}, {"clid", viewer}, {"payload", offer}}),
+                 rc::PermissionDenied);
+        QCOMPARE(expectError(viewer, "streamsignaling", {{"streamIdentifier", sid}, {"clid", host}, {"payload", answer}}),
+                 rc::PermissionDenied);
+
+        // Relay -> clientes, com clid 0; nunca para quem não participa.
+        relay.signal(sid, viewer, offer);
+        relay.signal(sid, host, answer);
+        relay.signal(sid, stranger, offer);
+        const auto toViewer = notes(viewer, "notifystreamsignaling");
+        QCOMPARE(toViewer.size(), 1);
+        QCOMPARE(toViewer[0].value("clid").toInt(-1), RelayClid);
+        QCOMPARE(toViewer[0].value("payload").toObject().value("type").toString(), QStringLiteral("offer"));
+        QCOMPARE(notes(host, "notifystreamsignaling").size(), 1);
+        QVERIFY(notes(stranger, "notifystreamsignaling").isEmpty());
+
+        // Em stream P2P o clid 0 não existe.
+        const QString p2p = setup(host);
+        QCOMPARE(expectError(host, "streamsignaling", {{"streamIdentifier", p2p}, {"clid", RelayClid}, {"payload", offer}}),
+                 rc::PermissionDenied);
+    }
+
+    void sfuLifecycleNotifiesRelay()
+    {
+        FakeRelay relay;
+        server->setRelay(&relay);
+        const int host = login("host"), a = login("a"), b = login("b"), c = login("c");
+        const QString sid = setup(host, {{"mode", int(StreamMode::SFU)}});
+        for (int v : {a, b, c}) {
+            server->handle(v, "joinstreamrequest", {{"streamIdentifier", sid}});
+            server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", sid}, {"clid", v}, {"accept", true}});
+        }
+        relay.calls.clear();
+
+        server->handle(a, "removeclientfromstream", {{"streamIdentifier", sid}});
+        QCOMPARE(relay.calls.last(), QStringLiteral("remove %1 %2").arg(sid).arg(a));
+        server->handle(host, "removeclientfromstream", {{"streamIdentifier", sid}, {"clid", b}, {"reason", int(LeaveReason::Banned)}});
+        QCOMPARE(relay.calls.last(), QStringLiteral("remove %1 %2").arg(sid).arg(b));
+        QCOMPARE(expectError(b, "joinstreamrequest", {{"streamIdentifier", sid}}), rc::Banned);
+
+        // Falha do egress no relay: espectador sai com Failed.
+        relay.failed(sid, c);
+        QCOMPARE(notes(c, "notifystreamclientleft").last().value("reason").toInt(), int(LeaveReason::Failed));
+        QCOMPARE(relay.calls.last(), QStringLiteral("remove %1 %2").arg(sid).arg(c));
+
+        // Desconectar o dono encerra o stream no relay.
+        server->disconnect(host);
+        QCOMPARE(relay.calls.last(), QStringLiteral("close %1").arg(sid));
+        QCOMPARE(server->streamCount(), 0);
+    }
+
+    void sfuIngestFailureStopsStream()
+    {
+        FakeRelay relay;
+        server->setRelay(&relay);
+        const int host = login("host"), viewer = login("viewer");
+        const QString sid = setup(host, {{"mode", int(StreamMode::SFU)}});
+        relay.failed(sid, host);
+        QCOMPARE(server->streamCount(), 0);
+        QCOMPARE(notes(viewer, "notifystreamstopped")[0].value("streamIdentifier").toString(), sid);
+        QCOMPARE(relay.calls.last(), QStringLiteral("close %1").arg(sid));
     }
 };
 

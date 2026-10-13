@@ -110,6 +110,8 @@ ScreenshareManager::StreamConfig ScreenshareManager::configFromMap(const QVarian
         c.name = m.value("name").toString().trimmed().left(64);
     if (m.contains("access"))
         c.access = StreamAccess(m.value("access").toInt());
+    if (m.contains("mode"))
+        c.mode = m.value("mode").toInt() == int(StreamMode::SFU) ? StreamMode::SFU : StreamMode::P2P;
     if (m.contains("bitrate"))
         c.bitrate = std::clamp(m.value("bitrate").toInt(), 250'000, 20'000'000);
     if (m.contains("viewerLimit"))
@@ -132,7 +134,7 @@ ScreenshareManager::StreamConfig ScreenshareManager::configFromMap(const QVarian
 QJsonObject ScreenshareManager::wireConfig(const StreamConfig &c)
 {
     return {
-        {"name", c.name}, {"type", int(c.type)}, {"access", int(c.access)}, {"mode", int(StreamMode::P2P)},
+        {"name", c.name}, {"type", int(c.type)}, {"access", int(c.access)}, {"mode", int(c.mode)},
         {"bitrate", c.bitrate}, {"viewerLimit", c.viewerLimit}, {"audio", c.audio},
         {"quality", QJsonObject{{"width", c.width}, {"height", c.height}, {"fps", c.fps}}},
     };
@@ -202,15 +204,16 @@ void ScreenshareManager::detachPreview(QVideoSink *sink)
 
 void ScreenshareManager::startStream(const QVariantMap &config)
 {
-    if (!m_handler->hasStreamingP2P()) {
-        emit errorOccurred(QStringLiteral("error.streaming_not_supported_by_server"));
+    StreamConfig cfg = configFromMap(config, StreamConfig{});
+    if (cfg.mode == StreamMode::SFU ? !m_handler->hasStreamingSFU() : !m_handler->hasStreamingP2P()) {
+        emit errorOccurred(cfg.mode == StreamMode::SFU ? QStringLiteral("error.mode_not_supported")
+                                                       : QStringLiteral("error.streaming_not_supported_by_server"));
         return;
     }
     if (!m_preview) {
         emit errorOccurred(QStringLiteral("video.error.no_available_source"));
         return;
     }
-    StreamConfig cfg = configFromMap(config, StreamConfig{});
     cfg.type = m_preview->type();
     if (cfg.name.isEmpty())
         cfg.name = QStringLiteral("Stream de %1").arg(m_handler->clientName(m_handler->ownClid()));
@@ -242,8 +245,11 @@ void ScreenshareManager::startStream(const QVariantMap &config)
         OwnStream &ref = *own;
         m_own[id] = std::move(own);
         startMedia(ref);
+        // SFU: um único envio, para o servidor, que repassa aos espectadores.
+        if (ref.sfu())
+            addOutbound(ref, RelayClid, {QStringLiteral("video/H264")});
         scheduleThumbnails(ref);
-        qCInfo(lcShare) << "stream" << id << "ao vivo";
+        qCInfo(lcShare) << "stream" << id << "ao vivo" << (ref.sfu() ? "(SFU)" : "(P2P)");
         notifyChanged();
     });
 }
@@ -391,9 +397,11 @@ void ScreenshareManager::updateStream(const QString &id, const QVariantMap &conf
         return;
     OwnStream &own = *it->second;
     const StreamType type = own.config.type;
+    const StreamMode mode = own.config.mode; // o modo não muda com o stream no ar
     const bool excludeDiscord = own.config.excludeDiscord;
     own.config = configFromMap(config, own.config);
     own.config.type = type;
+    own.config.mode = mode;
     configureEncoder(own);
     if (own.config.excludeDiscord != excludeDiscord)
         startAudioFor(own);
@@ -463,7 +471,7 @@ QVariantMap ScreenshareManager::ownConfig(const QString &id) const
     if (it == m_own.end())
         return {};
     const StreamConfig &c = it->second->config;
-    return {{"name", c.name}, {"type", int(c.type)}, {"access", int(c.access)}, {"mode", int(StreamMode::P2P)},
+    return {{"name", c.name}, {"type", int(c.type)}, {"access", int(c.access)}, {"mode", int(c.mode)},
             {"bitrate", c.bitrate}, {"viewerLimit", c.viewerLimit}, {"audio", c.audio}, {"width", c.width},
             {"height", c.height}, {"fps", c.fps}, {"audioBitrate", c.audioBitrate},
             {"sourceLabel", it->second->source->label()}};
@@ -530,7 +538,8 @@ QVariantMap ScreenshareManager::viewers(const QString &id) const
     for (const JoinReq &r : own.joinRequests)
         requests.append(QVariantMap{{"clid", r.clid}, {"nickname", r.nickname}, {"identity", m_handler->clientIdentity(r.clid)}});
     for (int clid : own.viewers) {
-        const SessionOutbound *s = own.sessions.value(clid);
+        // SFU: não há sessão por espectador; mostra a conexão com o servidor.
+        const SessionOutbound *s = own.sessions.value(own.sfu() ? RelayClid : clid);
         viewers.append(QVariantMap{{"clid", clid}, {"nickname", m_handler->clientName(clid)}, {"identity", m_handler->clientIdentity(clid)},
                                    {"state", s ? s->stateName() : QStringLiteral("connecting")},
                                    {"codec", QStringLiteral("H264")}});
@@ -704,6 +713,12 @@ void ScreenshareManager::onClientJoined(const QJsonObject &a)
         return;
     OwnStream &own = *it->second;
     const int clid = a.value("clid").toInt();
+    if (own.sfu()) {
+        // A mídia sai pelo relay do servidor; aqui só a lista de espectadores.
+        own.viewers.insert(clid);
+        notifyChanged();
+        return;
+    }
     if (m_handler->cloudMode() && (!m_handler->directory() || m_handler->directory()->self().address.isNull())) {
         m_conn->sendCommand(QStringLiteral("removeclientfromstream"), {{"streamIdentifier", id}, {"clid", clid}, {"reason", int(LeaveReason::Failed)}});
         return;
@@ -713,35 +728,50 @@ void ScreenshareManager::onClientJoined(const QJsonObject &a)
     QStringList codecs;
     for (const QJsonValue &c : a.value("codecs").toArray())
         codecs.append(c.toString());
+    qCInfo(lcShare) << "ResolveJoinRequest - adicionando espectador" << clid << "ao stream" << id;
+    addOutbound(own, clid, codecs);
+}
+
+SessionOutbound *ScreenshareManager::addOutbound(OwnStream &own, int peerClid, const QStringList &codecs)
+{
+    const QString id = own.id;
+    const bool relay = peerClid == RelayClid;
     VideoEncoder *encoder = own.encoder.get();
     auto *session = new SessionOutbound(
-        id, clid, m_handler->iceServers(), codecs,
-        [this, id, clid](const QJsonObject &payload) {
-            m_conn->sendCommand(QStringLiteral("streamsignaling"), {{"streamIdentifier", id}, {"clid", clid}, {"payload", payload}});
+        id, peerClid, m_handler->iceServers(), codecs,
+        [this, id, peerClid](const QJsonObject &payload) {
+            m_conn->sendCommand(QStringLiteral("streamsignaling"), {{"streamIdentifier", id}, {"clid", peerClid}, {"payload", payload}});
         },
         [encoder] { encoder->requestKeyFrame(); }, this);
-    if ((m_handler->cloudMode() || (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")))) && m_handler->directory())
+    // A sessão com o servidor (SFU) segue a rota normal, nunca a da tailnet.
+    if (!relay && (m_handler->cloudMode() || (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")))) && m_handler->directory())
         session->setBindAddress(m_handler->directory()->self().address.toString());
     if (!session->remoteSupportsH264()) {
-        qCWarning(lcShare) << "espectador" << clid << "não decodifica H.264";
+        qCWarning(lcShare) << "espectador" << peerClid << "não decodifica H.264";
         delete session;
         m_conn->sendCommand(QStringLiteral("removeclientfromstream"),
-                            {{"streamIdentifier", id}, {"clid", clid}, {"reason", int(LeaveReason::Failed)}});
-        return;
+                            {{"streamIdentifier", id}, {"clid", peerClid}, {"reason", int(LeaveReason::Failed)}});
+        return nullptr;
     }
-    own.sessions.insert(clid, session);
+    own.sessions.insert(peerClid, session);
     {
         std::lock_guard lock(own.sinkMutex);
         own.sinks.append(session);
     }
     connect(session, &RtcSession::stateChanged, this, &ScreenshareManager::notifyChanged);
-    connect(session, &RtcSession::failed, this, [this, id, clid] {
+    connect(session, &RtcSession::failed, this, [this, id, peerClid, relay] {
+        if (relay) {
+            // Sem o servidor não há para quem transmitir: encerra o stream.
+            emit errorOccurred(QStringLiteral("video.error.sfu_connection_lost"));
+            QMetaObject::invokeMethod(this, [this, id] { stopStream(id); }, Qt::QueuedConnection);
+            return;
+        }
         m_conn->sendCommand(QStringLiteral("removeclientfromstream"),
-                            {{"streamIdentifier", id}, {"clid", clid}, {"reason", int(LeaveReason::Failed)}});
+                            {{"streamIdentifier", id}, {"clid", peerClid}, {"reason", int(LeaveReason::Failed)}});
     });
-    qCInfo(lcShare) << "ResolveJoinRequest - adicionando espectador" << clid << "ao stream" << id;
     session->start();
     notifyChanged();
+    return session;
 }
 
 void ScreenshareManager::removeSession(OwnStream &own, int clid)
@@ -804,15 +834,19 @@ void ScreenshareManager::onJoinResponse(const QJsonObject &a)
         return;
     }
     it->status = InStatus::Connecting;
-    if (m_handler->cloudMode() && (!m_handler->directory() || m_handler->directory()->self().address.isNull())) {
+    // P2P: negocia com o dono; SFU: com o servidor (peerClid 0). Servidores
+    // antigos não mandam peerClid.
+    const int peer = a.contains("peerClid") ? a.value("peerClid").toInt() : it->ownerClid;
+    const bool relay = peer == RelayClid;
+    it->peerClid = peer;
+    if (!relay && m_handler->cloudMode() && (!m_handler->directory() || m_handler->directory()->self().address.isNull())) {
         setInboundError(*it, QStringLiteral("video.join.error.connection_lost"));
         return;
     }
-    const int owner = it->ownerClid;
-    auto *session = new SessionInbound(id, owner, m_handler->iceServers(), [this, id, owner](const QJsonObject &payload) {
-        m_conn->sendCommand(QStringLiteral("streamsignaling"), {{"streamIdentifier", id}, {"clid", owner}, {"payload", payload}});
+    auto *session = new SessionInbound(id, peer, m_handler->iceServers(), [this, id, peer](const QJsonObject &payload) {
+        m_conn->sendCommand(QStringLiteral("streamsignaling"), {{"streamIdentifier", id}, {"clid", peer}, {"payload", payload}});
     }, this);
-    if ((m_handler->cloudMode() || (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")))) && m_handler->directory())
+    if (!relay && (m_handler->cloudMode() || (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")))) && m_handler->directory())
         session->setBindAddress(m_handler->directory()->self().address.toString());
     session->setVolume(m_inboundMuted ? 0.0 : it->volume);
     if (m_inboundMuted)
@@ -855,7 +889,7 @@ void ScreenshareManager::onSignaling(const QJsonObject &a)
     }
     auto view = m_inbound.find(id);
     if (view != m_inbound.end() && view->session) {
-        if (clid == view->ownerClid)
+        if (clid == view->peerClid)
             view->session->onSignalingMessage(payload);
         return;
     }
@@ -951,8 +985,11 @@ QVariantMap ScreenshareManager::stats(const QString &id, int viewerClid) const
     if (own != m_own.end()) {
         const OwnStream &o = *own->second;
         QVariantList viewers;
+        // SFU: as estatísticas de envio são as da sessão com o servidor.
         for (auto it = o.sessions.begin(); it != o.sessions.end(); ++it)
-            viewers.append(QVariantMap{{"clid", it.key()}, {"nickname", m_handler->clientName(it.key())}});
+            viewers.append(QVariantMap{{"clid", it.key()},
+                                       {"nickname", o.sfu() && it.key() == RelayClid ? QStringLiteral("Servidor (SFU)")
+                                                                                     : m_handler->clientName(it.key())}});
         if (!o.sessions.contains(viewerClid))
             viewerClid = o.sessions.isEmpty() ? 0 : o.sessions.firstKey();
         QVariantMap out{{"own", true}, {"viewers", viewers}, {"viewerClid", viewerClid},

@@ -59,6 +59,7 @@ class ConnectionHandler : public QObject {
     Q_PROPERTY(int ownClid READ ownClid NOTIFY connectionChanged)
     Q_PROPERTY(int ownChannel READ ownChannel NOTIFY changed)
     Q_PROPERTY(bool hasStreamingP2P READ hasStreamingP2P NOTIFY connectionChanged)
+    Q_PROPERTY(bool hasStreamingSFU READ hasStreamingSFU NOTIFY connectionChanged)
     Q_PROPERTY(QVariantList tree READ tree NOTIFY changed)
     Q_PROPERTY(bool meshMode READ meshMode NOTIFY connectionChanged)
     Q_PROPERTY(bool reconnecting READ reconnecting NOTIFY changed)
@@ -91,6 +92,7 @@ public:
     int ownClid() const { return m_ownClid; }
     int ownChannel() const;
     bool hasStreamingP2P() const { return m_capabilities.contains(CapStreamP2P); }
+    bool hasStreamingSFU() const { return m_capabilities.contains(CapStreamSFU); }
     bool meshMode() const { return m_mesh != nullptr && m_connection.backend() == m_mesh; }
     QString tailnetStatus() const;
     QString tailnetName() const { return m_directory ? m_directory->networkName() : QString(); }

@@ -10,6 +10,7 @@ export class SessionOutbound extends StreamBase {
    * @param {string[]} o.remoteCodecs   codecs que o espectador decodifica
    * @param {{bitrate:number, audioBitrate:number, quality:object}} o.encoding
    * @param {string} [o.preferredCodec]
+   * @param {boolean} [o.scalability]  camadas temporais (L1T3); desligado no SFU
    */
   constructor(o) {
     super({ ...o, isInbound: false });
@@ -17,6 +18,7 @@ export class SessionOutbound extends StreamBase {
     this.remoteCodecs = o.remoteCodecs ?? [];
     this.encoding = { ...o.encoding };
     this.preferredCodec = o.preferredCodec ?? 'auto';
+    this.scalability = o.scalability ?? true;
     this.activeCodec = null;
     this.videoTransceiver = null;
     this.audioTransceiver = null;
@@ -51,7 +53,7 @@ export class SessionOutbound extends StreamBase {
       quality: this.encoding.quality, bitrate: this.encoding.bitrate, preferred: this.preferredCodec,
     });
     this.activeCodec = ranked[0] ?? null;
-    const scalabilityMode = this.activeCodec ? scalabilityModeFor(this.activeCodec) : null;
+    const scalabilityMode = this.activeCodec && this.scalability ? scalabilityModeFor(this.activeCodec) : null;
     const encoding = { maxBitrate: this.encoding.bitrate, maxFramerate: this.encoding.quality.fps, priority: 'high' };
     try {
       this.videoTransceiver = pc.addTransceiver('video', {

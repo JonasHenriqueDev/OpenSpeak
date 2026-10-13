@@ -8,6 +8,10 @@
 #include <QLoggingCategory>
 #include <QUrl>
 
+#ifdef OPENSPEAK_HAS_SFU
+#include "SfuRelay.h"
+#endif
+
 Q_LOGGING_CATEGORY(lcServer, "openspeak.server")
 
 namespace openspeak {
@@ -21,6 +25,19 @@ ServerHost::ServerHost(Options options, QObject *parent)
       m_options(std::move(options)),
       m_server([this](int clid, const QJsonObject &msg) { sendTo(clid, msg); }, m_options.name, m_options.iceServers)
 {
+#ifdef OPENSPEAK_HAS_SFU
+    if (m_options.sfu) {
+        SfuRelay::Options relay;
+        relay.iceServers = m_options.iceServers;
+        relay.transport.udpMuxPort = m_options.rtcPort;
+        relay.transport.publicIp = m_options.publicIp;
+        m_relay = std::make_unique<SfuRelay>(relay);
+        m_server.setRelay(m_relay.get());
+    }
+#else
+    if (m_options.sfu)
+        qCWarning(lcServer) << "relay SFU indisponível: compilado sem libdatachannel";
+#endif
     m_http.addWebSocketUpgradeVerifier(this, [](const QHttpServerRequest &request) {
         return request.url().path() == QLatin1String("/ws") ? QHttpServerWebSocketUpgradeResponse::accept()
                                                             : QHttpServerWebSocketUpgradeResponse::deny();
@@ -62,6 +79,15 @@ bool ServerHost::start()
 }
 
 quint16 ServerHost::port() const { return m_tcp ? m_tcp->serverPort() : 0; }
+
+bool ServerHost::sfuAvailable()
+{
+#ifdef OPENSPEAK_HAS_SFU
+    return true;
+#else
+    return false;
+#endif
+}
 
 void ServerHost::onNewWebSocket()
 {

@@ -101,6 +101,7 @@ Dialog {
         } else {
             const c = Object.assign({}, Settings.lastStreamingConfig)
             c.name = "Stream de " + Server.clientName(Server.ownClid)
+            if (c.mode !== 2 || !Server.hasStreamingSFU) c.mode = 1 // SFU só se este servidor oferecer
             cfg = c
         }
         if (editing) {
@@ -419,15 +420,32 @@ Dialog {
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 4
-                        Button { text: I18n.t("video.mode.p2p"); checkable: true; checked: true; highlighted: true; enabled: !dialog.editing }
                         Button {
+                            text: I18n.t("video.mode.p2p")
+                            Layout.fillWidth: true
+                            implicitWidth: 0
+                            checkable: true
+                            checked: dialog.cfg.mode !== 2
+                            highlighted: checked
+                            enabled: !dialog.editing
+                            onClicked: dialog.patch({ mode: 1 })
+                        }
+                        Button {
+                            objectName: "modeServer"
                             text: I18n.t("video.mode.server")
-                            enabled: false
+                            Layout.fillWidth: true
+                            implicitWidth: 0
+                            checkable: true
+                            checked: dialog.cfg.mode === 2
+                            highlighted: checked
+                            // O modo é fixo enquanto o stream está no ar.
+                            enabled: Server.hasStreamingSFU && !dialog.editing
+                            onClicked: dialog.patch({ mode: 2 })
                             ToolTip.visible: hovered
-                            ToolTip.text: I18n.t("video.mode.server.unsupported")
+                            ToolTip.text: I18n.t(Server.hasStreamingSFU ? "video.mode.server.info" : "video.mode.server.unsupported")
                         }
                     }
-                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim; font.pixelSize: 12; text: I18n.t("video.mode.p2p.info") }
+                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim; font.pixelSize: 12; text: I18n.t(dialog.cfg.mode === 2 ? "video.mode.server.info" : "video.mode.p2p.info") }
                 }
 
                 // avançado

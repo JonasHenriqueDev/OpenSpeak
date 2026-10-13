@@ -141,4 +141,20 @@ test('modo SFU é recusado (servidor só anuncia STREAM_P2P)', () => {
   const { server, login } = setup();
   const host = login('host');
   assert.throws(() => server.handle(host, 'setupstream', { mode: 2 }), { code: 'mode_not_supported' });
+  // O relay de mídia só existe no servidor nativo: aqui STREAM_SFU nunca é anunciado.
+  const other = server.connect();
+  const view = server.handle(other, 'login', { nickname: 'x', uid: 'uid-x' });
+  assert.deepEqual(view.server.capabilityExtensions, ['STREAM_P2P']);
+});
+
+test('aceite informa peerClid (P2P: o próprio dono)', () => {
+  const { server, login, notes } = setup();
+  const host = login('host');
+  const viewer = login('viewer');
+  const { streamIdentifier } = server.handle(host, 'setupstream', {});
+  server.handle(viewer, 'joinstreamrequest', { streamIdentifier });
+  server.handle(host, 'respondjoinstreamrequest', { streamIdentifier, clid: viewer, accept: true });
+  const [resp] = notes(viewer, 'notifyrespondjoinstreamrequest');
+  assert.equal(resp.args.peerClid, host);
+  assert.equal(resp.args.ownerClid, host);
 });

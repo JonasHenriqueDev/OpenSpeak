@@ -1,4 +1,5 @@
 #include "RtcSession.h"
+#include "SdpFilter.h"
 
 #include <QLoggingCategory>
 #include <QMetaObject>
@@ -105,12 +106,18 @@ void RtcSession::createPeerConnection()
     }
     const int gen = ++m_generation;
     m_pendingCandidates.clear();
+    m_announced.clear();
 
     rtc::Configuration config;
     config.iceServers = toIceServers(m_iceServers);
     if (!m_bindAddress.isEmpty()) {
         config.bindAddress = m_bindAddress.toStdString();
         config.iceServers.clear(); // tailnet transport needs neither STUN nor TURN
+    }
+    if (m_transport.udpMuxPort) {
+        // Servidor: uma porta UDP só para todas as sessões (firewall/NAT simples).
+        config.enableIceUdpMux = true;
+        config.portRangeBegin = config.portRangeEnd = m_transport.udpMuxPort;
     }
     config.disableAutoNegotiation = true;
     config.forceMediaTransport = true;
@@ -120,7 +127,8 @@ void RtcSession::createPeerConnection()
         const QString type = QString::fromStdString(desc.typeString());
         const QString sdp = QString::fromStdString(std::string(desc));
         post(gen, [this, type, sdp] {
-            QJsonObject payload{{"type", type}, {"sdp", transformLocalSdp(sdp)}};
+            const QString local = m_transport.publicIp.isEmpty() ? sdp : sdp::advertiseHostIp(sdp, m_transport.publicIp);
+            QJsonObject payload{{"type", type}, {"sdp", transformLocalSdp(local)}};
             if (type == QLatin1String("offer"))
                 payload["isReconnect"] = m_reconnectPending;
             m_reconnectPending = false;
@@ -128,9 +136,21 @@ void RtcSession::createPeerConnection()
         });
     });
     m_pc->onLocalCandidate([this, gen](rtc::Candidate c) {
-        const QJsonObject cand{{"candidate", QString::fromStdString(c.candidate())},
-                               {"sdpMid", QString::fromStdString(c.mid())}};
-        post(gen, [this, cand] { m_send({{"type", "ice"}, {"candidate", cand}}); });
+        QString candidate = QString::fromStdString(c.candidate());
+        const QString mid = QString::fromStdString(c.mid());
+        post(gen, [this, candidate, mid]() mutable {
+            if (!m_transport.publicIp.isEmpty()) {
+                // NAT 1:1 (ex.: VM na nuvem): o IP privado da interface não serve
+                // para ninguém de fora; anuncia o público. Várias interfaces viram
+                // o mesmo candidato, então descarta repetidos.
+                candidate = sdp::advertiseHostIp(candidate, m_transport.publicIp);
+                const QString key = sdp::candidateKey(candidate);
+                if (m_announced.contains(key))
+                    return;
+                m_announced.insert(key);
+            }
+            m_send({{"type", "ice"}, {"candidate", QJsonObject{{"candidate", candidate}, {"sdpMid", mid}}}});
+        });
     });
     m_pc->onStateChange([this, gen](rtc::PeerConnection::State s) {
         post(gen, [this, s] {

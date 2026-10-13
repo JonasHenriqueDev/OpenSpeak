@@ -1,7 +1,7 @@
 # Downloads e atualizações
 
-O cliente web oferece **Baixar app para Windows** na tela de entrada e
-**App Windows ↓** na barra superior quando conectado. Os links apontam para:
+O cliente web oferece **Download App** na tela de entrada e na barra superior
+quando conectado. Os links apontam para:
 
 `https://github.com/JonasHenriqueDev/OpenSpeak/releases/latest/download/OpenSpeak-Setup.exe`
 

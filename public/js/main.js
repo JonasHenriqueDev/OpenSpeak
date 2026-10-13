@@ -22,8 +22,8 @@ const entryParams = new URLSearchParams(location.search);
 const INSTALLER_URL = 'https://github.com/JonasHenriqueDev/OpenSpeak/releases/latest/download/OpenSpeak-Setup.exe';
 function installerLink(compact = false) {
   return h('a.desktop-download', { href: INSTALLER_URL, title: 'Baixar o instalador Windows da última versão estável',
-    'aria-label': 'Baixar OpenSpeak para Windows — última versão estável', class: compact ? 'compact' : '' },
-    compact ? 'App Windows ↓' : 'Baixar app para Windows ↓');
+    'aria-label': 'Download App — OpenSpeak para Windows, última versão estável', class: compact ? 'compact' : '' },
+    'Download App');
 }
 
 const root = document.getElementById('app');

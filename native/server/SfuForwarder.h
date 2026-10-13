@@ -15,6 +15,7 @@
 #include <rtc/rtc.hpp>
 
 #include <chrono>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -38,11 +39,13 @@ public:
     void detach();
     /// Copia o pacote já reescrito, aplica o SSRC deste espectador e envia.
     void send(Kind kind, const rtc::binary &packet);
+    uint64_t sentBytes() const { return m_sentBytes.load(); }
 
 private:
     std::mutex m_mutex;
     std::shared_ptr<rtc::Track> m_video, m_audio;
     uint32_t m_videoSsrc = 0, m_audioSsrc = 0;
+    std::atomic<uint64_t> m_sentBytes{0};
 };
 
 class Forwarder {
@@ -53,6 +56,7 @@ public:
     // --- lado do transmissor (ingest)
     void setIngestVideoTrack(const std::shared_ptr<rtc::Track> &track);
     void onRtp(Kind kind, const std::byte *data, size_t size);
+    uint64_t receivedBytes() const { return m_receivedBytes.load(); }
     /// Sender Report do transmissor: âncora NTP<->RTP para o SR de saída.
     void onSenderReport(Kind kind, uint32_t ssrc, uint32_t rtpTimestamp);
 
@@ -86,6 +90,7 @@ private:
     std::shared_ptr<rtc::Track> takeKeyFrameRequestLocked(Clock::time_point now);
 
     mutable std::mutex m_mutex;
+    std::atomic<uint64_t> m_receivedBytes{0};
     Lane m_lanes[2];
     std::vector<std::shared_ptr<EgressSink>> m_sinks;
     std::weak_ptr<rtc::Track> m_ingestVideo;

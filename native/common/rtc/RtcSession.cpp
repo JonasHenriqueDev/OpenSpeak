@@ -89,6 +89,20 @@ QString RtcSession::connectionType() const
     return QStringLiteral("srflx");
 }
 
+QJsonObject RtcSession::monitoringSnapshot() const
+{
+    QJsonObject data{{"state", stateName()}, {"connectionType", connectionType()},
+                     {"generation", m_generation.load()}};
+    rtc::Candidate local, remote;
+    if (m_pc && m_pc->getSelectedCandidatePair(&local, &remote)) {
+        if (const auto address = remote.address())
+            data["mediaIp"] = QString::fromStdString(*address);
+        if (const auto port = remote.port())
+            data["mediaPort"] = int(*port);
+    }
+    return data;
+}
+
 void RtcSession::post(int generation, std::function<void()> fn)
 {
     QPointer<RtcSession> self(this);

@@ -76,6 +76,27 @@ private slots:
 
     void cleanup() { server.reset(); } // antes dos relays falsos (locais a cada teste)
 
+    void monitoringTracksLoginStreamsAndDisconnect()
+    {
+        const int pending = server->connect();
+        const int host = login("host"), viewer = login("viewer");
+        const QString sid = setup(host, {{"name", "Tela"}});
+        server->handle(viewer, "joinstreamrequest", {{"streamIdentifier", sid}});
+        server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", sid}, {"clid", viewer}, {"accept", true}});
+        const auto snapshot = server->monitoringSnapshot();
+        QCOMPARE(snapshot.value("connections").toInt(), 3);
+        QCOMPARE(snapshot.value("clients").toArray().size(), 2);
+        QCOMPARE(snapshot.value("viewerSubscriptions").toInt(), 1);
+        QCOMPARE(snapshot.value("streams").toArray().size(), 1);
+        QCOMPARE(snapshot.value("streams").toArray().first().toObject().value("viewerClids").toArray(), QJsonArray{viewer});
+        QVERIFY(!snapshot.value("clients").toArray().first().toObject().contains("uid"));
+        QVERIFY(!snapshot.value("streams").toArray().first().toObject().contains("thumbnail"));
+        server->disconnect(host);
+        server->disconnect(pending);
+        QCOMPARE(server->monitoringSnapshot().value("clients").toArray().size(), 1);
+        QCOMPARE(server->monitoringSnapshot().value("streams").toArray().size(), 0);
+    }
+
     void fullFlow()
     {
         const int host = login("host"), viewer = login("viewer");

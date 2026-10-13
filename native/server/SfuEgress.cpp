@@ -132,6 +132,25 @@ void SfuEgress::setupPeerConnection(rtc::PeerConnection &pc)
 
 QString SfuEgress::transformLocalSdp(const QString &sdp) { return sdp::opusStereo(sdp, 510'000); }
 
+QJsonObject SfuEgress::mediaSnapshot()
+{
+    auto data = monitoringSnapshot();
+    data["mediaRxBytes"] = 0;
+    data["mediaTxBytes"] = double(m_sink->sentBytes());
+    std::lock_guard lock(m_statsMutex);
+    if (m_videoStats) {
+        const auto stats = m_videoStats->snapshot();
+        if (stats.receiverReports) {
+            data["lossPercent"] = stats.fractionLost * 100;
+            data["jitterMs"] = stats.jitter * 1000;
+            if (stats.rttCount)
+                data["rttMs"] = stats.rtt * 1000;
+            data["nackedPackets"] = double(stats.nackedPackets);
+        }
+    }
+    return data;
+}
+
 void SfuEgress::collectStats(int configuredBitrate)
 {
     std::shared_ptr<RtpStatsHandler> stats;

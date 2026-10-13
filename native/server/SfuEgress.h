@@ -27,6 +27,7 @@ public:
     /// Atualiza a estimativa de banda deste espectador (1 Hz).
     void collectStats(int configuredBitrate);
     int estimatedBitrate() const { return m_estimate; }
+    QJsonObject mediaSnapshot();
 
 protected:
     void setupPeerConnection(rtc::PeerConnection &pc) override;

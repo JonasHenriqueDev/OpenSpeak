@@ -4,6 +4,13 @@
 #include <atomic>
 
 namespace openspeak {
+QJsonObject SfuIngest::mediaSnapshot() const
+{
+    auto data = monitoringSnapshot();
+    data["mediaRxBytes"] = double(m_forwarder->receivedBytes());
+    data["mediaTxBytes"] = 0;
+    return data;
+}
 
 namespace {
 

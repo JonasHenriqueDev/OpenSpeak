@@ -18,6 +18,7 @@ public:
     ~SfuIngest() override;
 
     void start() override;
+    QJsonObject mediaSnapshot() const;
 
 protected:
     void setupPeerConnection(rtc::PeerConnection &pc) override;

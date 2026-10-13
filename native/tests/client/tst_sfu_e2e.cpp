@@ -13,6 +13,10 @@
 #include <QTest>
 #include <QUdpSocket>
 #include <QVideoSink>
+#include <QTemporaryDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QScopeGuard>
 
 using namespace openspeak;
 
@@ -37,6 +41,19 @@ class TestSfuEndToEnd : public QObject {
 private slots:
     void relayToTwoViewers()
     {
+        QTemporaryDir metricsDir;
+        QVERIFY(metricsDir.isValid());
+        const QString metricsFile = metricsDir.filePath("metrics.json");
+        const QByteArray previousMetricsFile = qgetenv("OPENSPEAK_METRICS_FILE");
+        qputenv("OPENSPEAK_METRICS_FILE", metricsFile.toUtf8());
+        const auto restoreEnv = qScopeGuard([&] {
+            if (previousMetricsFile.isNull()) qunsetenv("OPENSPEAK_METRICS_FILE");
+            else qputenv("OPENSPEAK_METRICS_FILE", previousMetricsFile);
+        });
+        const auto snapshot = [&] {
+            QFile file(metricsFile);
+            return file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll()).object() : QJsonObject{};
+        };
         if (qEnvironmentVariableIsSet("OPENSPEAK_RTC_LOG"))
             rtc::InitLogger(rtc::LogLevel::Debug);
         ServerHost::Options opts;
@@ -94,6 +111,23 @@ private slots:
         QTRY_VERIFY_WITH_TIMEOUT(framesB >= 15 && framesC >= 15, 20000);
         QCOMPARE(sizeB, QSize(1280, 720));
         QCOMPARE(sizeC, QSize(1280, 720));
+        QTRY_COMPARE_WITH_TIMEOUT(snapshot().value("mediaSessions").toArray().size(), 3, 5000);
+        const auto metrics = snapshot();
+        for (const auto &value : metrics.value("mediaSessions").toArray()) {
+            const auto session = value.toObject();
+            QCOMPARE(session.value("state").toString(), QStringLiteral("connected"));
+            if (session.value("role").toString() == QLatin1String("publisher"))
+                QVERIFY(session.value("mediaRxBytes").toDouble() > 0);
+            else
+                QVERIFY(session.value("mediaTxBytes").toDouble() > 0);
+            QVERIFY(!session.value("mediaIp").toString().isEmpty());
+        }
+        for (const auto &value : metrics.value("clients").toArray()) {
+            const auto client = value.toObject();
+            QCOMPARE(client.value("ip").toString(), QStringLiteral("127.0.0.1"));
+            QCOMPARE(client.value("clientInfo").toObject().value("kind").toString(), QStringLiteral("native"));
+            QVERIFY(client.value("connectedAt").toDouble() > 0);
+        }
         qInfo() << "quadros recebidos: B =" << framesB << " C =" << framesC;
 
         // O transmissor mantém UMA sessão (com o servidor) e vê os dois espectadores.

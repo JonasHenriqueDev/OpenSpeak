@@ -263,6 +263,13 @@ select.input { padding-right: 4px; }
 .video-stream:focus-within .tile-top, .video-stream:focus-within .tile-actions,
 .tile-actions.always { opacity: 1; }
 .video-stream .tile-top:has(.issue-indicator) { opacity: 1; }
+.video-stream:fullscreen .tile-top, .video-stream:fullscreen .tile-actions { opacity: 1; }
+.video-stream:fullscreen.fullscreen-idle { cursor: none; }
+.video-stream:fullscreen.fullscreen-idle .tile-top,
+.video-stream:fullscreen.fullscreen-idle .tile-actions {
+  opacity: 0; visibility: hidden; pointer-events: none;
+}
+.video-stream:fullscreen.fullscreen-idle * { cursor: none; }
 .tile-title { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; }
 .tile-title .icon { width: 15px; height: 15px; color: var(--text-dim); }
 .tile-owner { color: var(--text-dim); white-space: nowrap; }

@@ -1,12 +1,16 @@
 #include "ServerHost.h"
 
 #include <QFileInfo>
+#include <QCoreApplication>
+#include <QDateTime>
+#include <QSaveFile>
 #include <QHttpServerRequest>
 #include <QHttpServerResponse>
 #include <QHttpServerWebSocketUpgradeResponse>
 #include <QJsonDocument>
 #include <QLoggingCategory>
 #include <QUrl>
+#include <QNetworkRequest>
 
 #ifdef OPENSPEAK_HAS_SFU
 #include "SfuRelay.h"
@@ -65,6 +69,11 @@ ServerHost::ServerHost(Options options, QObject *parent)
 
     m_heartbeat.setInterval(15'000);
     connect(&m_heartbeat, &QTimer::timeout, this, &ServerHost::heartbeat);
+    m_monitoringFile = QString::fromLocal8Bit(qgetenv("OPENSPEAK_METRICS_FILE"));
+    if (!m_monitoringFile.isEmpty()) {
+        m_monitoring.setInterval(2'000);
+        connect(&m_monitoring, &QTimer::timeout, this, &ServerHost::writeMonitoringSnapshot);
+    }
 }
 
 bool ServerHost::start()
@@ -75,7 +84,42 @@ bool ServerHost::start()
         return false;
     }
     m_heartbeat.start();
+    if (!m_monitoringFile.isEmpty()) {
+        writeMonitoringSnapshot();
+        m_monitoring.start();
+    }
     return true;
+}
+
+void ServerHost::writeMonitoringSnapshot()
+{
+    auto data = m_server.monitoringSnapshot();
+    data["timestamp"] = double(QDateTime::currentMSecsSinceEpoch());
+    data["pid"] = double(QCoreApplication::applicationPid());
+    data["sfuEnabled"] = sfuEnabled();
+    data["signalingRxBytes"] = double(m_signalingRx);
+    data["signalingTxBytes"] = double(m_signalingTx);
+    QJsonArray clients;
+    for (const auto &value : data.value("clients").toArray()) {
+        auto client = value.toObject();
+        const auto info = m_connectionInfo.value(client.value("clid").toInt());
+        client["ip"] = info.ip;
+        client["userAgent"] = info.userAgent;
+        client["origin"] = info.origin;
+        client["connectedAt"] = double(info.connectedAt);
+        client["lastActivityAt"] = double(info.lastActivityAt);
+        client["pingRttMs"] = info.pingRttMs < 0 ? QJsonValue(QJsonValue::Null) : QJsonValue(double(info.pingRttMs));
+        client["signalingRxBytes"] = double(info.rxBytes);
+        client["signalingTxBytes"] = double(info.txBytes);
+        clients.append(client);
+    }
+    data["clients"] = clients;
+    if (m_relay)
+        data["mediaSessions"] = m_relay->monitoringSessions();
+    QSaveFile file(m_monitoringFile);
+    const auto bytes = QJsonDocument(data).toJson(QJsonDocument::Compact);
+    if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
+        qCWarning(lcServer) << "não foi possível gravar o monitoramento:" << file.errorString();
 }
 
 quint16 ServerHost::port() const { return m_tcp ? m_tcp->serverPort() : 0; }
@@ -98,13 +142,32 @@ void ServerHost::onNewWebSocket()
         const int clid = m_server.connect();
         m_sockets.insert(clid, ws);
         m_alive.insert(ws, true);
+        ConnectionInfo info;
+        info.connectedAt = info.lastActivityAt = QDateTime::currentMSecsSinceEpoch();
+        info.ip = ws->peerAddress().toString();
+        const auto request = ws->request();
+        // Só o proxy local é confiável para informar o IP; clientes diretos não podem forjar XFF.
+        if (ws->peerAddress().isLoopback()) {
+            const auto forwarded = QString::fromLatin1(request.rawHeader("X-Forwarded-For")).split(',').last().trimmed();
+            const QHostAddress address(forwarded);
+            if (!address.isNull()) info.ip = address.toString();
+        }
+        info.userAgent = QString::fromUtf8(request.rawHeader("User-Agent")).left(512);
+        info.origin = QString::fromUtf8(request.rawHeader("Origin")).left(256);
+        m_connectionInfo.insert(clid, info);
         qCInfo(lcServer).noquote() << "conexão clid=" << clid << "de" << ws->peerAddress().toString();
 
         connect(ws, &QWebSocket::textMessageReceived, this, [this, clid](const QString &text) { onMessage(clid, text); });
-        connect(ws, &QWebSocket::pong, this, [this, ws] { m_alive[ws] = true; });
+        connect(ws, &QWebSocket::pong, this, [this, ws, clid](quint64 elapsedMs, const QByteArray &) {
+            m_alive[ws] = true;
+            auto &info = m_connectionInfo[clid];
+            info.pingRttMs = qint64(elapsedMs);
+            info.lastActivityAt = QDateTime::currentMSecsSinceEpoch();
+        });
         connect(ws, &QWebSocket::disconnected, this, [this, ws, clid] {
             m_sockets.remove(clid);
             m_alive.remove(ws);
+            m_connectionInfo.remove(clid);
             m_server.disconnect(clid);
             ws->deleteLater();
             qCInfo(lcServer) << "desconectado clid=" << clid;
@@ -114,6 +177,10 @@ void ServerHost::onNewWebSocket()
 
 void ServerHost::onMessage(int clid, const QString &text)
 {
+    m_signalingRx += text.toUtf8().size();
+    auto &info = m_connectionInfo[clid];
+    info.rxBytes += text.toUtf8().size();
+    info.lastActivityAt = QDateTime::currentMSecsSinceEpoch();
     const QJsonObject msg = QJsonDocument::fromJson(text.toUtf8()).object();
     if (msg.value("type").toString() != QLatin1String("cmd") || !msg.value("cmd").isString())
         return;
@@ -134,8 +201,12 @@ void ServerHost::onMessage(int clid, const QString &text)
 
 void ServerHost::sendTo(int clid, const QJsonObject &message)
 {
-    if (QWebSocket *ws = m_sockets.value(clid))
-        ws->sendTextMessage(QString::fromUtf8(QJsonDocument(message).toJson(QJsonDocument::Compact)));
+    if (QWebSocket *ws = m_sockets.value(clid)) {
+        const auto bytes = QJsonDocument(message).toJson(QJsonDocument::Compact);
+        m_signalingTx += bytes.size();
+        m_connectionInfo[clid].txBytes += bytes.size();
+        ws->sendTextMessage(QString::fromUtf8(bytes));
+    }
 }
 
 void ServerHost::heartbeat()

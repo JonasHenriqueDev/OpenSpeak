@@ -40,6 +40,7 @@ public:
     void addViewer(const QString &streamId, int clid) override;
     void removeViewer(const QString &streamId, int clid) override;
     void signaling(const QString &streamId, int fromClid, const QJsonObject &payload) override;
+    QJsonArray monitoringSessions() override;
 
     /// Piso do bitrate pedido ao transmissor: um espectador ruim não derruba
     /// a qualidade de todos abaixo disso.

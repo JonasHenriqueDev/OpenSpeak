@@ -4,7 +4,8 @@
 import { h, replaceChildren } from './dom.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
-import { Severity, RELAY_CLID } from '../core/protocol.js';
+import { Severity, RELAY_CLID, StreamMode } from '../core/protocol.js';
+import { statsTransmissionMode } from './statsConnection.js';
 import { formatBitrate, formatBytes } from '../video/StatsCollector.js';
 
 const ms = v => `${Math.round(1000 * (v || 0))}ms`;
@@ -191,6 +192,13 @@ export class StatsPanel {
     row('video.stream.stats.ping.avg', ms(s.avgRoundTripTime / 2), 'network:rtt');
     row('video.stream.stats.retransmit.packets', s.retransmit.packets.toLocaleString('pt-BR'), 'network:retransmit');
     row('video.stream.stats.retransmit.bytes', formatBytes(s.retransmit.bytes));
+    const mode = statsTransmissionMode({
+      own: this.manager.ownStreams.get(this.streamIdentifier),
+      stream: this.handler.streams.get(this.streamIdentifier),
+      view: this.manager.inbound.get(this.streamIdentifier),
+    });
+    row('video.stream.stats.mode', mode === StreamMode.SFU ? t('video.stream.stats.mode.sfu')
+      : mode === StreamMode.P2P ? t('video.mode.p2p') : '—');
     row('video.stream.stats.connection_type', s.connectionType ? t(`video.stream.stats.connection.${s.connectionType}`) : '—');
     row('video.stream.stats.srtp_cipher', s.srtpCipher || '—');
     row('video.stream.stats.tls_version', DTLS_VERSIONS[s.tlsVersion] ?? (s.tlsVersion || '—'));

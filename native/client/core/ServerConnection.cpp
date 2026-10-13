@@ -1,6 +1,7 @@
 #include "ServerConnection.h"
 
 #include <QJsonDocument>
+#include <QSysInfo>
 
 namespace openspeak {
 
@@ -108,6 +109,10 @@ void WebSocketConnection::sendCommand(const QString &cmd, const QJsonObject &arg
     });
     timer->start(CommandTimeoutMs);
     QJsonObject outgoing = args;
+    if (cmd == "login") {
+        outgoing["clientInfo"] = QJsonObject{{"name", "OpenSpeak"}, {"version", "0.2.7"},
+                                             {"kind", "native"}, {"platform", QSysInfo::prettyProductName()}};
+    }
     if (m_cloud && cmd == "login") {
         m_loginArgs = outgoing;
         callback = [this, next = std::move(callback)](const CommandResult &r) {

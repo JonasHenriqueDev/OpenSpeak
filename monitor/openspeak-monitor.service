@@ -1,0 +1,25 @@
+[Unit]
+Description=OpenSpeak monitoring dashboard
+After=network.target openspeak.service
+
+[Service]
+User=openspeak
+Group=openspeak
+ExecStart=/usr/bin/python3 /opt/openspeak-monitor/monitor.py
+Environment=OPENSPEAK_METRICS_FILE=/run/openspeak/metrics.json
+Environment=MONITOR_TIMEZONE=America/Sao_Paulo
+StateDirectory=openspeak-monitor
+StateDirectoryMode=0750
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

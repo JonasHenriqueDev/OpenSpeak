@@ -42,6 +42,7 @@ private:
     void onMessage(int clid, const QString &text);
     void sendTo(int clid, const QJsonObject &message);
     void heartbeat();
+    void writeMonitoringSnapshot();
 
     Options m_options;
     QHttpServer m_http;
@@ -50,7 +51,17 @@ private:
     VirtualServer m_server;
     QHash<int, QWebSocket *> m_sockets;
     QHash<QWebSocket *, bool> m_alive;
+    struct ConnectionInfo {
+        QString ip, userAgent, origin;
+        qint64 connectedAt = 0, lastActivityAt = 0;
+        qint64 pingRttMs = -1;
+        quint64 rxBytes = 0, txBytes = 0;
+    };
+    QHash<int, ConnectionInfo> m_connectionInfo;
     QTimer m_heartbeat;
+    QTimer m_monitoring;
+    QString m_monitoringFile;
+    quint64 m_signalingRx = 0, m_signalingTx = 0;
 };
 
 } // namespace openspeak

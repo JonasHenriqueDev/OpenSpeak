@@ -182,8 +182,10 @@ const STRINGS = {
   'video.stream.stats.video.quality.target': 'Qualidade (alvo)',
   'video.stream.stats.video.scalability_mode': 'Modo de escalabilidade',
   'video.stream.stats.no_viewers': 'Sem espectadores: as estatísticas aparecem quando alguém assistir.',
-  'video.stream.stats.connection.host': 'Direta (LAN)',
-  'video.stream.stats.connection.srflx': 'Direta (P2P)',
+  'video.stream.stats.mode': 'Modo de transmissão',
+  'video.stream.stats.mode.sfu': 'Via servidor (SFU)',
+  'video.stream.stats.connection.host': 'Endereço direto (host ICE)',
+  'video.stream.stats.connection.srflx': 'Endereço público (STUN)',
   'video.stream.stats.connection.relay': 'Retransmitida (TURN)',
 
   'video.streams': 'Nenhum stream | 1 stream | {count} streams',

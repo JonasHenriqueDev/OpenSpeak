@@ -154,6 +154,26 @@ void SfuRelay::signaling(const QString &streamId, int fromClid, const QJsonObjec
         viewer->second->onSignalingMessage(payload);
 }
 
+QJsonArray SfuRelay::monitoringSessions()
+{
+    QJsonArray sessions;
+    for (auto &[id, s] : m_streams) {
+        auto ingest = s.ingest->mediaSnapshot();
+        ingest["streamId"] = id;
+        ingest["clid"] = s.ownerClid;
+        ingest["role"] = "publisher";
+        sessions.append(ingest);
+        for (auto &[clid, egress] : s.viewers) {
+            auto viewer = egress->mediaSnapshot();
+            viewer["streamId"] = id;
+            viewer["clid"] = clid;
+            viewer["role"] = "viewer";
+            sessions.append(viewer);
+        }
+    }
+    return sessions;
+}
+
 void SfuRelay::adjustBitrates()
 {
     // Uma qualidade só para todos: o transmissor segue o espectador mais

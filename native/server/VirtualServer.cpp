@@ -106,6 +106,31 @@ const QHash<QString, VirtualServer::Handler> &VirtualServer::handlers()
 
 // ------------------------------------------------------------------ conexão
 
+QJsonObject VirtualServer::monitoringSnapshot() const
+{
+    QJsonArray clients, channels, streams;
+    for (const auto &[id, c] : m_clients)
+        if (c.loggedIn)
+            clients.append(QJsonObject{{"clid", id}, {"nickname", c.nickname}, {"cid", c.cid}, {"clientInfo", c.clientInfo}});
+    for (const auto &[id, ch] : m_channels)
+        channels.append(QJsonObject{{"cid", id}, {"name", ch.name}});
+    int viewers = 0;
+    for (const auto &[id, s] : m_streams) {
+        viewers += s.viewers.size();
+        QJsonArray viewerClids;
+        for (const int clid : s.viewers)
+            viewerClids.append(clid);
+        streams.append(QJsonObject{{"id", id}, {"name", s.name}, {"ownerClid", s.ownerClid},
+                                   {"cid", s.cid}, {"mode", s.mode}, {"paused", s.paused},
+                                   {"viewers", int(s.viewers.size())}, {"bitrate", s.bitrate},
+                                   {"created", s.created}, {"viewerClids", viewerClids},
+                                   {"width", s.quality.width}, {"height", s.quality.height},
+                                   {"fps", s.quality.fps}, {"audio", s.audio}});
+    }
+    return {{"name", m_name}, {"clients", clients}, {"channels", channels}, {"streams", streams},
+            {"connections", int(m_clients.size())}, {"viewerSubscriptions", viewers}};
+}
+
 int VirtualServer::connect()
 {
     const int clid = m_nextClid++;
@@ -153,6 +178,11 @@ QJsonObject VirtualServer::cmdLogin(Client &client, const QJsonObject &args)
     client.uid = uid;
     client.cid = m_defaultChannel;
     client.loggedIn = true;
+    const auto info = args.value("clientInfo").toObject();
+    for (const auto &key : {"name", "version", "platform", "kind"}) {
+        const auto value = cleanString(info.value(key), 80);
+        if (!value.isEmpty()) client.clientInfo[key] = value;
+    }
     broadcast(QStringLiteral("notifycliententerview"), {{"client", publicClient(client)}}, client.clid);
 
     QJsonArray channels, clients, streams;

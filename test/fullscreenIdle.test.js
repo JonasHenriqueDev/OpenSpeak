@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { installFullscreenIdle } from '../public/js/ui/fullscreenIdle.js';
+
+test('fullscreen hides stationary controls, wakes on activity, handles dragging and cleans up', () => {
+  const el = new EventTarget(), doc = new EventTarget(), classes = new Set();
+  el.classList = { add: name => classes.add(name), remove: name => classes.delete(name) };
+  let pending, duration;
+  const timers = { setTimeout: (fn, ms) => { pending = fn; duration = ms; return 1; }, clearTimeout: () => { pending = null; } };
+  const dispose = installFullscreenIdle(el, doc, timers);
+  doc.fullscreenElement = el;
+  doc.dispatchEvent(new Event('fullscreenchange'));
+  assert.equal(duration, 3000);
+  pending();
+  assert.ok(classes.has('fullscreen-idle'));
+  el.dispatchEvent(new Event('pointermove'));
+  assert.ok(!classes.has('fullscreen-idle'));
+  pending();
+  el.dispatchEvent(new Event('keydown'));
+  assert.ok(!classes.has('fullscreen-idle'));
+  el.dispatchEvent(new Event('pointerdown'));
+  assert.equal(pending, null);
+  doc.dispatchEvent(new Event('pointerup'));
+  assert.equal(typeof pending, 'function');
+  doc.fullscreenElement = null;
+  doc.dispatchEvent(new Event('fullscreenchange'));
+  assert.equal(pending, null);
+  assert.ok(!classes.has('fullscreen-idle'));
+  dispose();
+  doc.fullscreenElement = el;
+  doc.dispatchEvent(new Event('fullscreenchange'));
+  assert.equal(pending, null);
+});

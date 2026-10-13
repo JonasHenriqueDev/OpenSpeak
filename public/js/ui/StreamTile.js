@@ -6,6 +6,7 @@ import { icon } from './icons.js';
 import { t } from './i18n.js';
 import { StreamAccess, StreamType, Severity } from '../core/protocol.js';
 import { InboundStatus } from '../video/ScreenshareManager.js';
+import { installFullscreenIdle } from './fullscreenIdle.js';
 
 const ACCESS_ICON = { [StreamAccess.PUBLIC]: 'globe', [StreamAccess.CONTACTS_ONLY]: 'contacts', [StreamAccess.PRIVATE]: 'lock' };
 const TYPE_ICON = { [StreamType.CAMERA]: 'camera', [StreamType.SCREEN]: 'screen', [StreamType.WINDOW]: 'window' };
@@ -34,6 +35,7 @@ export class StreamTile {
     this.overlay = h('div.tile-overlay');
     this.el = h('div.video-stream', { dataset: { stream: streamIdentifier } }, this.video, this.overlay);
     this.el.addEventListener('dblclick', () => this.toggleFullscreen());
+    this._disposeFullscreenIdle = installFullscreenIdle(this.el);
     this._srcObject = null;
   }
 
@@ -211,6 +213,7 @@ export class StreamTile {
   }
 
   destroy() {
+    this._disposeFullscreenIdle();
     this.video.srcObject = null;
     this.el.remove();
   }

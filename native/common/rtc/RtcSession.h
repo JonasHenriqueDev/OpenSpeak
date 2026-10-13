@@ -54,6 +54,8 @@ public:
     QString stateName() const;
     /// host | srflx | relay (par de candidatos selecionado)
     QString connectionType() const;
+    /// Endpoint ICE e estado, para o monitoramento local protegido.
+    QJsonObject monitoringSnapshot() const;
 
 signals:
     void stateChanged(openspeak::RtcSession::State state);

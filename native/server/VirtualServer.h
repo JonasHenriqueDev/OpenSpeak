@@ -41,6 +41,8 @@ public:
 
     QString name() const { return m_name; }
     int streamCount() const { return int(m_streams.size()); }
+    /// Somente para o arquivo local de monitoramento; não é um comando público.
+    QJsonObject monitoringSnapshot() const;
 
     /// Habilita STREAM_SFU. O relay deve viver mais que o VirtualServer.
     void setRelay(StreamRelay *relay);
@@ -52,6 +54,7 @@ private:
         QString nickname;
         QString uid;
         int cid = 0;
+        QJsonObject clientInfo;
     };
     struct Channel {
         int cid = 0;

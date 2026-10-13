@@ -63,6 +63,7 @@ void EgressSink::send(Kind kind, const rtc::binary &packet)
     put32(copy.data() + 8, ssrc);
     try {
         track->send(std::move(copy));
+        m_sentBytes += packet.size();
     } catch (const std::exception &) {
         // track fechando durante uma reconexão do espectador
     }
@@ -94,6 +95,7 @@ void Forwarder::onRtp(Kind kind, const std::byte *data, size_t size)
             return;
     }
     const uint16_t seq = be16(data + 2);
+    m_receivedBytes += size;
     const uint32_t ts = be32(data + 4);
     const uint32_t ssrc = be32(data + 8);
     const auto now = Clock::now();

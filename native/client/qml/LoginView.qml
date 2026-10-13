@@ -35,14 +35,17 @@ Rectangle {
     }
     function enterServer() {
         const nick = nickField.text.trim()
-        if (!nick.length)
+        // Lido antes de gravar qualquer configuração: Settings.changed reavalia o
+        // binding do campo e trocaria o texto digitado pelo endereço salvo.
+        const url = serverField.text.trim()
+        if (!nick.length || !url.length)
             return
+        Settings.serverUrl = url
         Settings.nickname = nick
-        Settings.serverUrl = serverField.text.trim()
         Settings.connectionMode = "server"
         busy = true
         message = I18n.t("app.connecting")
-        Server.connectTo(Settings.serverUrl, nick, Settings.uid)
+        Server.connectTo(url, nick, Settings.uid)
     }
     function enterCloud() {
         const nick = nickField.text.trim()

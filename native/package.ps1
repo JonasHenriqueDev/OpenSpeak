@@ -39,6 +39,14 @@ Copy-Item (Join-Path $crt.FullName '*.dll') $staging
 # 3) Cliente web (servido pelo servidor dedicado)
 Copy-Item -Recurse (Join-Path $here '..\public') (Join-Path $staging 'public')
 
+# 3b) Licenças: AGPL do OpenSpeak + textos das dependências do vcpkg
+Copy-Item (Join-Path $here '..\LICENSE'), (Join-Path $here '..\THIRD_PARTY_LICENSES.md') $staging
+$licenses = Join-Path $staging 'licenses'
+New-Item -ItemType Directory -Force $licenses | Out-Null
+Get-ChildItem (Join-Path $here 'vcpkg_installed\x64-windows-static-md\share') -Directory |
+    Where-Object { Test-Path (Join-Path $_.FullName 'copyright') } |
+    ForEach-Object { Copy-Item (Join-Path $_.FullName 'copyright') (Join-Path $licenses "$($_.Name).txt") }
+
 # 4) Instalador
 $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") |
     Where-Object { Test-Path $_ } | Select-Object -First 1

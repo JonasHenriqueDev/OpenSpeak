@@ -75,3 +75,9 @@ passam por `streamsignaling` → a mídia vai direto entre os pares (DTLS-SRTP).
 ```bash
 npm test
 ```
+
+## Licença
+
+OpenSpeak é software livre sob a [GNU AGPL v3.0 ou posterior](LICENSE). Se você hospedar
+uma versão modificada do servidor, precisa disponibilizar o código-fonte dela aos usuários.
+Licenças das dependências: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

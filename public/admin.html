@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>OpenSpeak Admin</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <main id="login" class="login" hidden>
+    <form class="card login-card" id="login-form">
+      <img src="favicon.svg" alt="" width="40" height="40">
+      <h1>OpenSpeak Admin</h1>
+      <p class="dim">Entre com a senha definida em <code>ADMIN_TOKEN</code>.</p>
+      <input type="password" id="password" placeholder="Senha" autocomplete="current-password" required>
+      <button class="btn primary" type="submit">Entrar</button>
+      <p class="error" id="login-error" role="alert"></p>
+    </form>
+  </main>
+
+  <div id="panel" hidden>
+    <header class="topbar">
+      <img src="favicon.svg" alt="" width="24" height="24">
+      <strong>OpenSpeak Admin</strong>
+      <span class="dim" id="build"></span>
+      <span class="spacer"></span>
+      <span class="updated dim" id="updated"></span>
+      <button class="btn ghost" id="logout">Sair</button>
+    </header>
+
+    <main class="content">
+      <p class="banner" id="banner" hidden></p>
+
+      <section class="stats">
+        <div class="card stat"><span class="label">Redis</span><span class="value" id="s-redis">—</span></div>
+        <div class="card stat"><span class="label">Participantes</span><span class="value" id="s-clients">—</span></div>
+        <div class="card stat"><span class="label">Transmissões</span><span class="value" id="s-streams">—</span></div>
+        <div class="card stat lock">
+          <span class="label">Entrada na sala</span>
+          <span class="value" id="s-lock">—</span>
+          <button class="btn" id="lock-toggle" disabled>—</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Participantes</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nick</th><th>Canal</th><th>Estado</th><th>Conectado há</th><th>IP (hash)</th><th></th></tr></thead>
+            <tbody id="clients"></tbody>
+          </table>
+        </div>
+        <p class="empty dim" id="clients-empty" hidden>Ninguém na sala agora.</p>
+      </section>
+
+      <section class="card">
+        <h2>Banimentos</h2>
+        <ul class="bans" id="bans"></ul>
+        <p class="empty dim" id="bans-empty" hidden>Nenhum banimento ativo.</p>
+      </section>
+
+      <section class="card danger-zone">
+        <h2>Manutenção</h2>
+        <div class="row">
+          <div>
+            <strong>Reiniciar sala</strong>
+            <p class="dim">Desconecta todos e encerra as transmissões em andamento. Banimentos e a trava são mantidos. Use quando o estado da sala travar.</p>
+          </div>
+          <button class="btn danger" id="reset">Reiniciar sala</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="ban-dialog">
+    <form method="dialog" id="ban-form">
+      <h2>Banir <span id="ban-name"></span></h2>
+      <p class="dim">Bloqueia o identificador do cliente e o endereço IP.</p>
+      <label>Duração
+        <select id="ban-minutes">
+          <option value="10">10 minutos</option>
+          <option value="60" selected>1 hora</option>
+          <option value="1440">24 horas</option>
+          <option value="10080">7 dias</option>
+          <option value="permanent">Permanente</option>
+        </select>
+      </label>
+      <label>Motivo (opcional)
+        <input id="ban-reason" maxlength="120">
+      </label>
+      <div class="dialog-actions">
+        <button class="btn ghost" value="cancel" formnovalidate>Cancelar</button>
+        <button class="btn danger" value="confirm">Banir</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

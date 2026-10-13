@@ -1,12 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CloudRoom, SESSION_GRACE_MS } from '../server/cloudRoom.js';
+import { CloudRoom, SESSION_GRACE_MS, KICK_COOLDOWN_MS } from '../server/cloudRoom.js';
 
 function storage() {
   return { value: null, events: [], async read() { return this.value; },
     async commit(before, after, events) {
       if (before !== this.value) return false;
       this.value = after; this.events.push(...events); return true;
+    },
+    policy: null, async readPolicy() { return this.policy; },
+    async commitPolicy(before, after) {
+      if ((before || null) !== this.policy) return false;
+      this.policy = after; return true;
     } };
 }
 const login = (room, name) => room.execute({}, 'login', { nickname: name, uid: name });
@@ -68,4 +73,60 @@ test('abandoned clients expire but live participants remain', async () => {
   const view = await room.execute(bob.session, 'sync');
   assert.equal(view.data.clients.length, 1); assert.equal(view.data.streams.length, 0);
   await assert.rejects(room.execute({}, 'login', { resumeClid: alice.session.clid, resumeToken: alice.data.resumeToken }), { code: 'session_expired' });
+});
+
+test('admin kick disconnects, closes the socket and refuses the automatic re-login briefly', async () => {
+  let now = 1000;
+  const store = storage(), room = new CloudRoom(store, () => now);
+  const alice = await login(room, 'Alice'), bob = await login(room, 'Bob');
+  store.events.length = 0;
+  await room.kick(bob.session.clid);
+  assert.ok(store.events.some(e => e.clid === bob.session.clid && e.message.type === 'close'));
+  assert.ok(store.events.some(e => e.clid === alice.session.clid && e.message.cmd === 'notifyclientleftview'));
+  await assert.rejects(room.execute(bob.session, 'sync'), { code: 'session_expired' });
+  await assert.rejects(login(room, 'Bob'), { code: 'access_denied' });
+  now += KICK_COOLDOWN_MS + 1;
+  assert.ok((await login(room, 'Bob')).data.clid);
+  assert.equal((await room.status()).bans.length, 0);
+});
+
+test('ban matches the client id or the IP address and can be lifted', async () => {
+  let now = 1000;
+  const store = storage(), room = new CloudRoom(store, () => now);
+  const bob = await room.execute({}, 'login', { nickname: 'Bob', uid: 'bob' }, { ip: '10.0.0.5' });
+  await room.kick(bob.session.clid, { minutes: 60, reason: 'spam' });
+  await assert.rejects(room.execute({}, 'login', { nickname: 'Bob2', uid: 'other' }, { ip: '10.0.0.5' }), { code: 'access_denied' });
+  await assert.rejects(room.execute({}, 'login', { nickname: 'Bob', uid: 'bob' }, { ip: '10.9.9.9' }), { code: 'access_denied' });
+  const [ban] = (await room.status()).bans;
+  assert.equal(ban.reason, 'spam');
+  await room.unban(ban.id);
+  assert.ok((await room.execute({}, 'login', { nickname: 'Bob', uid: 'bob' }, { ip: '10.0.0.5' })).data.clid);
+});
+
+test('locked room keeps members and resumes but refuses newcomers; bans survive the room key expiring', async () => {
+  const store = storage(), room = new CloudRoom(store);
+  const alice = await login(room, 'Alice');
+  await room.setLocked(true);
+  await assert.rejects(login(room, 'Bob'), { code: 'access_denied' });
+  const resumed = await room.execute({}, 'login', { resumeClid: alice.session.clid, resumeToken: alice.data.resumeToken });
+  assert.equal(resumed.data.clid, alice.session.clid);
+  store.value = null; // Redis EX on the idle room
+  await assert.rejects(login(room, 'Bob'), { code: 'access_denied' });
+  await room.setLocked(false);
+  assert.ok((await login(room, 'Bob')).data.clid);
+});
+
+test('reset closes every socket, clears streams and never reuses a client id', async () => {
+  const store = storage(), room = new CloudRoom(store);
+  const alice = await login(room, 'Alice'), bob = await login(room, 'Bob');
+  await room.execute(alice.session, 'setupstream', {});
+  await room.setLocked(true);
+  store.events.length = 0;
+  assert.equal((await room.reset()).disconnected, 2);
+  assert.equal(store.events.filter(e => e.message.type === 'close').length, 2);
+  const status = await room.status();
+  assert.equal(status.clients.length, 0); assert.equal(status.streams, 0); assert.equal(status.locked, true);
+  await room.setLocked(false);
+  const carol = await login(room, 'Carol');
+  assert.ok(carol.session.clid > bob.session.clid);
 });

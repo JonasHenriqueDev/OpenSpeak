@@ -15,12 +15,16 @@ function getRoom() {
   if (!room) room = new CloudRoom(createRedisRoomStore(process.env.REDIS_URL, events => {
     for (const { clid, message } of events) {
       const ws = sockets.get(clid);
-      if (ws?.readyState === ws.OPEN) ws.send(JSON.stringify(message));
+      if (!ws || ws.readyState !== ws.OPEN) continue;
+      // Admin kicks/resets: drop the socket; the client's re-login is then refused.
+      if (message.type === 'close') { sockets.delete(clid); ws.close(message.code, message.reason); }
+      else ws.send(JSON.stringify(message));
     }
   }));
   return room;
 }
-wss.on('connection', ws => {
+wss.on('connection', (ws, req) => {
+  const ip = String(req.headers['x-real-ip'] || req.headers['x-forwarded-for'] || '').split(',')[0].trim();
   if (wss.clients.size > 64) { ws.close(1013, 'Servidor ocupado'); return; }
   let session = {}, queue = Promise.resolve(), count = 0, windowAt = Date.now();
   const authDeadline = setTimeout(() => { if (!session.clid) ws.close(1008, 'Autenticação necessária'); }, 15_000);
@@ -38,7 +42,7 @@ wss.on('connection', ws => {
         if (msg.cmd === 'login' && session.clid) throw new CommandError('invalid_args', 'Já conectado');
         if (!process.env.REDIS_URL)
           throw new CommandError('not_configured', 'Sala ainda não configurada pelo administrador.');
-        const result = await getRoom().execute(session, msg.cmd, msg.args);
+        const result = await getRoom().execute(session, msg.cmd, msg.args, { ip });
         session = result.session;
         sockets.set(session.clid, ws);
         clearTimeout(authDeadline);

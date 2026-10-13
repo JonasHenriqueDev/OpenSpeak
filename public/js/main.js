@@ -204,7 +204,9 @@ class App {
     const ch = own ? this.handler.channels.get(own.cid) : null;
     if (this.handler.reconnecting) { this.statusBar.textContent = 'Reconectando…'; return; }
     replaceChildren(this.statusBar,
-      h('span.online-dot'), own?.nickname ?? '', ch ? h('span.muted', ` — ${ch.name}`) : null);
+      h('span.online-dot'), own?.nickname ?? '', ch ? h('span.muted', ` — ${ch.name}`) : null,
+      h('span.server-ping', { title: 'Seu ping até o servidor (RTT)' },
+        Number.isFinite(this.handler.serverPingMs) && this.handler.serverPingMs >= 0 ? `Ping: ${Math.round(this.handler.serverPingMs)} ms` : 'Ping: —'));
   }
 
   // ------------------------------------------------------------- ações

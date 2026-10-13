@@ -79,6 +79,8 @@ private slots:
         b.connectTo(url, QStringLiteral("ViewerB"), settingsB.uid());
         c.connectTo(url, QStringLiteral("ViewerC"), settingsC.uid());
         QTRY_VERIFY_WITH_TIMEOUT(a.isConnected() && b.isConnected() && c.isConnected(), 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(a.serverPingMs() >= 0 && b.serverPingMs() >= 0 && c.serverPingMs() >= 0, 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(a.client(b.ownClid()) && a.client(b.ownClid())->pingMs >= 0, 5000);
         QVERIFY(a.hasStreamingP2P());
         QVERIFY(a.hasStreamingSFU());
 

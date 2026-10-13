@@ -40,7 +40,7 @@ QVariantMap streamToVariant(const StreamInfo &s)
 static ClientInfo clientFromJson(const QJsonObject &c)
 {
     return {c.value("clid").toInt(), c.value("cid").toInt(), c.value("nickname").toString(), c.value("uid").toString(),
-            c.value("identity").toString()};
+            c.value("identity").toString(), c.value("pingMs").isDouble() ? c.value("pingMs").toDouble() : -1};
 }
 
 ConnectionHandler::ConnectionHandler(QObject *parent) : QObject(parent)
@@ -250,7 +250,7 @@ QVariantList ConnectionHandler::tree() const
                     streams.append(streamToVariant(s));
             streamCount += streams.size();
             clientList.append(QVariantMap{{"clid", c.clid}, {"nickname", c.nickname}, {"uid", c.uid}, {"identity", c.identity},
-                                          {"me", c.clid == m_ownClid}, {"streams", streams}});
+                                          {"me", c.clid == m_ownClid}, {"streams", streams}, {"pingMs", c.pingMs}});
         }
         out.append(QVariantMap{{"cid", ch.cid}, {"name", ch.name}, {"description", ch.description},
                                {"current", ch.cid == own}, {"streamCount", streamCount}, {"clients", clientList}});
@@ -262,6 +262,14 @@ void ConnectionHandler::onNotification(const QString &cmd, const QJsonObject &ar
 {
     if (cmd == "cloudview") { applyView(args); return; }
     if (cmd == "cloudconnection") { m_reconnecting = args.value("reconnecting").toBool(); emit changed(); return; }
+    if (cmd == "notifyclientlatency") {
+        const int clid = args.value("clid").toInt();
+        if (m_clients.contains(clid)) {
+            m_clients[clid].pingMs = args.value("pingMs").isDouble() ? args.value("pingMs").toDouble() : -1;
+            emit changed();
+        }
+        return;
+    }
     if (cmd == QLatin1String("notifycliententerview") || cmd == QLatin1String("notifyclientupdated")) {
         const ClientInfo c = clientFromJson(args.value("client").toObject());
         m_clients.insert(c.clid, c);

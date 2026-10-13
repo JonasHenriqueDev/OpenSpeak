@@ -105,6 +105,14 @@ Rectangle {
                                         name: "star"; size: 13; color: Theme.gold
                                     }
                                     Item { Layout.fillWidth: true }
+                                    Label {
+                                        text: client.modelData.pingMs >= 0 ? Math.round(client.modelData.pingMs) + " ms" : "—"
+                                        color: Theme.textDim
+                                        font.pixelSize: 11
+                                        ToolTip.visible: pingHover.hovered
+                                        ToolTip.text: client.modelData.pingMs >= 0 ? "Ping desta pessoa até o servidor (RTT)" : "Ping não disponível neste modo ou aguardando medição"
+                                        HoverHandler { id: pingHover }
+                                    }
                                 }
                                 Menu {
                                     id: contextMenu

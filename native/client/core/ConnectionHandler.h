@@ -25,6 +25,7 @@ struct ClientInfo {
     QString nickname;
     QString uid;
     QString identity; // identidade real (Tailscale), discreta na UI
+    double pingMs = -1;
 };
 
 struct StreamQuality {
@@ -57,6 +58,7 @@ class ConnectionHandler : public QObject {
     Q_PROPERTY(bool connected READ isConnected NOTIFY connectionChanged)
     Q_PROPERTY(QString serverName READ serverName NOTIFY connectionChanged)
     Q_PROPERTY(int ownClid READ ownClid NOTIFY connectionChanged)
+    Q_PROPERTY(double serverPingMs READ serverPingMs NOTIFY changed)
     Q_PROPERTY(int ownChannel READ ownChannel NOTIFY changed)
     Q_PROPERTY(bool hasStreamingP2P READ hasStreamingP2P NOTIFY connectionChanged)
     Q_PROPERTY(bool hasStreamingSFU READ hasStreamingSFU NOTIFY connectionChanged)
@@ -90,6 +92,7 @@ public:
     bool isConnected() const { return m_loggedIn; }
     QString serverName() const { return m_serverName; }
     int ownClid() const { return m_ownClid; }
+    double serverPingMs() const { const auto *c = client(m_ownClid); return c ? c->pingMs : -1; }
     int ownChannel() const;
     bool hasStreamingP2P() const { return m_capabilities.contains(CapStreamP2P); }
     bool hasStreamingSFU() const { return m_capabilities.contains(CapStreamSFU); }

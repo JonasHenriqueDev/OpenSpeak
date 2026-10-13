@@ -1,6 +1,6 @@
 {
   "name": "openspeak",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Voz + transmissão de vídeo P2P no estilo TeamSpeak (servidor de sinalização + cliente WebRTC)",
   "license": "AGPL-3.0-or-later",
   "type": "module",

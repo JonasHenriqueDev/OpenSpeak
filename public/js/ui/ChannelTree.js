@@ -50,7 +50,9 @@ export class ChannelTree {
         h('span.talk-dot'),
         h('span.ellipsis', client.nickname),
         isMe ? h('span.muted', `(${t('app.you')})`) : null,
-        isContact ? h('span.contact-star', { title: t('app.contacts') }, icon('star')) : null),
+        isContact ? h('span.contact-star', { title: t('app.contacts') }, icon('star')) : null,
+        h('span.client-ping', { title: 'Ping desta pessoa até o servidor (RTT)' },
+          Number.isFinite(client.pingMs) && client.pingMs >= 0 ? `${Math.round(client.pingMs)} ms` : '—')),
       streams.map(s => {
         const watching = this.manager.inbound.has(s.streamIdentifier);
         return h('div.tree-row.stream-row', {

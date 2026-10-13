@@ -56,6 +56,14 @@ Rectangle {
                     HoverHandler { id: serverHover }
                 }
                 Label { visible: Server.reconnecting; text: "Reconectando…"; color: Theme.textDim }
+                Label {
+                    text: Server.serverPingMs >= 0 ? "Ping: " + Math.round(Server.serverPingMs) + " ms" : "Ping: —"
+                    color: Theme.textDim
+                    font.pixelSize: 12
+                    ToolTip.visible: serverPingHover.hovered
+                    ToolTip.text: "Seu ping até o servidor (RTT)"
+                    HoverHandler { id: serverPingHover }
+                }
                 Rectangle { width: 8; height: 8; radius: 4; color: Server.reconnecting ? Theme.textDim : Theme.online }
                 Label {
                     text: Server.clientName(Server.ownClid)

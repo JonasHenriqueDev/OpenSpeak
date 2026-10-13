@@ -98,7 +98,20 @@ wss.on('connection', (ws, req) => {
   ws.isAlive = true;
   console.log(`[openspeak] conexão clid=${clid} de ${req.socket.remoteAddress}`);
 
-  ws.on('pong', () => { ws.isAlive = true; });
+  const ping = () => {
+    ws.pingPayload = Buffer.from(String(Date.now()));
+    ws.pingStarted = process.hrtime.bigint();
+    ws.ping(ws.pingPayload);
+  };
+  ws.measurePing = ping;
+  ws.on('pong', payload => {
+    ws.isAlive = true;
+    if (ws.pingStarted && payload.equals(ws.pingPayload)) {
+      server.setClientLatency(clid, Number(process.hrtime.bigint() - ws.pingStarted) / 1e6);
+      ws.pingStarted = null;
+    }
+  });
+  ping();
 
   ws.on('message', raw => {
     let msg;
@@ -140,7 +153,7 @@ const heartbeat = setInterval(() => {
       continue;
     }
     ws.isAlive = false;
-    ws.ping();
+    ws.measurePing();
   }
 }, 15_000);
 wss.on('close', () => clearInterval(heartbeat));

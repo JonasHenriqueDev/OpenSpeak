@@ -2,7 +2,7 @@
 ; Gerado por native/package.ps1 — que monta native/dist/OpenSpeak antes.
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #define AppName "OpenSpeak"
 #define AppExe "OpenSpeak.exe"
@@ -62,22 +62,4 @@ begin
             (ExpandConstant('{param:RELAUNCH|0}') = '1');
 end;
 
-// O único requisito externo é o Tailscale: avisa se não estiver instalado.
-function TailscaleInstalled(): Boolean;
-begin
-  Result := FileExists(ExpandConstant('{commonpf64}\Tailscale\tailscale.exe'))
-         or FileExists(ExpandConstant('{commonpf32}\Tailscale\tailscale.exe'));
-end;
-
-procedure CurStepChanged(CurStep: TSetupStep);
-var
-  ErrorCode: Integer;
-begin
-  if (CurStep = ssPostInstall) and (not TailscaleInstalled()) and (not WizardSilent()) then
-  begin
-    if MsgBox('O OpenSpeak usa o Tailscale para encontrar as pessoas da sua rede (sem servidor).' + #13#10 +
-              'O Tailscale não foi encontrado. Deseja abrir a página de download agora?',
-              mbConfirmation, MB_YESNO) = IDYES then
-      ShellExec('open', 'https://tailscale.com/download/windows', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
-  end;
-end;
+// Tailscale é opcional, oferecido apenas nos modos avançados do app.

@@ -31,6 +31,7 @@ export class ConnectionHandler extends EventEmitter {
   get ownClient() {
     return this.clients.get(this.ownClid) ?? null;
   }
+  get serverPingMs() { return this.ownClient?.pingMs ?? null; }
 
   async connect(url, { nickname, uid }) {
     await this.connection.connect(url);
@@ -89,6 +90,13 @@ export class ConnectionHandler extends EventEmitter {
     });
     c.on('notifyclientleftview', ({ clid }) => {
       this.clients.delete(clid);
+      this.emit('changed');
+    });
+    c.on('notifyclientlatency', ({ clid, pingMs, pingUpdatedAt }) => {
+      const client = this.clients.get(clid);
+      if (!client) return;
+      client.pingMs = Number.isFinite(pingMs) && pingMs >= 0 ? pingMs : null;
+      client.pingUpdatedAt = pingUpdatedAt;
       this.emit('changed');
     });
     c.on('notifyclientmoved', ({ clid, cid }) => {

@@ -17,6 +17,21 @@ function setup() {
   return { server, login, notes, clear };
 }
 
+test('server broadcasts measured client ping and includes it in new login views', () => {
+  const { server, login, notes } = setup();
+  const a = login('a'), b = login('b');
+  server.setClientLatency(a, 42);
+  const sample = notes(b, 'notifyclientlatency').at(-1).args;
+  assert.equal(sample.clid, a);
+  assert.equal(sample.pingMs, 42);
+  assert.ok(sample.pingUpdatedAt > 0);
+  assert.equal(sample.ip, undefined);
+  assert.equal(server.view(b).clients.find(c => c.clid === a).pingMs, 42);
+  server.setClientLatency(a, -1);
+  assert.equal(notes(b, 'notifyclientlatency').at(-1).args.pingMs, null);
+  assert.throws(() => server.handle(a, 'setClientLatency', {pingMs:0}));
+});
+
 test('fluxo completo: setup, pedido, aceite, sinalização e saída', () => {
   const { server, login, notes } = setup();
   const host = login('host');

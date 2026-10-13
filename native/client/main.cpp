@@ -113,7 +113,13 @@ int main(int argc, char *argv[])
         window->resize(900, 560);
         QTimer::singleShot(4500, &app, [&app, window, panel = parser.value(openOpt)] {
             bool valid = !window->grabWindow().isNull();
-            if (panel == "updates") {
+            if (panel.startsWith("login")) {
+                auto *connectButton = findVisualItem(window->contentItem(), QStringLiteral("serverConnectButton"));
+                auto *advanced = findVisualItem(window->contentItem(), QStringLiteral("advancedOptions"));
+                auto *address = findVisualItem(window->contentItem(), QStringLiteral("serverAddress"));
+                valid = valid && connectButton && connectButton->isVisible() && address && address->isVisible()
+                    && advanced && advanced->isVisible() == (panel == "login-advanced");
+            } else if (panel == "updates") {
                 auto *dialog = window->findChild<QObject *>(QStringLiteral("updatesDialog"));
                 valid = valid && dialog && dialog->property("visible").toBool()
                     && dialog->property("width").toDouble() >= 400

@@ -131,6 +131,19 @@ QJsonObject VirtualServer::monitoringSnapshot() const
             {"connections", int(m_clients.size())}, {"viewerSubscriptions", viewers}};
 }
 
+void VirtualServer::setClientLatency(int clid, qint64 milliseconds)
+{
+    auto it = m_clients.find(clid);
+    if (it == m_clients.end()) return;
+    auto &client = it->second;
+    client.pingMs = milliseconds < 0 ? -1 : std::min<qint64>(milliseconds, 90'000);
+    client.pingUpdatedAt = nowMs();
+    if (client.loggedIn)
+        broadcast(QStringLiteral("notifyclientlatency"), {{"clid", clid},
+            {"pingMs", client.pingMs < 0 ? QJsonValue(QJsonValue::Null) : QJsonValue(double(client.pingMs))},
+            {"pingUpdatedAt", double(client.pingUpdatedAt)}});
+}
+
 int VirtualServer::connect()
 {
     const int clid = m_nextClid++;
@@ -557,7 +570,9 @@ void VirtualServer::notifyAttendees(const Stream &s)
 QJsonObject VirtualServer::publicClient(const Client &c) const
 {
     return {{"clid", c.clid}, {"nickname", c.nickname}, {"uid", c.uid}, {"cid", c.cid},
-            {"inputMuted", false}, {"outputMuted", false}};
+            {"inputMuted", false}, {"outputMuted", false},
+            {"pingMs", c.pingMs < 0 ? QJsonValue(QJsonValue::Null) : QJsonValue(double(c.pingMs))},
+            {"pingUpdatedAt", double(c.pingUpdatedAt)}};
 }
 
 QJsonObject VirtualServer::publicStream(const Stream &s) const

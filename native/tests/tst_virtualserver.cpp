@@ -97,6 +97,23 @@ private slots:
         QCOMPARE(server->monitoringSnapshot().value("streams").toArray().size(), 0);
     }
 
+    void serverMeasuredLatencyIsPublicWithoutPrivateMetadata()
+    {
+        const int a = login("a"), b = login("b");
+        server->setClientLatency(a, 37);
+        const auto notices = notes(b, "notifyclientlatency");
+        QCOMPARE(notices.size(), 1);
+        QCOMPARE(notices.first().value("clid").toInt(), a);
+        QCOMPARE(notices.first().value("pingMs").toInt(), 37);
+        QVERIFY(!notices.first().contains("ip"));
+        const int c = server->connect();
+        const auto view = server->handle(c, "login", {{"nickname", "c"}, {"uid", "uid-c"}});
+        QCOMPARE(view.value("clients").toArray().first().toObject().value("pingMs").toInt(), 37);
+        server->setClientLatency(a, -1);
+        QVERIFY(notes(b, "notifyclientlatency").last().value("pingMs").isNull());
+        QCOMPARE(expectError(a, "setClientLatency", {{"pingMs", 0}}), rc::UnknownCommand);
+    }
+
     void fullFlow()
     {
         const int host = login("host"), viewer = login("viewer");

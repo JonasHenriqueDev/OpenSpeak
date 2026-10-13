@@ -36,7 +36,7 @@ ApplicationWindow {
                 Accessible.name: "Atualizações do OpenSpeak"
                 ToolTip.visible: hovered
                 ToolTip.text: "Atualizações · " + Updater.version
-                contentItem: Icon { name: "settings"; size: 16 }
+                contentItem: Icon { name: "download"; size: 16 }
                 onClicked: updatesDialog.open()
             }
             Repeater {
@@ -148,7 +148,7 @@ ApplicationWindow {
 
     Loader {
         anchors.fill: parent
-        sourceComponent: Server.connected || UiSmoke ? mainView : loginView
+        sourceComponent: Server.connected || (UiSmoke && DebugOpen.indexOf("login") !== 0) ? mainView : loginView
     }
 
     Component {

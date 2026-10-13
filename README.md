@@ -6,7 +6,7 @@ interface de streaming do TeamSpeak 6. A análise do cliente original está em
 
 | | |
 |---|---|
-| **App nativo Windows** (Qt 6 + QML Fluent, libdatachannel, FFmpeg/NVENC) | [native/](native/README.md): instalador `.exe`, **modo Tailnet sem servidor** |
+| **App nativo Windows** (Qt 6 + QML Fluent, libdatachannel, FFmpeg/NVENC) | [native/](native/README.md): instalador `.exe`, servidor e modos avançados |
 | Cliente web + servidor Node | esta página |
 
 ## App nativo (recomendado)
@@ -15,9 +15,10 @@ Baixe o [instalador da última release estável](https://github.com/JonasHenriqu
 A partir da 1.0.0, o app instalado atualiza automaticamente e oferece um canal
 opcional de pré-releases. [Downloads e atualizações](docs/ATUALIZACOES.md).
 
-Instale o `OpenSpeak-Setup-<versão>.exe` e o [Tailscale](https://tailscale.com/download/windows).
-Abra o app e entre: todos da mesma tailnet aparecem automaticamente, sem IP nem
-servidor. Detalhes em [native/README.md](native/README.md).
+Instale o `OpenSpeak-Setup-<versão>.exe`, informe seu nome e conecte ao servidor.
+O endereço padrão é `wss://openspeak.duckdns.org/ws`. Tailscale e sala web ficam
+em **Avançado**; Tailscale é necessário somente para esses modos.
+Detalhes em [native/README.md](native/README.md).
 
 ## Cliente web
 

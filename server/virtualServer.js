@@ -69,6 +69,13 @@ export class VirtualServer {
     this.clients.set(clid, { clid, loggedIn: false, nickname: '', uid: '', cid: 0, inputMuted: false, outputMuted: false });
     return clid;
   }
+  setClientLatency(clid, milliseconds) {
+    const client = this.clients.get(clid);
+    if (!client) return;
+    client.pingMs = Number.isFinite(milliseconds) && milliseconds >= 0 ? Math.min(90_000, milliseconds) : null;
+    client.pingUpdatedAt = Date.now();
+    if (client.loggedIn) this.#broadcast({cmd:'notifyclientlatency',args:{clid,pingMs:client.pingMs,pingUpdatedAt:client.pingUpdatedAt}});
+  }
 
   snapshot() {
     return {
@@ -406,7 +413,8 @@ export class VirtualServer {
   }
 
   #publicClient(c) {
-    return { clid: c.clid, nickname: c.nickname, uid: c.uid, cid: c.cid, inputMuted: c.inputMuted, outputMuted: c.outputMuted };
+    return { clid: c.clid, nickname: c.nickname, uid: c.uid, cid: c.cid, inputMuted: c.inputMuted, outputMuted: c.outputMuted,
+      pingMs: c.pingMs ?? null, pingUpdatedAt: c.pingUpdatedAt ?? 0 };
   }
 
   #publicStream(s) {

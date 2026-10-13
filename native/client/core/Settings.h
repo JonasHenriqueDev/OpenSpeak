@@ -30,7 +30,7 @@ public:
 
     QString nickname() const { return value("nickname").toString(); }
     void setNickname(const QString &v) { set("nickname", v); }
-    QString serverUrl() const { return value("serverUrl", QStringLiteral("ws://localhost:9988/ws")).toString(); }
+    QString serverUrl() const { return value("serverUrl", QStringLiteral("wss://openspeak.duckdns.org/ws")).toString(); }
     void setServerUrl(const QString &v) { set("serverUrl", v); }
     QString uid() const { return m_uid; }
     QString preferredEncoder() const { return value("preferredEncoder").toString(); }
@@ -47,8 +47,8 @@ public:
     QVariantMap lastStreamingConfig() const;
     void setLastStreamingConfig(const QVariantMap &v) { set("lastStreamingConfig", v); }
     bool debug() const { return m_debug; }
-    /// "tailnet" (padrão, sem servidor) ou "server" (servidor dedicado).
-    QString connectionMode() const { return value("connectionMode", QStringLiteral("tailnet")).toString(); }
+    /// "server" (padrão), "tailnet" ou "cloud" (opções avançadas).
+    QString connectionMode() const { return value("connectionMode", QStringLiteral("server")).toString(); }
     void setConnectionMode(const QString &v) { set("connectionMode", v); }
     bool automaticUpdates() const { return value("automaticUpdates", true).toBool(); }
     void setAutomaticUpdates(bool v) { set("automaticUpdates", v); }

@@ -4,7 +4,7 @@
 #   .\build.ps1 -Config Debug
 param(
     [string]$Config = 'Release',
-    [string]$Version = '1.0.0',
+    [string]$Version = '1.0.1',
     [switch]$ServerOnly,
     [string]$QtDir = 'C:\Qt\6.11.3\msvc2022_64',
     [string]$Vcpkg = 'D:\Dev\vcpkg'
@@ -24,11 +24,12 @@ $client = if ($ServerOnly) { 'OFF' } else { 'ON' }
     '-DVCPKG_TARGET_TRIPLET=x64-windows-static-md' `
     "-DVCPKG_INSTALLED_DIR=$here\vcpkg_installed" `
     '-DVCPKG_MANIFEST_INSTALL=OFF' `
+    '-DCMAKE_SUPPRESS_REGENERATION=ON' `
     "-DOPENSPEAK_BUILD_CLIENT=$client" `
     "-DOPENSPEAK_RELEASE_VERSION=$Version"
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-& $cmake --build "$here\build" --config $Config --parallel
+& $cmake --build "$here\build" --config $Config --parallel 2
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
 $env:PATH = "$QtDir\bin;$env:PATH"

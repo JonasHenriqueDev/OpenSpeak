@@ -1,3 +1,12 @@
+# OpenSpeak 1.0.1 — conexão via servidor e ping
+
+- Conexão via servidor é a opção principal na tela inicial. Tailscale e sala web
+  ficam recolhidos dentro de **Avançado**, e só aparecem ao expandir.
+- O ping de cada pessoa até o servidor aparece na lista de participantes no web
+  e no Windows. Seu ping até o servidor também aparece na barra superior.
+  Medição de RTT via ping/pong WebSocket; não é latência de mídia entre usuários.
+- Botão de atualizações na barra da janela usa o ícone de download.
+
 # OpenSpeak 1.0.0 — release estável
 
 - Atualizações do app instalado pelas releases do GitHub: canal estável por padrão,

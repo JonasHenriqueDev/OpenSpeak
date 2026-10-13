@@ -33,9 +33,9 @@ cd native && D:/Dev/vcpkg/vcpkg.exe install --triplet x64-windows-static-md --x-
 ## Instalar
 
 Baixe e rode `OpenSpeak-Setup-<versão>.exe`. O instalador já traz o Qt, o FFmpeg, o
-WebRTC e o runtime do Visual C++, além de liberar o app no firewall. O **único
-requisito externo é o [Tailscale](https://tailscale.com/download/windows)**: instale e
-faça login.
+WebRTC e o runtime do Visual C++, além de liberar o app no firewall. A conexão
+via servidor não exige Tailscale. O [Tailscale](https://tailscale.com/download/windows)
+é necessário somente para os modos avançados de tailnet e sala web.
 
 Para gerar o instalador, rode o comando abaixo. Ele compila, testa e cria
 `native/dist/OpenSpeak-Setup-<versão>.exe`.
@@ -44,10 +44,18 @@ Para gerar o instalador, rode o comando abaixo. Ele compila, testa e cria
 powershell -ExecutionPolicy Bypass -File native/package.ps1
 ```
 
-## Modo Tailnet (padrão): sem servidor
+## Conexão via servidor (padrão)
 
-Abra o app, escolha um **nome de exibição** e clique em **Entrar**. Não há IP nem
-servidor para configurar.
+Informe seu nome e conecte ao endereço do servidor na tela inicial. O endereço
+padrão é `wss://openspeak.duckdns.org/ws`; endereços personalizados salvos são
+preservados. A lista de participantes mostra o RTT de cada pessoa até o servidor,
+e a barra superior mostra seu próprio ping. A medição é por ping/pong WebSocket,
+com atualização a cada 15 segundos e uma primeira amostra ao conectar.
+
+## Modo Tailnet (Avançado): sem servidor
+
+Abra **Avançado** na tela inicial e clique em **Entrar via Tailscale**. Não há IP
+nem servidor para configurar nesse modo.
 
 1. **Descoberta.** O app lê `tailscale status --json` e descobre as máquinas online da
    tailnet. Em cada uma, tenta a porta `9987`, escutando só no IP `100.x` da tailnet.
@@ -62,15 +70,14 @@ servidor para configurar.
    discreta: no hover da árvore de canais, nos pedidos de entrada e no painel de
    espectadores. Bans e contatos usam essa identidade.
 
-### Servidor dedicado (opcional)
+### Sala web e servidor dedicado
 
-Para usar Windows e navegador sem servidor em um PC, escolha **Sala web • Windows
-e navegadores**. A entrada não pede código. A mídia continua na
+Para usar Windows e navegador sem servidor em um PC, abra **Avançado** e escolha
+**Entrar na sala web**. A entrada não pede código. A mídia continua na
 tailnet, e o Vercel faz somente a sinalização. A opção Tailnet permanece
 independente do Vercel. Veja [WEB-TAILSCALE.md](../WEB-TAILSCALE.md).
 
-Em "Servidor dedicado (avançado)" na tela de entrada, o app usa um servidor central,
-compatível também com o cliente web:
+Na entrada principal, o app usa um servidor central, compatível também com o cliente web:
 
 ```bash
 openspeak-server.exe --port 9988

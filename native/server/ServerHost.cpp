@@ -163,6 +163,7 @@ void ServerHost::onNewWebSocket()
             auto &info = m_connectionInfo[clid];
             info.pingRttMs = qint64(elapsedMs);
             info.lastActivityAt = QDateTime::currentMSecsSinceEpoch();
+            m_server.setClientLatency(clid, info.pingRttMs);
         });
         connect(ws, &QWebSocket::disconnected, this, [this, ws, clid] {
             m_sockets.remove(clid);
@@ -172,6 +173,7 @@ void ServerHost::onNewWebSocket()
             ws->deleteLater();
             qCInfo(lcServer) << "desconectado clid=" << clid;
         });
+        ws->ping();
     }
 }
 
@@ -197,6 +199,10 @@ void ServerHost::onMessage(int clid, const QString &text)
         reply["error"] = QStringLiteral("erro interno");
     }
     sendTo(clid, reply);
+    // Measure after login as well: native peers may still be opening when the
+    // handshake ping arrives. The reply establishes the client's public view.
+    if (msg.value("cmd").toString() == QLatin1String("login") && reply.value("return_code").toString() == rc::Ok)
+        if (auto *ws = m_sockets.value(clid)) ws->ping();
 }
 
 void ServerHost::sendTo(int clid, const QJsonObject &message)

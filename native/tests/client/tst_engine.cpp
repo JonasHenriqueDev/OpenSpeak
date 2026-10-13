@@ -1,6 +1,7 @@
 // Testes unitários do motor: detecção de problemas (limiares do TS),
 // layout e filtro de SDP. Mesmos cenários de test/stats.test.js e test/layout.test.js.
 
+#include "AudioCapture.h"
 #include "AudioCodec.h"
 #include "Layout.h"
 #include "SdpFilter.h"
@@ -32,6 +33,30 @@ class TestEngine : public QObject {
     }
 
 private slots:
+    void picksDiscordProcessTreeRoot()
+    {
+        // Raiz (pai é o Update.exe, fora da lista) com filhos, como o Discord real.
+        QCOMPARE(AudioCapture::rootProcess({{500, 900}, {610, 500}, {620, 500}, {630, 610}}), 500u);
+        // Filhos listados antes da raiz.
+        QCOMPARE(AudioCapture::rootProcess({{620, 500}, {500, 900}}), 500u);
+        // Duas instâncias independentes (estável + PTB): a de menor PID.
+        QCOMPARE(AudioCapture::rootProcess({{800, 1}, {810, 800}, {700, 2}}), 700u);
+        QCOMPARE(AudioCapture::rootProcess({}), 0u);
+    }
+
+    void excludingDiscordReportsWhatIsExcluded()
+    {
+        AudioCapture capture;
+        QSignalSpy excluded(&capture, &AudioCapture::excludedChanged);
+        QSignalSpy errors(&capture, &AudioCapture::errorOccurred);
+        capture.start(AudioCapture::Mode::SystemExcludingDiscord);
+        QTRY_VERIFY_WITH_TIMEOUT(!excluded.isEmpty() || !errors.isEmpty(), 5000);
+        QVERIFY2(errors.isEmpty(), errors.isEmpty() ? "" : qPrintable(errors.first().first().toString()));
+        const QString expected = AudioCapture::discordRootPid() ? QStringLiteral("discord") : QStringLiteral("self");
+        QCOMPARE(excluded.first().first().toString(), expected);
+        capture.stop();
+    }
+
     void filtersShellAndBackgroundWindows()
     {
         QWindow normal;

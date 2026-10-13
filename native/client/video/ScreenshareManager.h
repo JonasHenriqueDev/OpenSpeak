@@ -82,6 +82,8 @@ signals:
     void joinRequest(const QString &id, int clid, const QString &nickname);
     void joinRequestResolved(const QString &id, int clid);
     void errorOccurred(const QString &message);
+    /// Aviso informativo; `key` é uma chave do I18n.
+    void noticeOccurred(const QString &key);
 
 private:
     struct StreamConfig {
@@ -91,6 +93,7 @@ private:
         int bitrate = 3'000'000;
         int viewerLimit = 0;
         bool audio = true;
+        bool excludeDiscord = false; // tela: não transmite o áudio do Discord
         int width = 1280, height = 720, fps = 30, audioBitrate = 128'000;
     };
     struct JoinReq {
@@ -107,6 +110,8 @@ private:
         std::unique_ptr<VideoSource> source;
         std::unique_ptr<VideoEncoder> encoder;
         std::unique_ptr<AudioCapture> audio;
+        QString audioLabel;            // como o áudio está sendo capturado (estatísticas)
+        bool excludingDiscord = false; // o Discord (e não o OpenSpeak) está fora da captura
         std::unique_ptr<OpusEncoder> opus;
         QMap<int, SessionOutbound *> sessions;
         std::mutex sinkMutex;           // protege `sinks` (thread do encoder/áudio)
@@ -149,6 +154,7 @@ private:
     void setInboundError(InboundView &view, const QString &key);
     void collectStats();
     void notifyChanged();
+    void updateInboundMute();
     QString errorMessage(const CommandResult &r) const;
 
     ConnectionHandler *m_handler;
@@ -162,6 +168,9 @@ private:
     QMap<QString, QList<QJsonObject>> m_earlySignals;
     QTimer m_statsTimer;
     QTimer m_changeDebounce;
+    // Com o Discord excluído, o OpenSpeak entra na captura da tela: o áudio de quem
+    // você assiste vazaria para a sua transmissão, então ele é silenciado.
+    bool m_inboundMuted = false;
 };
 
 } // namespace openspeak

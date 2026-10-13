@@ -116,6 +116,8 @@ ScreenshareManager::StreamConfig ScreenshareManager::configFromMap(const QVarian
         c.viewerLimit = std::clamp(m.value("viewerLimit").toInt(), 0, 1000);
     if (m.contains("audio"))
         c.audio = m.value("audio").toBool();
+    if (m.contains("excludeDiscord"))
+        c.excludeDiscord = m.value("excludeDiscord").toBool();
     if (m.contains("width"))
         c.width = m.value("width").toInt();
     if (m.contains("height"))
@@ -304,6 +306,16 @@ void ScreenshareManager::startMedia(OwnStream &own)
             Qt::DirectConnection);
     connect(own.audio.get(), &AudioCapture::errorOccurred, this,
             [](const QString &e) { qCWarning(lcShare) << "captura de áudio:" << e; });
+    connect(own.audio.get(), &AudioCapture::excludedChanged, this, [this, id](const QString &excluded) {
+        auto it = m_own.find(id);
+        if (it == m_own.end())
+            return;
+        OwnStream &o = *it->second;
+        o.excludingDiscord = excluded == QLatin1String("discord");
+        o.audioLabel = o.excludingDiscord ? QStringLiteral("Sistema, sem o Discord")
+                                          : QStringLiteral("Sistema, sem o OpenSpeak (Discord fechado)");
+        updateInboundMute();
+    });
     startAudioFor(own);
 }
 
@@ -312,18 +324,44 @@ void ScreenshareManager::startAudioFor(OwnStream &own)
     if (!own.audio)
         return;
     own.audio->stop();
+    own.excludingDiscord = false;
     switch (own.config.type) {
     case StreamType::Camera:
+        own.audioLabel = QStringLiteral("Microfone");
         own.audio->start(AudioCapture::Mode::Microphone);
         break;
     case StreamType::Window: {
         const quint32 pid = AudioCapture::pidForWindowTitle(own.source->label());
+        own.audioLabel = pid ? QStringLiteral("Somente a janela") : QStringLiteral("Sistema, sem o OpenSpeak");
         own.audio->start(pid ? AudioCapture::Mode::Process : AudioCapture::Mode::SystemExcludingSelf, pid);
         break;
     }
     default:
-        own.audio->start(AudioCapture::Mode::SystemExcludingSelf);
+        // Com "sem Discord", o rótulo definitivo vem do excludedChanged (Discord aberto ou não).
+        own.audioLabel = QStringLiteral("Sistema, sem o OpenSpeak");
+        own.audio->start(own.config.excludeDiscord ? AudioCapture::Mode::SystemExcludingDiscord
+                                                   : AudioCapture::Mode::SystemExcludingSelf);
     }
+    updateInboundMute();
+}
+
+void ScreenshareManager::updateInboundMute()
+{
+    bool mute = false;
+    for (const auto &[id, own] : m_own)
+        mute = mute || (own->audio && own->excludingDiscord);
+    if (mute == m_inboundMuted)
+        return;
+    m_inboundMuted = mute;
+    bool watching = false;
+    for (InboundView &v : m_inbound)
+        if (v.session) {
+            v.session->setVolume(mute ? 0.0 : v.volume);
+            watching = true;
+        }
+    if (mute && watching)
+        emit noticeOccurred(QStringLiteral("video.audio.discord.inbound_muted"));
+    notifyChanged();
 }
 
 void ScreenshareManager::scheduleThumbnails(OwnStream &own)
@@ -353,9 +391,12 @@ void ScreenshareManager::updateStream(const QString &id, const QVariantMap &conf
         return;
     OwnStream &own = *it->second;
     const StreamType type = own.config.type;
+    const bool excludeDiscord = own.config.excludeDiscord;
     own.config = configFromMap(config, own.config);
     own.config.type = type;
     configureEncoder(own);
+    if (own.config.excludeDiscord != excludeDiscord)
+        startAudioFor(own);
     if (own.opus)
         own.opus->setBitrate(own.config.audioBitrate);
     QJsonObject wire = wireConfig(own.config);
@@ -590,7 +631,7 @@ void ScreenshareManager::setVolume(const QString &id, double volume)
         return;
     it->volume = volume;
     if (it->session)
-        it->session->setVolume(volume);
+        it->session->setVolume(m_inboundMuted ? 0.0 : volume);
 }
 
 // ============================================================ notificações
@@ -773,7 +814,9 @@ void ScreenshareManager::onJoinResponse(const QJsonObject &a)
     }, this);
     if ((m_handler->cloudMode() || (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")))) && m_handler->directory())
         session->setBindAddress(m_handler->directory()->self().address.toString());
-    session->setVolume(it->volume);
+    session->setVolume(m_inboundMuted ? 0.0 : it->volume);
+    if (m_inboundMuted)
+        emit noticeOccurred(QStringLiteral("video.audio.discord.inbound_muted"));
     it->session = session;
     connect(session, &RtcSession::stateChanged, this, [this, id](RtcSession::State s) {
         auto v = m_inbound.find(id);
@@ -846,6 +889,7 @@ void ScreenshareManager::disposeOwn(const QString &id)
     for (int clid : own.joinRequests.keys())
         emit joinRequestResolved(id, clid);
     m_own.erase(it);
+    updateInboundMute();
     notifyChanged();
 }
 
@@ -915,6 +959,7 @@ QVariantMap ScreenshareManager::stats(const QString &id, int viewerClid) const
                         {"target", QVariantMap{{"width", o.config.width}, {"height", o.config.height}, {"fps", o.config.fps}}}};
         if (o.source)
             out["capture"] = o.source->captureMethod();
+        out["audioCapture"] = o.audio ? o.audioLabel : QStringLiteral("Desativado");
         if (const SessionOutbound *s = o.sessions.value(viewerClid)) {
             out["video"] = s->videoStats().toVariant();
             out["audio"] = s->audioStats().toVariant();
@@ -993,6 +1038,7 @@ QVariantList ScreenshareManager::items() const
             }
             item["errorKey"] = v->errorKey;
             item["volume"] = v->volume;
+            item["audioBlocked"] = m_inboundMuted;
             item["hasVideo"] = v->session && v->session->hasVideo();
             if (v->session)
                 severity = std::max(v->session->videoStats().worstSeverity(), v->session->audioStats().worstSeverity());

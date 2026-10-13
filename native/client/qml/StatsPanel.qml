@@ -213,6 +213,8 @@ ScrollView {
                         rows.push([I18n.t("video.stream.stats.video.quality.target"), tw + " " + (t.fps || 0) + "fps"])
                         rows.push([I18n.t("video.stream.stats.video.quality.current"), (s.width || 0) + "x" + (s.height || 0) + " " + (s.fps || 0) + "fps", "video:fps"])
                     }
+                    if (root.tab === "audio" && !root.inbound)
+                        rows.push([I18n.t("video.stream.stats.video.capture"), root.data_.audioCapture || "—"])
                     if (root.inbound) {
                         rows.push([I18n.t("video.stream.stats.received.packets"), String(s.receivedPackets || 0)])
                         rows.push([I18n.t("video.stream.stats.received.bytes"), root.bytes(s.receivedBytes)])

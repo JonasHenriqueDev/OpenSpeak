@@ -1,6 +1,8 @@
 #pragma once
 // Captura do áudio que acompanha o stream.
-//  - Tela:   todo o áudio do sistema EXCETO o próprio OpenSpeak (evita eco)
+//  - Tela:   todo o áudio do sistema EXCETO o próprio OpenSpeak (evita eco), ou
+//            EXCETO o Discord (o Windows só exclui uma árvore de processos; enquanto
+//            o Discord estiver fechado, volta a excluir o OpenSpeak)
 //  - Janela: apenas o áudio do processo dono da janela
 //  - Câmera: microfone padrão
 // Usa o "process loopback" do WASAPI (Windows 10 2004+), como o
@@ -9,7 +11,9 @@
 #include <QAudioSource>
 #include <QByteArray>
 #include <QIODevice>
+#include <QList>
 #include <QObject>
+#include <QPair>
 
 #include <atomic>
 #include <memory>
@@ -20,7 +24,7 @@ namespace openspeak {
 class AudioCapture : public QObject {
     Q_OBJECT
 public:
-    enum class Mode { SystemExcludingSelf, Process, Microphone };
+    enum class Mode { SystemExcludingSelf, SystemExcludingDiscord, Process, Microphone };
 
     explicit AudioCapture(QObject *parent = nullptr);
     ~AudioCapture() override;
@@ -35,11 +39,17 @@ public:
 
     /// Procura o PID do processo dono de uma janela pelo título.
     static quint32 pidForWindowTitle(const QString &title);
+    /// PID do processo raiz do Discord (estável, PTB ou Canary), ou 0 se fechado.
+    static quint32 discordRootPid();
+    /// Entre processos (pid, pai), a raiz: o de menor PID cujo pai não está na lista.
+    static quint32 rootProcess(const QList<QPair<quint32, quint32>> &processes);
 
 signals:
     /// Amostras float32 intercaladas (SampleRate/Channels acima).
     void samplesAvailable(const QByteArray &pcm, int sampleRate, int channels);
     void errorOccurred(const QString &error);
+    /// Mode::SystemExcludingDiscord: o que está sendo excluído agora ("discord" ou "self").
+    void excludedChanged(const QString &excluded);
 
 private:
     void loopbackThread(Mode mode, quint32 pid);

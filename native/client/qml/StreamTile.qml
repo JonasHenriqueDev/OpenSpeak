@@ -353,8 +353,8 @@ Rectangle {
             TileButton {
                 id: volumeButton
                 visible: !tile.own && tile.playing
-                iconName: volumeSlider.value === 0 ? "mute" : "volume"
-                tip: I18n.t("video.action.volume")
+                iconName: tile.data_.audioBlocked || volumeSlider.value === 0 ? "mute" : "volume"
+                tip: tile.data_.audioBlocked ? I18n.t("video.audio.discord.blocked") : I18n.t("video.action.volume")
                 onClicked: volumeSlider.value = volumeSlider.value === 0 ? 1 : 0
             }
             Slider {

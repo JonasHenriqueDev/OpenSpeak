@@ -8,6 +8,10 @@
 #include <mmdeviceapi.h>
 #include <wrl/client.h>
 #include <wrl/implements.h>
+#include <tlhelp32.h>
+
+#include <algorithm>
+#include <iterator>
 
 #pragma comment(lib, "mmdevapi.lib")
 
@@ -117,34 +121,43 @@ void AudioCapture::stop()
     }
 }
 
+quint32 AudioCapture::discordRootPid()
+{
+    static const wchar_t *const names[] = {L"Discord.exe", L"DiscordPTB.exe", L"DiscordCanary.exe", L"DiscordDevelopment.exe"};
+    auto isDiscord = [](const wchar_t *exe) {
+        return std::any_of(std::begin(names), std::end(names), [exe](const wchar_t *n) { return _wcsicmp(exe, n) == 0; });
+    };
+    HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snap == INVALID_HANDLE_VALUE)
+        return 0;
+    QList<QPair<quint32, quint32>> discord; // (pid, pai)
+    PROCESSENTRY32W pe{sizeof(pe)};
+    for (BOOL ok = Process32FirstW(snap, &pe); ok; ok = Process32NextW(snap, &pe))
+        if (isDiscord(pe.szExeFile))
+            discord.append({pe.th32ProcessID, pe.th32ParentProcessID});
+    CloseHandle(snap);
+    // Excluir a árvore da raiz tira também o processo filho que toca as vozes.
+    return rootProcess(discord);
+}
+
+quint32 AudioCapture::rootProcess(const QList<QPair<quint32, quint32>> &processes)
+{
+    quint32 root = 0;
+    for (const auto &[pid, parent] : processes) {
+        const bool hasParentInList = std::any_of(processes.begin(), processes.end(),
+                                                 [parent](const auto &p) { return p.first == parent; });
+        if (!hasParentInList && (!root || pid < root))
+            root = pid;
+    }
+    return root;
+}
+
 void AudioCapture::loopbackThread(Mode mode, quint32 pid)
 {
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     auto fail = [this](const QString &what, HRESULT hr) {
         emit errorOccurred(QStringLiteral("%1 (0x%2)").arg(what).arg(quint32(hr), 8, 16, QLatin1Char('0')));
     };
-
-    AUDIOCLIENT_ACTIVATION_PARAMS params{};
-    params.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
-    params.ProcessLoopbackParams.TargetProcessId = mode == Mode::SystemExcludingSelf ? GetCurrentProcessId() : pid;
-    params.ProcessLoopbackParams.ProcessLoopbackMode = mode == Mode::SystemExcludingSelf
-        ? PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE
-        : PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE;
-    PROPVARIANT pv{};
-    pv.vt = VT_BLOB;
-    pv.blob.cbSize = sizeof(params);
-    pv.blob.pBlobData = reinterpret_cast<BYTE *>(&params);
-
-    auto handler = Microsoft::WRL::Make<ActivationHandler>();
-    ComPtr<IActivateAudioInterfaceAsyncOperation> op;
-    HRESULT hr = ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, __uuidof(IAudioClient), &pv,
-                                             handler.Get(), &op);
-    if (FAILED(hr) || WaitForSingleObject(handler->done, 5000) != WAIT_OBJECT_0 || FAILED(handler->hr)) {
-        fail(QStringLiteral("falha ao ativar captura de áudio"), FAILED(hr) ? hr : handler->hr);
-        CoUninitialize();
-        return;
-    }
-    ComPtr<IAudioClient> client = handler->client;
 
     WAVEFORMATEX fmt{};
     fmt.wFormatTag = WAVE_FORMAT_IEEE_FLOAT;
@@ -153,43 +166,88 @@ void AudioCapture::loopbackThread(Mode mode, quint32 pid)
     fmt.wBitsPerSample = 32;
     fmt.nBlockAlign = fmt.nChannels * fmt.wBitsPerSample / 8;
     fmt.nAvgBytesPerSec = fmt.nSamplesPerSec * fmt.nBlockAlign;
-
     HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-                            200'000 /* 20 ms */, 0, &fmt, nullptr);
-    ComPtr<IAudioCaptureClient> capture;
-    if (SUCCEEDED(hr))
-        hr = client->SetEventHandle(event);
-    if (SUCCEEDED(hr))
-        hr = client->GetService(IID_PPV_ARGS(&capture));
-    if (SUCCEEDED(hr))
-        hr = client->Start();
-    if (FAILED(hr)) {
-        fail(QStringLiteral("falha ao iniciar captura de áudio"), hr);
-        CloseHandle(event);
-        CoUninitialize();
-        return;
-    }
+
+    // Quem sai da captura. No modo "sem Discord", reavaliado a cada segundo: se o
+    // Discord abrir, fechar ou reiniciar (novo PID), a captura é recriada (~100 ms de corte).
+    auto excludedTarget = [&]() -> DWORD {
+        if (mode == Mode::SystemExcludingDiscord)
+            if (const quint32 discord = discordRootPid())
+                return discord;
+        return mode == Mode::Process ? pid : GetCurrentProcessId();
+    };
+    QString lastExcluded;
 
     while (m_running) {
-        if (WaitForSingleObject(event, 100) != WAIT_OBJECT_0)
-            continue;
-        UINT32 frames = 0;
-        while (SUCCEEDED(capture->GetNextPacketSize(&frames)) && frames > 0) {
-            BYTE *data = nullptr;
-            DWORD flags = 0;
-            if (FAILED(capture->GetBuffer(&data, &frames, &flags, nullptr, nullptr)))
-                break;
-            QByteArray pcm(int(frames * fmt.nBlockAlign), Qt::Uninitialized);
-            if (flags & AUDCLNT_BUFFERFLAGS_SILENT)
-                pcm.fill(0);
-            else
-                memcpy(pcm.data(), data, pcm.size());
-            capture->ReleaseBuffer(frames);
-            emit samplesAvailable(pcm, SampleRate, Channels);
+        const DWORD target = excludedTarget();
+        if (mode == Mode::SystemExcludingDiscord) {
+            const QString excluded = target == GetCurrentProcessId() ? QStringLiteral("self") : QStringLiteral("discord");
+            if (excluded != lastExcluded) {
+                lastExcluded = excluded;
+                emit excludedChanged(excluded);
+            }
         }
+
+        AUDIOCLIENT_ACTIVATION_PARAMS params{};
+        params.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
+        params.ProcessLoopbackParams.TargetProcessId = target;
+        params.ProcessLoopbackParams.ProcessLoopbackMode = mode == Mode::Process
+            ? PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE
+            : PROCESS_LOOPBACK_MODE_EXCLUDE_TARGET_PROCESS_TREE;
+        PROPVARIANT pv{};
+        pv.vt = VT_BLOB;
+        pv.blob.cbSize = sizeof(params);
+        pv.blob.pBlobData = reinterpret_cast<BYTE *>(&params);
+
+        auto handler = Microsoft::WRL::Make<ActivationHandler>();
+        ComPtr<IActivateAudioInterfaceAsyncOperation> op;
+        HRESULT hr = ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, __uuidof(IAudioClient), &pv,
+                                                 handler.Get(), &op);
+        if (FAILED(hr) || WaitForSingleObject(handler->done, 5000) != WAIT_OBJECT_0 || FAILED(handler->hr)) {
+            fail(QStringLiteral("falha ao ativar captura de áudio"), FAILED(hr) ? hr : handler->hr);
+            break;
+        }
+        ComPtr<IAudioClient> client = handler->client;
+        hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                                200'000 /* 20 ms */, 0, &fmt, nullptr);
+        ComPtr<IAudioCaptureClient> capture;
+        if (SUCCEEDED(hr))
+            hr = client->SetEventHandle(event);
+        if (SUCCEEDED(hr))
+            hr = client->GetService(IID_PPV_ARGS(&capture));
+        if (SUCCEEDED(hr))
+            hr = client->Start();
+        if (FAILED(hr)) {
+            fail(QStringLiteral("falha ao iniciar captura de áudio"), hr);
+            break;
+        }
+
+        ULONGLONG nextCheck = GetTickCount64() + 1000;
+        while (m_running) {
+            if (mode == Mode::SystemExcludingDiscord && GetTickCount64() >= nextCheck) {
+                nextCheck = GetTickCount64() + 1000;
+                if (excludedTarget() != target)
+                    break; // recria a captura com o novo alvo
+            }
+            if (WaitForSingleObject(event, 100) != WAIT_OBJECT_0)
+                continue;
+            UINT32 frames = 0;
+            while (SUCCEEDED(capture->GetNextPacketSize(&frames)) && frames > 0) {
+                BYTE *data = nullptr;
+                DWORD flags = 0;
+                if (FAILED(capture->GetBuffer(&data, &frames, &flags, nullptr, nullptr)))
+                    break;
+                QByteArray pcm(int(frames * fmt.nBlockAlign), Qt::Uninitialized);
+                if (flags & AUDCLNT_BUFFERFLAGS_SILENT)
+                    pcm.fill(0);
+                else
+                    memcpy(pcm.data(), data, pcm.size());
+                capture->ReleaseBuffer(frames);
+                emit samplesAvailable(pcm, SampleRate, Channels);
+            }
+        }
+        client->Stop();
     }
-    client->Stop();
     CloseHandle(event);
     CoUninitialize();
 }

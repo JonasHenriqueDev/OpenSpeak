@@ -135,6 +135,9 @@ ApplicationWindow {
         function onErrorOccurred(message) {
             toasts.show({ kind: "error", text: window.errorText(message) })
         }
+        function onNoticeOccurred(key) {
+            toasts.show({ key: key, kind: "info", text: I18n.t(key) })
+        }
         function onJoinRequest(id, clid, nickname) {
             toasts.show({
                 key: "join:" + id + ":" + clid,

@@ -913,6 +913,8 @@ QVariantMap ScreenshareManager::stats(const QString &id, int viewerClid) const
             viewerClid = o.sessions.isEmpty() ? 0 : o.sessions.firstKey();
         QVariantMap out{{"own", true}, {"viewers", viewers}, {"viewerClid", viewerClid},
                         {"target", QVariantMap{{"width", o.config.width}, {"height", o.config.height}, {"fps", o.config.fps}}}};
+        if (o.source)
+            out["capture"] = o.source->captureMethod();
         if (const SessionOutbound *s = o.sessions.value(viewerClid)) {
             out["video"] = s->videoStats().toVariant();
             out["audio"] = s->audioStats().toVariant();

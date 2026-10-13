@@ -1,4 +1,5 @@
 #include "VideoSource.h"
+#include "WindowGrabber.h"
 
 #include <QBuffer>
 #include <QDateTime>
@@ -83,6 +84,7 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
         m_testTimer.start(1000 / std::max(1, targetFps));
         m_active = true;
         m_desc.label = QStringLiteral("Padrão de teste");
+        m_captureMethod = QStringLiteral("Padrão de teste");
         return true;
     }
 
@@ -96,6 +98,7 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
         m_screen = std::make_unique<QScreenCapture>();
         m_screen->setScreen(screens[idx]);
         m_session.setScreenCapture(m_screen.get());
+        m_captureMethod = QStringLiteral("Tela inteira (Qt)");
         connect(m_screen.get(), &QScreenCapture::errorOccurred, this, [this](auto, const QString &e) { emit errorOccurred(e); });
         m_screen->start();
     } else if (desc.type == StreamType::Window) {
@@ -106,14 +109,25 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
             m_error = QStringLiteral("no_available_source");
             return false;
         }
-        m_window = std::make_unique<QWindowCapture>();
-        m_window->setWindow(desc.windowSpecified ? desc.window : windows[idx]);
-        m_session.setWindowCapture(m_window.get());
-        connect(m_window.get(), &QWindowCapture::errorOccurred, this, [this](auto, const QString &e) {
-            emit errorOccurred(e);
-            emit ended(); // janela fechada
-        });
-        m_window->start();
+        const QCapturableWindow window = desc.windowSpecified ? desc.window : windows[idx];
+        const auto *handle = QCapturableWindowPrivate::handle(window);
+        // OPENSPEAK_WINDOW_CAPTURE=wgc força o Windows.Graphics.Capture (com a borda amarela).
+        if (handle && handle->id && qEnvironmentVariable("OPENSPEAK_WINDOW_CAPTURE") != QLatin1String("wgc")) {
+            m_grabber = std::make_unique<WindowGrabber>(handle->id, targetFps);
+            connect(m_grabber.get(), &WindowGrabber::frameReady, this, &VideoSource::onFrame);
+            connect(m_grabber.get(), &WindowGrabber::methodChanged, this, [this](const QString &m) { m_captureMethod = m; });
+            connect(m_grabber.get(), &WindowGrabber::windowClosed, this, [this] {
+                emit errorOccurred(QStringLiteral("window_closed"));
+                emit ended();
+            });
+            connect(m_grabber.get(), &WindowGrabber::fallbackRequested, this, [this, window] {
+                m_grabber.reset();
+                startWindowCapture(window);
+            });
+            m_grabber->start();
+        } else {
+            startWindowCapture(window);
+        }
     } else if (desc.type == StreamType::Camera) {
         QCameraDevice device;
         for (const QCameraDevice &cam : QMediaDevices::videoInputs())
@@ -137,6 +151,7 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
         if (!best.isNull())
             m_camera->setCameraFormat(best);
         m_session.setCamera(m_camera.get());
+        m_captureMethod = QStringLiteral("Câmera");
         connect(m_camera.get(), &QCamera::errorOccurred, this, [this](auto, const QString &e) { emit errorOccurred(e); });
         m_camera->start();
     }
@@ -147,6 +162,7 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
 void VideoSource::close()
 {
     m_testTimer.stop();
+    m_grabber.reset();
     if (m_screen)
         m_screen->stop();
     if (m_window)
@@ -161,6 +177,20 @@ void VideoSource::close()
     m_camera.reset();
     m_active = false;
     m_lastFrame = {};
+    m_captureMethod.clear();
+}
+
+void VideoSource::startWindowCapture(const QCapturableWindow &window)
+{
+    m_window = std::make_unique<QWindowCapture>();
+    m_window->setWindow(window);
+    m_captureMethod = QStringLiteral("Windows.Graphics.Capture (com borda)");
+    m_session.setWindowCapture(m_window.get());
+    connect(m_window.get(), &QWindowCapture::errorOccurred, this, [this](auto, const QString &e) {
+        emit errorOccurred(e);
+        emit ended(); // janela fechada
+    });
+    m_window->start();
 }
 
 void VideoSource::addPreviewSink(QVideoSink *sink)

@@ -9,6 +9,7 @@ add_library(openspeak_engine STATIC
     mesh/PeerDirectory.cpp mesh/PeerDirectory.h
     mesh/MeshConnection.cpp mesh/MeshConnection.h
     media/VideoSource.cpp media/VideoSource.h
+    media/WindowGrabber.cpp media/WindowGrabber.h
     media/SourceThumbnails.cpp media/SourceThumbnails.h
     media/VideoEncoder.cpp media/VideoEncoder.h
     media/VideoDecoder.cpp media/VideoDecoder.h
@@ -36,7 +37,7 @@ target_link_libraries(openspeak_engine PUBLIC
     Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::WebSockets
     ${OPENSPEAK_LDC}
     openspeak_ffmpeg
-    ole32 mmdevapi
+    ole32 mmdevapi d3d11 dxgi dwmapi gdi32 user32
 )
 target_link_libraries(openspeak_engine PRIVATE Qt6::MultimediaPrivate dwmapi)
 target_compile_definitions(openspeak_engine PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)

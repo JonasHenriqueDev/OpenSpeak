@@ -178,6 +178,7 @@ const STRINGS = {
   'video.stream.stats.tls_version': 'Versão DTLS',
   'video.stream.stats.video.decoder': 'Decodificador',
   'video.stream.stats.video.encoder': 'Codificador',
+  'video.stream.stats.video.capture': 'Captura',
   'video.stream.stats.video.limit.reason': 'Gargalo',
   'video.stream.stats.video.quality.current': 'Qualidade (atual)',
   'video.stream.stats.video.quality.target': 'Qualidade (alvo)',

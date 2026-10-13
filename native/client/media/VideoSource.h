@@ -1,7 +1,8 @@
 #pragma once
 // Fonte de captura compartilhada por todas as sessões de um stream
 // (o "lado de entrada" do ScalableSharedVideoTransformer do TS).
-// Telas, janelas e câmeras via Qt Multimedia; padrão de teste via QPainter.
+// Telas e câmeras via Qt Multimedia; janelas via WindowGrabber (sem a borda amarela do
+// WGC), com o QWindowCapture como reserva; padrão de teste via QPainter.
 
 #include "Protocol.h"
 
@@ -21,6 +22,8 @@
 #include <memory>
 
 namespace openspeak {
+
+class WindowGrabber;
 
 struct SourceDescriptor {
     StreamType type = StreamType::Screen;
@@ -59,6 +62,8 @@ public:
     QString captureThumbnail(int width = 320) const;
 
     QString errorString() const { return m_error; }
+    /// Como os quadros estão sendo capturados (informações da transmissão).
+    QString captureMethod() const { return m_captureMethod; }
 
 signals:
     void frameAvailable(const QVideoFrame &frame);
@@ -68,16 +73,19 @@ signals:
 private:
     void onFrame(const QVideoFrame &frame);
     void renderTestPattern();
+    void startWindowCapture(const QCapturableWindow &window);
 
     SourceDescriptor m_desc;
     bool m_active = false;
     QString m_error;
+    QString m_captureMethod;
     QSize m_lastSize;
     QVideoFrame m_lastFrame;
     QMediaCaptureSession m_session;
     QVideoSink m_sink;
     std::unique_ptr<QScreenCapture> m_screen;
     std::unique_ptr<QWindowCapture> m_window;
+    std::unique_ptr<WindowGrabber> m_grabber; // captura sem borda (WindowGrabber.h)
     std::unique_ptr<QCamera> m_camera;
     QTimer m_testTimer;
     qint64 m_testStart = 0;

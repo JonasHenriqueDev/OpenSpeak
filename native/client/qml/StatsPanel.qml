@@ -206,6 +206,7 @@ ScrollView {
                             rows.push([I18n.t("video.stream.stats.video.decoder"), s.decoder || "—"])
                         } else {
                             rows.push([I18n.t("video.stream.stats.video.encoder"), s.encoder || "—"])
+                            rows.push([I18n.t("video.stream.stats.video.capture"), root.data_.capture || "—"])
                             rows.push([I18n.t("video.stream.stats.video.limit.reason"), s.limitReason || "none", "video:qualitylimit"])
                         }
                         const tw = t.width > 0 ? t.width + "x" + t.height : I18n.t("video.preset.source")

@@ -1,3 +1,15 @@
+# OpenSpeak nativo 0.2.7
+
+- Modo **Servidor (SFU)**: o transmissor envia um fluxo só ao `openspeak-server`,
+  que repassa o RTP (H.264 + Opus) a cada espectador sem transcodificar. O upload do
+  transmissor deixa de crescer com o número de espectadores. Disponível quando o
+  servidor anuncia `STREAM_SFU`; a malha da tailnet e a sala web continuam P2P.
+- `openspeak-server`: `--rtc-port` (porta UDP única do relay, padrão 10000),
+  `--public-ip` (IP anunciado atrás de NAT 1:1) e `--no-sfu`. Compila também em Linux
+  (só o servidor, sem FFmpeg).
+- Corrige a entrada em servidor dedicado: o endereço digitado era trocado pelo salvo
+  (`ws://localhost:9988/ws`) ao clicar em Conectar.
+
 # OpenSpeak nativo 0.2.6
 
 - Opção "Sem áudio do Discord" na transmissão de tela: o áudio do app do Discord

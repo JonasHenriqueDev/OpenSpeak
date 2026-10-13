@@ -1,3 +1,11 @@
+# OpenSpeak 1.0.2 — confirmação de atualização ao abrir
+
+- Verifica o canal selecionado em toda abertura e pergunta antes de baixar e
+  instalar uma versão nova. **Agora não** adia o aviso até a próxima abertura.
+- **Atualizar agora** baixa, valida o SHA-256 e reinicia o app para instalar.
+- A opção de verificação periódica controla somente as consultas a cada 6 horas.
+  Fechar o aplicativo não instala atualizações sem confirmação.
+
 # OpenSpeak 1.0.1 — conexão via servidor e ping
 
 - Conexão via servidor é a opção principal na tela inicial. Tailscale e sala web

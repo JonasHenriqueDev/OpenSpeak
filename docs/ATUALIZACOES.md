@@ -10,14 +10,21 @@ não são oferecidos pelo link web.
 
 ## App instalado
 
-No botão de configurações de atualizações na barra da janela:
+Ao abrir, o app consulta o GitHub e pergunta se deseja atualizar quando encontra
+uma versão mais nova no canal escolhido. **Atualizar agora** baixa e valida o
+instalador, fecha o app e o reabre após instalar. **Agora não** mantém o app
+aberto e adia o aviso até a próxima abertura. Não baixa nem instala sem aceitar.
 
-- **Atualizações automáticas**: habilitado por padrão. Consulta ao abrir (15 s)
-  e a cada 6 horas; baixa o instalador em segundo plano e aplica ao fechar o app.
+No botão com ícone de download na barra da janela:
+
+- **Verificar também a cada 6 horas**: habilitado por padrão. Controla somente
+  as consultas periódicas; a verificação ao abrir ocorre sempre.
 - **Receber pré-releases**: desabilitado por padrão. Desligado recebe somente
   releases estáveis. Ligado recebe a versão mais nova entre releases e pré-releases.
-- **Verificar agora**: consulta manual. Com atualização automática desligada,
-  o download e a instalação também são manuais.
+- **Verificar agora**: consulta manual. Uma nova versão gera um aviso por
+  abertura, evitando repetir a pergunta depois de **Agora não**.
+- **Baixar atualização**: apenas baixa e valida. Fechar o app não instala
+  atualizações; use **Aplicar e reiniciar** para autorizar a instalação.
 - **Aplicar e reiniciar**: pede confirmação antes de encerrar conexões existentes.
 
 O instalador pode pedir elevação pelo UAC porque a instalação usa Program Files.

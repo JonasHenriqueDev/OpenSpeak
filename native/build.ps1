@@ -4,7 +4,7 @@
 #   .\build.ps1 -Config Debug
 param(
     [string]$Config = 'Release',
-    [string]$Version = '1.0.1',
+    [string]$Version = '1.0.2',
     [switch]$ServerOnly,
     [string]$QtDir = 'C:\Qt\6.11.3\msvc2022_64',
     [string]$Vcpkg = 'D:\Dev\vcpkg'

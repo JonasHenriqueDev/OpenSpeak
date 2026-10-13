@@ -119,8 +119,8 @@ int main(int argc, char *argv[])
                 auto *address = findVisualItem(window->contentItem(), QStringLiteral("serverAddress"));
                 valid = valid && connectButton && connectButton->isVisible() && address && address->isVisible()
                     && advanced && advanced->isVisible() == (panel == "login-advanced");
-            } else if (panel == "updates") {
-                auto *dialog = window->findChild<QObject *>(QStringLiteral("updatesDialog"));
+            } else if (panel == "updates" || panel == "update-prompt") {
+                auto *dialog = window->findChild<QObject *>(panel == "updates" ? QStringLiteral("updatesDialog") : QStringLiteral("updatePrompt"));
                 valid = valid && dialog && dialog->property("visible").toBool()
                     && dialog->property("width").toDouble() >= 400
                     && dialog->property("height").toDouble() < window->height();

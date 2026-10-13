@@ -1,4 +1,4 @@
-# OpenSpeak 0.2.4: Windows e navegador
+# OpenSpeak 0.2.5: Windows e navegador
 
 Todos os computadores devem estar conectados à mesma tailnet, com tráfego entre eles permitido nas regras do Tailscale. Não há TURN nem STUN neste modo.
 
@@ -24,7 +24,7 @@ Ao desconectar normalmente, o cliente envia logout. Em quedas abruptas, os outro
 
 ## Publicar
 
-Instale as dependências com npm ci. Vincule o projeto do Vercel na raiz do repositório e configure REDIS_URL (integração Upstash) como segredo de produção. Não existe código de sala na versão 0.2.4. Publique a raiz, não a antiga pasta web-dist:
+Instale as dependências com npm ci. Vincule o projeto do Vercel na raiz do repositório e configure REDIS_URL (integração Upstash) como segredo de produção. Não existe código de sala desde a versão 0.2.4. Publique a raiz, não a antiga pasta web-dist:
 
 ```powershell
 npx vercel deploy --prod --scope jonashenriquedevs-projects

@@ -1,3 +1,14 @@
+# OpenSpeak nativo 0.2.5
+
+- Captura de janela sem a borda amarela do Windows.Graphics.Capture (Windows 10 não
+  permite desligá-la). Janela visível e sem nada por cima: duplicação da tela (DXGI)
+  recortada na GPU, no monitor com a maior parte da janela. Janela coberta:
+  `PrintWindow(PW_RENDERFULLCONTENT)`. Preto nos dois modos por ~1 s volta para o
+  `QWindowCapture` (com borda). Captura no fps alvo, cursor desenhado, janela
+  minimizada reenvia o último quadro. `OPENSPEAK_WINDOW_CAPTURE=wgc` força o método antigo.
+- As estatísticas da transmissão mostram o método de captura em uso.
+- Licença AGPL-3.0-or-later; licenças das dependências vão em `licenses/` no pacote.
+
 # OpenSpeak nativo 0.2.2
 
 - Filtro de janelas baseado no HWND real: remove superfícies sem título, ocultas,

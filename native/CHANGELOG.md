@@ -3,6 +3,7 @@
 - Verifica o canal selecionado em toda abertura, antes de conectar. Uma versão
   nova é baixada, validada pelo SHA-256 e instalada com reinício automático.
 - Tela inicial mostra o estado da verificação e do download, sem pedir confirmação.
+- Instalador por usuário em AppData, sem exigir administrador nas atualizações.
 - Falhas na consulta ou no download liberam a entrada normalmente.
 - A opção de verificação periódica controla somente as consultas a cada 6 horas.
   Atualizações encontradas durante o uso ficam para a próxima abertura.

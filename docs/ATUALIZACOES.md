@@ -28,9 +28,14 @@ No botão com ícone de download na barra da janela:
   durante o uso, escolha **Aplicar e reiniciar**.
 - **Aplicar e reiniciar**: pede confirmação antes de encerrar conexões existentes.
 
-O instalador pode pedir elevação pelo UAC porque a instalação usa Program Files.
+O instalador usa `%LOCALAPPDATA%\Programs\OpenSpeak`, somente para o usuário
+atual, e não solicita elevação pelo UAC. Não modifica regras globais do firewall.
+Os modos avançados que recebem conexões podem precisar de autorização no firewall
+do Windows, separadamente da instalação.
 Não reinicia o Windows nem força o fechamento de outras instâncias. Configurações
-e identidade continuam no QSettings do usuário. O SHA-256 anunciado pelo GitHub
+e identidade continuam no QSettings do usuário. Ao migrar de Program Files, os
+arquivos antigos não são removidos automaticamente; a desinstalação da versão
+antiga, se desejada, continua sendo uma operação administrativa. O SHA-256 anunciado pelo GitHub
 é conferido ao baixar e antes de executar o instalador. Falhas de rede ou de
 integridade não executam o instalador; o app continua utilizável.
 

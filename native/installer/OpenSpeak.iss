@@ -7,14 +7,19 @@
 #define AppName "OpenSpeak"
 #define AppExe "OpenSpeak.exe"
 #define Staging "..\dist\OpenSpeak"
+#ifndef AppId
+  #define AppId "{{6F1B4F0A-0E2C-4C1B-9E7A-0F5E2B1C9D11}"
+#endif
 
 [Setup]
-AppId={{6F1B4F0A-0E2C-4C1B-9E7A-0F5E2B1C9D11}
+AppId={#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=OpenSpeak
 AppPublisherURL=https://github.com/JonasHenriqueDev/OpenSpeak
-DefaultDirName={autopf}\{#AppName}
+DefaultDirName={localappdata}\Programs\{#AppName}
+UsePreviousAppDir=no
+DisableDirPage=yes
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 OutputDir=..\dist
@@ -23,7 +28,7 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
 WizardStyle=modern
 SetupIconFile=..\client\assets\openspeak.ico
 DisableProgramGroupPage=yes
@@ -45,15 +50,9 @@ Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Run]
-; Libera o app no firewall: malha (TCP 9987, só na tailnet) + mídia WebRTC (UDP).
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""OpenSpeak"" dir=in action=allow program=""{app}\{#AppExe}"" enable=yes profile=any"; Flags: runhidden
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""OpenSpeak Server"" dir=in action=allow program=""{app}\openspeak-server.exe"" enable=yes profile=any"; Flags: runhidden
+; Per-user setup does not modify machine-wide firewall rules.
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: RelaunchAfterUpdate
-
-[UninstallRun]
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""OpenSpeak"""; Flags: runhidden; RunOnceId: "fw1"
-Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""OpenSpeak Server"""; Flags: runhidden; RunOnceId: "fw2"
 
 [Code]
 function RelaunchAfterUpdate(): Boolean;

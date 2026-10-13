@@ -100,7 +100,7 @@ ApplicationWindow {
                 text: Settings.prereleaseUpdates ? "Canal pré: releases estáveis e versões de teste mais novas." : "Canal estável: recebe somente releases, sem pré-releases." }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: Updater.status }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
-                text: Updater.installed ? "Ao abrir, o app baixa e instala atualizações automaticamente antes de conectar. A instalação preserva suas configurações e pode solicitar permissão de administrador." : "O app verifica ao abrir. Na versão portátil, baixe o novo instalador ou pacote na página de downloads." }
+                text: Updater.installed ? "Ao abrir, o app baixa e instala atualizações automaticamente antes de conectar. A instalação por usuário preserva suas configurações." : "O app verifica ao abrir. Na versão portátil, baixe o novo instalador ou pacote na página de downloads." }
             RowLayout {
                 Button { text: "Verificar agora"; enabled: !Updater.busy; onClicked: Updater.check() }
                 Button { text: "Baixar atualização"; visible: Updater.installed && Updater.available && !Updater.ready; enabled: !Updater.busy; onClicked: Updater.downloadUpdate() }

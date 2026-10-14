@@ -1,3 +1,16 @@
+# OpenSpeak 1.0.7 — efeitos sonoros e controles em tela cheia
+
+- Efeitos sonoros ao entrar e sair do canal, quando alguém entra ou sai do seu
+  canal e quando uma transmissão do canal começa, é pausada ou encerrada.
+- Dois estilos: **Suave** (padrão) e **Bolha**. Escolha em **Preferências › Sons**,
+  com prévia ao trocar e controle de volume.
+- Para silenciar, desmarque **Tocar efeitos sonoros** nas Preferências ou use
+  **Silenciar efeitos sonoros** no menu do ícone da bandeja.
+- O cliente web ganhou os mesmos sons e opções em **Configurações**.
+- Tela cheia com controles: ao mexer o mouse aparecem o nome do stream e os
+  botões de pausar/retomar, parar, volume, sair do stream, picture-in-picture e
+  sair da tela cheia. Eles somem, junto com o cursor, após 2,5 s parado.
+
 # OpenSpeak 1.0.6 — bandeja do sistema
 
 - Ícone na bandeja do Windows, como no Discord: o X esconde a janela e o

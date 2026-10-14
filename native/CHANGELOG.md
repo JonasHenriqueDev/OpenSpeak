@@ -1,3 +1,15 @@
+# OpenSpeak 1.0.6 — bandeja do sistema
+
+- Ícone na bandeja do Windows, como no Discord: o X esconde a janela e o
+  OpenSpeak continua rodando, com transmissões e streams assistidos ativos.
+- Clique no ícone para reabrir; com o botão direito: abrir, parar transmissão,
+  silenciar streams assistidos, preferências e **Sair do OpenSpeak**.
+- Nova tela de **Preferências**: minimizar para a bandeja ao fechar (ligado por
+  padrão), iniciar com o Windows e iniciar minimizado na bandeja.
+- Abrir o app de novo traz de volta a janela que está na bandeja, em vez de
+  abrir uma segunda cópia.
+- O picture-in-picture continua na tela quando o app é minimizado.
+
 # OpenSpeak 1.0.5 — prévia de janelas minimizadas
 
 - No seletor de fonte, janelas minimizadas mostram o último quadro, como no

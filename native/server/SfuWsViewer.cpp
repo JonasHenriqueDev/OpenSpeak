@@ -125,9 +125,13 @@ void SfuWsViewer::flush()
 
 QJsonObject SfuWsViewer::mediaSnapshot() const
 {
+    // Mesmos campos das sessões WebRTC (SfuEgress): o monitor lê mediaRxBytes/mediaTxBytes.
     return {
+        {"state", "connected"},
+        {"connectionType", "websocket"},
         {"transport", "websocket"},
-        {"txBytes", double(m_sink->sentBytes.load())},
+        {"mediaRxBytes", 0},
+        {"mediaTxBytes", double(m_sink->sentBytes.load())},
         {"droppedVideoPackets", double(m_sink->dropped())},
         {"congestions", double(m_sink->congestions.load())},
     };

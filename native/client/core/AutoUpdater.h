@@ -18,6 +18,8 @@ class AutoUpdater : public QObject {
     Q_PROPERTY(bool installed READ installed CONSTANT)
     Q_PROPERTY(QString newVersion READ newVersion NOTIFY changed)
     Q_PROPERTY(bool startupBusy READ startupBusy NOTIFY changed)
+    Q_PROPERTY(QString edition READ edition CONSTANT)
+    Q_PROPERTY(QString targetEdition READ targetEdition NOTIFY changed)
 public:
     explicit AutoUpdater(Settings *settings, QObject *parent = nullptr);
     QString version() const;
@@ -28,6 +30,10 @@ public:
     virtual bool installed() const;
     bool startupBusy() const { return m_startupBusy; }
     QString newVersion() const { return m_offer.value("version").toString(); }
+    /// Edição desta instalação, lida de edition.txt ao lado do .exe (sem o arquivo: "full").
+    static QString installedEdition();
+    QString edition() const { return m_edition; }
+    QString targetEdition() const;
     Q_INVOKABLE void check();
     Q_INVOKABLE void downloadUpdate();
     Q_INVOKABLE void downloadAndInstall();
@@ -53,6 +59,8 @@ private:
     bool m_installAfterDownload = false;
     bool m_busy = false, m_manualInstall = false;
     bool m_previousAuto, m_previousPre;
+    QString m_previousEdition;
+    QString m_edition = installedEdition();
     int m_generation = 0;
 };
 }

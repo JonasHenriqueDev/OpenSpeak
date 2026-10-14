@@ -26,6 +26,7 @@ class Settings : public QObject {
     Q_PROPERTY(bool automaticUpdates READ automaticUpdates WRITE setAutomaticUpdates NOTIFY changed)
     Q_PROPERTY(bool pipPinned READ pipPinned WRITE setPipPinned NOTIFY changed)
     Q_PROPERTY(bool prereleaseUpdates READ prereleaseUpdates WRITE setPrereleaseUpdates NOTIFY changed)
+    Q_PROPERTY(QString updateEdition READ updateEdition WRITE setUpdateEdition NOTIFY changed)
 public:
     explicit Settings(const QString &profile, bool debug, QObject *parent = nullptr);
 
@@ -58,6 +59,9 @@ public:
     void setPipPinned(bool v) { set("pipPinned", v); }
     bool prereleaseUpdates() const { return value("prereleaseUpdates", false).toBool(); }
     void setPrereleaseUpdates(bool v) { set("prereleaseUpdates", v); }
+    /// Edição recebida nas atualizações: "lite", "full" ou vazio (a instalada).
+    QString updateEdition() const { return value("updateEdition").toString(); }
+    void setUpdateEdition(const QString &v) { set("updateEdition", v); }
 
     Q_INVOKABLE bool isContact(const QString &uid) const { return contacts().contains(uid); }
     Q_INVOKABLE void toggleContact(const QString &uid);

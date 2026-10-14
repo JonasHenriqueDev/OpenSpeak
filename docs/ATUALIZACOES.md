@@ -22,6 +22,11 @@ No botão com ícone de download na barra da janela:
   as consultas periódicas; a verificação ao abrir ocorre sempre.
 - **Receber pré-releases**: desabilitado por padrão. Desligado recebe somente
   releases estáveis. Ligado recebe a versão mais nova entre releases e pré-releases.
+- **Edição**: **Lite** (padrão) é só o cliente do servidor, com streams P2P
+  direto ou pelo servidor (SFU). **Completa** inclui também Tailscale, sala web
+  e servidor dedicado. Escolher a outra edição baixa e instala o instalador dela
+  como uma atualização (mesma versão ou mais nova, nunca mais antiga). As duas
+  usam a mesma pasta e as mesmas configurações.
 - **Verificar agora**: consulta manual. Atualizações encontradas durante o uso
   ficam para a próxima abertura, sem interromper conexões ou transmissões.
 - **Baixar atualização**: apenas baixa e valida. Para antecipar uma atualização
@@ -48,9 +53,12 @@ manual da 1.0.0 para receber o mecanismo automático.
 1. Atualize as versões do projeto e compile/teste antes da publicação.
 2. Execute `native/package.ps1 -Version <versão>`. O parâmetro é repassado ao
    build para que a versão informada pelo app corresponda ao instalador.
-3. Publique na release os dois nomes do mesmo instalador:
-   `OpenSpeak-Setup-<versão>.exe` e **`OpenSpeak-Setup.exe`**. O nome fixo mantém
-   o link web funcionando em todas as releases estáveis.
+3. Publique na release os instaladores das duas edições, cada um com o nome
+   versionado e o fixo: `OpenSpeak-Setup-<versão>.exe` e **`OpenSpeak-Setup.exe`**
+   (lite, padrão) e `OpenSpeak-Full-Setup-<versão>.exe` e
+   **`OpenSpeak-Full-Setup.exe`** (completa). O nome fixo mantém o link web
+   funcionando em todas as releases estáveis. O app de cada edição só aceita
+   o instalador da edição escolhida.
 4. Releases de produção usam tags como `v1.0.1`, com pré-release desmarcado.
    Versões de teste usam tags como `v1.1.0-beta.1` e pré-release marcado.
 5. Use `native/package.ps1 -Version 1.1.0-beta.1` para que os clientes desse

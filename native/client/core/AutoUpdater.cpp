@@ -30,7 +30,8 @@ QNetworkRequest requestFor(const QUrl &url) {
 }
 AutoUpdater::AutoUpdater(Settings *settings, QObject *parent)
     : QObject(parent), m_settings(settings), m_network(this),
-      m_previousAuto(settings->automaticUpdates()), m_previousPre(settings->prereleaseUpdates()) {
+      m_previousAuto(settings->automaticUpdates()), m_previousPre(settings->prereleaseUpdates()),
+      m_previousEdition(settings->updateEdition()) {
     connect(settings, &Settings::changed, this, &AutoUpdater::settingsChanged);
     m_timer.setInterval(6 * 60 * 60 * 1000);
     connect(&m_timer, &QTimer::timeout, this, [this] { if (m_settings->automaticUpdates()) check(); });
@@ -40,6 +41,14 @@ AutoUpdater::AutoUpdater(Settings *settings, QObject *parent)
     QTimer::singleShot(1000, this, &AutoUpdater::check);
 }
 QString AutoUpdater::version() const { return QStringLiteral(OPENSPEAK_VERSION); }
+QString AutoUpdater::installedEdition() {
+    QFile file(QCoreApplication::applicationDirPath() + QStringLiteral("/edition.txt"));
+    return file.open(QIODevice::ReadOnly) ? normalizeEdition(QString::fromLatin1(file.read(16))) : QStringLiteral("full");
+}
+QString AutoUpdater::targetEdition() const {
+    const QString chosen = m_settings->updateEdition();
+    return chosen.isEmpty() ? m_edition : normalizeEdition(chosen);
+}
 bool AutoUpdater::installed() const { return QFileInfo::exists(QCoreApplication::applicationDirPath() + QStringLiteral("/unins000.exe")); }
 void AutoUpdater::setStatus(const QString &status, bool busy) { m_status = status; m_busy = busy; emit changed(); }
 void AutoUpdater::fail(const QString &status) {
@@ -48,12 +57,15 @@ void AutoUpdater::fail(const QString &status) {
     setStatus(status);
 }
 void AutoUpdater::settingsChanged() {
-    if (m_previousAuto == m_settings->automaticUpdates() && m_previousPre == m_settings->prereleaseUpdates()) return;
+    if (m_previousAuto == m_settings->automaticUpdates() && m_previousPre == m_settings->prereleaseUpdates()
+        && m_previousEdition == m_settings->updateEdition()) return;
+    const bool editionChanged = m_previousEdition != m_settings->updateEdition();
     m_previousAuto = m_settings->automaticUpdates(); m_previousPre = m_settings->prereleaseUpdates();
+    m_previousEdition = m_settings->updateEdition();
     ++m_generation;
     if (m_reply) m_reply->abort();
     m_readyFile.clear(); m_offer = {}; m_busy = false; m_installAfterDownload = false;
-    if (m_previousAuto || m_startupBusy) check();
+    if (m_previousAuto || m_startupBusy || editionChanged) check();
     else setStatus(QStringLiteral("Verificação periódica desativada. O app verifica ao abrir."));
 }
 void AutoUpdater::check() {
@@ -83,15 +95,21 @@ void AutoUpdater::check() {
     });
 }
 void AutoUpdater::handleReleaseDocument(const QJsonDocument &doc) {
-        m_offer = selectInstallerRelease(doc.isArray() ? doc.array() : QJsonArray{doc.object()}, m_settings->prereleaseUpdates());
+        const QString target = targetEdition();
+        const bool switching = target != m_edition;
+        m_offer = selectInstallerRelease(doc.isArray() ? doc.array() : QJsonArray{doc.object()}, m_settings->prereleaseUpdates(), target);
         if (m_offer.isEmpty()) {
             fail(QStringLiteral("Não há um instalador verificado disponível neste canal.")); return;
         }
-        if (compareReleaseVersions(m_offer.value("version").toString(), version()) <= 0) {
+        // Trocar de edição reinstala a mesma versão; nunca faz downgrade.
+        const int order = compareReleaseVersions(m_offer.value("version").toString(), version());
+        if (order < 0 || (order == 0 && !switching)) {
             m_offer = {}; m_startupBusy = false;
             setStatus(QStringLiteral("OpenSpeak %1 está atualizado neste canal.").arg(version())); return;
         }
-        setStatus(QStringLiteral("Nova versão %1 disponível.").arg(m_offer.value("version").toString()));
+        m_offer.insert("edition", target);
+        setStatus(switching ? QStringLiteral("OpenSpeak %1 %2 disponível.").arg(target == QLatin1String("full") ? QStringLiteral("completo") : QStringLiteral("lite"), newVersion())
+                            : QStringLiteral("Nova versão %1 disponível.").arg(newVersion()));
         if (m_startupBusy && installed()) downloadAndInstall();
         else {
             m_startupBusy = false;
@@ -101,7 +119,7 @@ void AutoUpdater::handleReleaseDocument(const QJsonDocument &doc) {
 }
 void AutoUpdater::downloadUpdate() {
     if (m_busy || m_offer.isEmpty() || !installed()) return;
-    const QString file = cachePath() + QStringLiteral("/OpenSpeak-Setup-%1.exe").arg(m_offer.value("version").toString());
+    const QString file = cachePath() + QLatin1Char('/') + m_offer.value("filename").toString();
     const QString digest = m_offer.value("sha256").toString();
     const QString newVersion = m_offer.value("version").toString();
     if (verifyInstallerDigest(file, digest)) {
@@ -160,7 +178,7 @@ void AutoUpdater::installOnExit() {
 int AutoUpdater::runInstallHelper(const QString &file, const QString &sha256, quint32 parentPid, bool restart) {
 #ifdef Q_OS_WIN
     const QFileInfo info(file);
-    if (info.absolutePath() != QDir(cachePath()).absolutePath() || !info.fileName().startsWith(QLatin1String("OpenSpeak-Setup-"))
+    if (info.absolutePath() != QDir(cachePath()).absolutePath() || !info.fileName().startsWith(QLatin1String("OpenSpeak-"))
         || !info.fileName().endsWith(QLatin1String(".exe")) || !verifyInstallerDigest(file, sha256)) return 1;
     if (HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, parentPid)) {
         const auto result = WaitForSingleObject(process, 90'000); CloseHandle(process);

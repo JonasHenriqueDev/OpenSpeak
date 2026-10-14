@@ -25,6 +25,11 @@ function installerLink(compact = false) {
     'aria-label': 'Download App — OpenSpeak para Windows, última versão estável', class: compact ? 'compact' : '' },
     'Download App');
 }
+const REPO_URL = 'https://github.com/JonasHenriqueDev/OpenSpeak';
+function repoLink() {
+  return h('a.repo-link', { href: REPO_URL, target: '_blank', rel: 'noopener noreferrer',
+    title: 'Código-fonte no GitHub', 'aria-label': 'Repositório do OpenSpeak no GitHub' }, icon('github'));
+}
 
 const root = document.getElementById('app');
 const toasts = new Toasts();
@@ -109,7 +114,8 @@ function renderLogin(message = '') {
   deployment.cloudSignaling ? h('button.btn.ghost', { type: 'button', on: { click: detectIp } }, 'Detectar IP automaticamente') : null,
   submit,
   status,
-  installerLink());
+  installerLink(),
+  repoLink());
   replaceChildren(root, h('div.login', form));
   nick.focus();
   if (deployment.cloudSignaling) void detectIp();
@@ -167,6 +173,7 @@ class App {
           h('span.spacer'),
           this.statusBar,
           installerLink(true),
+          repoLink(),
           h('button.btn.ghost.small', { title: t('app.settings'), on: { click: ev => this.#settingsPopover(ev.currentTarget) } }, icon('settings')),
           h('button.btn.ghost.small', { on: { click: () => hd.disconnect() } }, icon('leave'), t('app.disconnect'))),
         h('div.app-body',

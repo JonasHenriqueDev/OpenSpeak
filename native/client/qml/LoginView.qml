@@ -44,7 +44,7 @@ Rectangle {
     function tryAuto() {
         if (!AutoConnect || autoTried || !Settings.nickname.length) return
         if (Settings.connectionMode === "server") { autoTried = true; enterServer() }
-        else if (Settings.connectionMode === "tailnet" && tailnetReady) { autoTried = true; enterTailnet() }
+        else if (Settings.connectionMode === "tailnet" && tailnetReady && !LiteEdition) { autoTried = true; enterTailnet() }
     }
     onMessageChanged: if (message !== I18n.t("app.connecting")) busy = false
     onTailnetReadyChanged: tryAuto()
@@ -99,6 +99,7 @@ Rectangle {
                 }
                 Button {
                     objectName: "advancedToggle"
+                    visible: !LiteEdition
                     flat: true
                     text: (root.advancedExpanded ? "▾  " : "▸  ") + "Avançado"
                     onClicked: root.advancedExpanded = !root.advancedExpanded
@@ -106,7 +107,7 @@ Rectangle {
                 ColumnLayout {
                     objectName: "advancedOptions"
                     Layout.fillWidth: true
-                    visible: root.advancedExpanded
+                    visible: root.advancedExpanded && !LiteEdition
                     spacing: 10
                     Rectangle {
                         Layout.fillWidth: true

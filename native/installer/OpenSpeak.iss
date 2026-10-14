@@ -2,11 +2,28 @@
 ; Gerado por native/package.ps1 — que monta native/dist/OpenSpeak antes.
 
 #ifndef AppVersion
-  #define AppVersion "1.0.2"
+  #define AppVersion "1.0.3"
+#endif
+#ifndef Edition
+  #define Edition "lite"
 #endif
 #define AppName "OpenSpeak"
 #define AppExe "OpenSpeak.exe"
-#define Staging "..\dist\OpenSpeak"
+#ifndef Staging
+  #if Edition == "full"
+    #define Staging "..\dist\OpenSpeak"
+  #else
+    #define Staging "..\dist\lite\OpenSpeak"
+  #endif
+#endif
+; Mesmo AppId nas duas edições: trocar de edição atualiza a instalação existente.
+#if Edition == "full"
+  #define SetupName "OpenSpeak-Full-Setup"
+  #define AppVerName "OpenSpeak " + AppVersion
+#else
+  #define SetupName "OpenSpeak-Setup"
+  #define AppVerName "OpenSpeak Lite " + AppVersion
+#endif
 #ifndef AppId
   #define AppId "{{6F1B4F0A-0E2C-4C1B-9E7A-0F5E2B1C9D11}"
 #endif
@@ -15,6 +32,7 @@
 AppId={#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
+AppVerName={#AppVerName}
 AppPublisher=OpenSpeak
 AppPublisherURL=https://github.com/JonasHenriqueDev/OpenSpeak
 DefaultDirName={localappdata}\Programs\{#AppName}
@@ -23,7 +41,7 @@ DisableDirPage=yes
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 OutputDir=..\dist
-OutputBaseFilename=OpenSpeak-Setup-{#AppVersion}
+OutputBaseFilename={#SetupName}-{#AppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -43,9 +61,20 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#Staging}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+#if Edition != "full"
+[InstallDelete]
+; Ao trocar da edição completa para a lite, remove o que só a completa instala.
+Type: files; Name: "{app}\openspeak-server.exe"
+Type: files; Name: "{app}\Qt6HttpServer.dll"
+Type: filesandordirs; Name: "{app}\public"
+Type: files; Name: "{group}\Servidor dedicado OpenSpeak.lnk"
+#endif
+
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"
+#if Edition == "full"
 Name: "{group}\Servidor dedicado OpenSpeak"; Filename: "{app}\openspeak-server.exe"; Parameters: "--port 9988"
+#endif
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 

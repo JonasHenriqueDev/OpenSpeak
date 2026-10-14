@@ -19,7 +19,7 @@ ApplicationWindow {
         color: Theme.contrast
         MouseArea {
             anchors.fill: parent
-            anchors.rightMargin: 174
+            anchors.rightMargin: 210
             onPressed: window.startSystemMove()
             onDoubleClicked: window.toggleMaximized()
         }
@@ -30,6 +30,19 @@ ApplicationWindow {
             Icon { name: "logo"; size: 16; color: Theme.accent }
             Label { text: "OpenSpeak"; color: Theme.textDim; font.pixelSize: 12; font.weight: Font.DemiBold }
             Item { Layout.fillWidth: true }
+            ToolButton {
+                id: repoButton
+                objectName: "repoLink"
+                Layout.preferredWidth: 36
+                Layout.preferredHeight: 34
+                Accessible.name: "Repositório do OpenSpeak no GitHub"
+                ToolTip.visible: hovered
+                ToolTip.text: "Código-fonte no GitHub"
+                contentItem: Item {
+                    Icon { anchors.centerIn: parent; name: "github"; size: 14; color: repoButton.hovered ? Theme.textDim : Theme.textFaint }
+                }
+                onClicked: Qt.openUrlExternally("https://github.com/JonasHenriqueDev/OpenSpeak")
+            }
             ToolButton {
                 Layout.preferredWidth: 36
                 Layout.preferredHeight: 34
@@ -78,7 +91,7 @@ ApplicationWindow {
     Dialog {
         id: updatesDialog
         objectName: "updatesDialog"
-        title: "Atualizações · OpenSpeak " + Updater.version
+        title: "Atualizações · OpenSpeak " + Updater.version + (Updater.edition === "lite" ? " Lite" : "")
         anchors.centerIn: parent
         width: Math.min(480, window.width - 40)
         modal: true
@@ -98,6 +111,26 @@ ApplicationWindow {
             }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
                 text: Settings.prereleaseUpdates ? "Canal pré: releases estáveis e versões de teste mais novas." : "Canal estável: recebe somente releases, sem pré-releases." }
+            Label { text: "Edição"; color: Theme.textDim }
+            RowLayout {
+                objectName: "editionChoice"
+                spacing: 16
+                RadioButton {
+                    text: "Lite"
+                    checked: Updater.targetEdition === "lite"
+                    onClicked: Settings.updateEdition = "lite"
+                }
+                RadioButton {
+                    text: "Completa"
+                    checked: Updater.targetEdition === "full"
+                    onClicked: Settings.updateEdition = "full"
+                }
+            }
+            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
+                text: (Updater.targetEdition === "lite"
+                       ? "Lite: cliente do servidor, com streams P2P ou pelo servidor (SFU)."
+                       : "Completa: inclui também Tailscale, sala web e servidor dedicado.")
+                      + (Updater.targetEdition !== Updater.edition ? " A troca é instalada como atualização." : "") }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: Updater.status }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
                 text: Updater.installed ? "Ao abrir, o app baixa e instala atualizações automaticamente antes de conectar. A instalação por usuário preserva suas configurações." : "O app verifica ao abrir. Na versão portátil, baixe o novo instalador ou pacote na página de downloads." }

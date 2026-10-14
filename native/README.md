@@ -32,13 +32,24 @@ cd native && D:/Dev/vcpkg/vcpkg.exe install --triplet x64-windows-static-md --x-
 
 ## Instalar
 
-Baixe e rode `OpenSpeak-Setup-<versão>.exe`. O instalador já traz o Qt, o FFmpeg, o
+Há duas edições, com o mesmo `OpenSpeak.exe`:
+
+- **Lite** (padrão), `OpenSpeak-Setup-<versão>.exe`: cliente do servidor, com
+  streams P2P direto ou pelo servidor (SFU).
+- **Completa**, `OpenSpeak-Full-Setup-<versão>.exe`: inclui também o modo
+  Tailnet, a sala web e o servidor dedicado (`openspeak-server.exe`).
+
+A edição vem de `edition.txt` ao lado do `.exe` (sem o arquivo, o app roda como
+completa). Em **Atualizações** dá para trocar de edição.
+
+Baixe e rode o instalador. Ele já traz o Qt, o FFmpeg, o
 WebRTC e o runtime do Visual C++, além de liberar o app no firewall. A conexão
 via servidor não exige Tailscale. O [Tailscale](https://tailscale.com/download/windows)
 é necessário somente para os modos avançados de tailnet e sala web.
 
 Para gerar o instalador, rode o comando abaixo. Ele compila, testa e cria
-`native/dist/OpenSpeak-Setup-<versão>.exe`.
+`native/dist/OpenSpeak-Setup-<versão>.exe` (lite) e
+`native/dist/OpenSpeak-Full-Setup-<versão>.exe` (completa).
 
 ```bash
 powershell -ExecutionPolicy Bypass -File native/package.ps1

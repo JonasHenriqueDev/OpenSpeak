@@ -56,6 +56,11 @@ p { margin: 0; }
 .desktop-download:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .desktop-download.compact { display: inline-flex; min-height: 28px; margin: 0 8px; padding: 4px 10px; font-size: 12px; white-space: nowrap; }
 @media (max-width: 600px) { .desktop-download.compact { font-size: 11px; margin: 0 3px; } }
+.repo-link { display: inline-flex; align-self: center; padding: 4px; margin: 0 4px; border-radius: var(--radius-sm); color: var(--text-faint); opacity: .7; transition: color .15s, opacity .15s; }
+.repo-link .icon { width: 16px; height: 16px; }
+.repo-link:hover { color: var(--text); opacity: 1; }
+.repo-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; opacity: 1; }
+.login-card > .repo-link { margin: 2px auto 0; }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .row { display: flex; gap: 8px; align-items: center; }
 .tag {

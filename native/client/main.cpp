@@ -82,9 +82,13 @@ int main(int argc, char *argv[])
     if (parser.isSet(nickOpt))
         settings.setNickname(parser.value(nickOpt));
     ConnectionHandler handler;
-    // Modo padrão: descoberta dos pares pela tailnet (sem servidor).
-    const quint16 meshPort = parser.isSet(meshPortOpt) ? quint16(parser.value(meshPortOpt).toUInt()) : MeshConnection::DefaultPort;
-    handler.setDirectory(new TailscaleDirectory(meshPort, &handler));
+    // Edição lite: só cliente do servidor (streams P2P ou SFU), sem Tailscale nem sala web.
+    const bool lite = updater.edition() == QLatin1String("lite");
+    if (!lite) {
+        // Modos avançados: descoberta dos pares pela tailnet (sem servidor).
+        const quint16 meshPort = parser.isSet(meshPortOpt) ? quint16(parser.value(meshPortOpt).toUInt()) : MeshConnection::DefaultPort;
+        handler.setDirectory(new TailscaleDirectory(meshPort, &handler));
+    }
     ScreenshareManager screenshare(&handler, &settings);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &handler, &ConnectionHandler::disconnectFromServer);
     if (parser.isSet(quitOpt) && settings.debug())
@@ -103,6 +107,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("AutoConnect"), parser.isSet(autoOpt) && !parser.isSet(cloudOpt));
     engine.rootContext()->setContextProperty(QStringLiteral("DebugOpen"), parser.value(openOpt));
     engine.rootContext()->setContextProperty(QStringLiteral("UiSmoke"), parser.isSet(uiSmokeOpt));
+    engine.rootContext()->setContextProperty(QStringLiteral("LiteEdition"), lite);
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
                      Qt::QueuedConnection);
     engine.loadFromModule(QStringLiteral("OpenSpeak"), QStringLiteral("Main"));
@@ -174,7 +179,7 @@ int main(int argc, char *argv[])
                 screenshare.joinStream(handler.streams().firstKey());
         });
     }
-    if (parser.isSet(cloudOpt)) {
+    if (parser.isSet(cloudOpt) && !lite) {
         auto *directory = handler.directory();
         auto *cloudTimer = new QTimer(&app);
         cloudTimer->setInterval(500);

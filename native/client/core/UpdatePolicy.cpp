@@ -18,6 +18,12 @@ QString cleanVersion(QString version) {
     return version.section('+', 0, 0);
 }
 }
+QString normalizeEdition(const QString &edition) {
+    return edition.trimmed().compare(QLatin1String("full"), Qt::CaseInsensitive) == 0 ? QStringLiteral("full") : QStringLiteral("lite");
+}
+QString installerPrefix(const QString &edition) {
+    return normalizeEdition(edition) == QLatin1String("full") ? QStringLiteral("OpenSpeak-Full-Setup") : QStringLiteral("OpenSpeak-Setup");
+}
 bool validReleaseVersion(const QString &version) {
     static const QRegularExpression pattern(QStringLiteral("^v?[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\\+[0-9A-Za-z.-]+)?$"));
     return pattern.match(version).hasMatch();
@@ -39,7 +45,8 @@ int compareReleaseVersions(const QString &a, const QString &b) {
     }
     return aa.size() == ba.size() ? 0 : aa.size() < ba.size() ? -1 : 1;
 }
-QJsonObject selectInstallerRelease(const QJsonArray &releases, bool allowPrereleases) {
+QJsonObject selectInstallerRelease(const QJsonArray &releases, bool allowPrereleases, const QString &edition) {
+    const QString prefix = installerPrefix(edition);
     QJsonObject best;
     static const QRegularExpression digestPattern(QStringLiteral("^sha256:[0-9a-fA-F]{64}$"));
     for (const auto &value : releases) {
@@ -49,12 +56,12 @@ QJsonObject selectInstallerRelease(const QJsonArray &releases, bool allowPrerele
         if (release.value("draft").toBool() || (!allowPrereleases && pre) || !validReleaseVersion(tag)) continue;
         if (!best.isEmpty() && compareReleaseVersions(tag, best.value("version").toString()) <= 0) continue;
         QJsonObject chosen;
-        const QString filename = QStringLiteral("OpenSpeak-Setup-%1.exe").arg(tag.startsWith('v') ? tag.mid(1) : tag);
+        const QString filename = QStringLiteral("%1-%2.exe").arg(prefix, tag.startsWith('v') ? tag.mid(1) : tag);
         for (const auto &assetValue : release.value("assets").toArray()) {
             const auto asset = assetValue.toObject();
             const auto name = asset.value("name").toString();
             const QUrl url(asset.value("browser_download_url").toString());
-            if (name != filename && name != QLatin1String("OpenSpeak-Setup.exe")) continue;
+            if (name != filename && name != prefix + QLatin1String(".exe")) continue;
             if (asset.value("state").toString() != QLatin1String("uploaded") || !digestPattern.match(asset.value("digest").toString()).hasMatch()) continue;
             if (url.scheme() != QLatin1String("https") || url.host() != QLatin1String("github.com") || !url.userInfo().isEmpty()
                 || !url.path().startsWith(QLatin1String("/JonasHenriqueDev/OpenSpeak/releases/download/"))) continue;
@@ -63,7 +70,7 @@ QJsonObject selectInstallerRelease(const QJsonArray &releases, bool allowPrerele
         }
         if (!chosen.isEmpty()) best = {{"version", tag.startsWith('v') ? tag.mid(1) : tag}, {"prerelease", pre},
             {"url", chosen.value("browser_download_url")}, {"sha256", chosen.value("digest").toString().mid(7).toLower()},
-            {"size", chosen.value("size")}};
+            {"size", chosen.value("size")}, {"filename", filename}};
     }
     return best;
 }

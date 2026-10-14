@@ -1,3 +1,18 @@
+# OpenSpeak 1.0.3 — edição lite e picture-in-picture
+
+- Nova edição **Lite**, agora a padrão (`OpenSpeak-Setup.exe`): somente o cliente
+  do servidor, com streams P2P direto ou pelo servidor (SFU). Não traz Tailscale,
+  sala web nem servidor dedicado.
+- A edição **Completa** continua disponível (`OpenSpeak-Full-Setup.exe`). Em
+  Atualizações, escolha **Lite** ou **Completa**; a troca é instalada como
+  atualização e preserva as configurações.
+- Botão **Picture-in-picture** na barra de cada stream: abre uma janela pequena,
+  sem borda, arrastável e redimensionável, no canto inferior direito da tela.
+- Fixada por padrão por cima de todos os apps; o botão de alfinete alterna e a
+  escolha fica salva.
+- Controles ao passar o mouse: pausar/parar no seu stream, volume/sair nos outros.
+  Duplo clique ou Esc voltam para a janela do app.
+
 # OpenSpeak 1.0.2 — atualização automática ao abrir
 
 - Verifica o canal selecionado em toda abertura, antes de conectar. Uma versão

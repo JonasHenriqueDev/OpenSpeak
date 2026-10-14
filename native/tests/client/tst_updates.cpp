@@ -11,9 +11,10 @@ using namespace openspeak;
 namespace openspeak {
 class TestUpdaterStartup : public QObject {
     Q_OBJECT
-    static QJsonObject release(QString tag, bool pre = false, QString digest = QStringLiteral("sha256:") + QString(64, 'a')) {
+    static QJsonObject release(QString tag, bool pre = false, QString digest = QStringLiteral("sha256:") + QString(64, 'a'),
+                               QString prefix = QStringLiteral("OpenSpeak-Setup-")) {
         const auto version = tag.mid(1);
-        const QString name = "OpenSpeak-Setup-" + version + ".exe";
+        const QString name = prefix + version + ".exe";
         return {{"tag_name", tag}, {"prerelease", pre}, {"draft", false}, {"assets", QJsonArray{QJsonObject{
             {"name", name}, {"size", 123}, {"state", "uploaded"}, {"digest", digest},
             {"browser_download_url", "https://github.com/JonasHenriqueDev/OpenSpeak/releases/download/" + tag + "/" + name}}}}};
@@ -24,6 +25,7 @@ private slots:
         Settings settings(QStringLiteral("update-startup-test"), true);
         settings.setAutomaticUpdates(false);
         settings.setPrereleaseUpdates(false);
+        settings.setUpdateEdition(QString());
         class InstalledUpdater : public AutoUpdater {
         public:
             using AutoUpdater::AutoUpdater;
@@ -41,6 +43,7 @@ private slots:
         QVERIFY(file.open(QIODevice::WriteOnly));
         QCOMPARE(file.write(bytes), qint64(bytes.size())); file.close();
         InstalledUpdater startup(&settings);
+        startup.m_edition = QStringLiteral("lite");
         QVERIFY(startup.startupBusy());
         startup.handleReleaseDocument(QJsonDocument(release("v99.0.0", false, digest)));
         QCOMPARE(startup.installations, 1);
@@ -49,6 +52,7 @@ private slots:
         QVERIFY(startup.m_reply.isNull()); // Validated cache, no redundant download.
         QVERIFY(startup.startupBusy()); // Login stays blocked until restart.
         InstalledUpdater duringUse(&settings);
+        duringUse.m_edition = QStringLiteral("lite");
         duringUse.m_startupBusy = false;
         duringUse.handleReleaseDocument(QJsonDocument(release("v99.0.0", false, digest)));
         QCOMPARE(duringUse.installations, 0); // Never interrupt an active session.
@@ -59,7 +63,9 @@ private slots:
         Settings settings(QStringLiteral("update-startup-test"), true);
         settings.setAutomaticUpdates(false);
         settings.setPrereleaseUpdates(false);
+        settings.setUpdateEdition(QString());
         AutoUpdater updater(&settings);
+        updater.m_edition = QStringLiteral("lite");
         updater.handleReleaseDocument(QJsonDocument(release("v" + updater.version())));
         QVERIFY(!updater.available());
         QVERIFY(!updater.startupBusy());
@@ -69,10 +75,43 @@ private slots:
         QVERIFY(!failed.busy());
         QVERIFY(!failed.m_installAfterDownload);
         AutoUpdater portable(&settings);
+        portable.m_edition = QStringLiteral("lite");
         portable.handleReleaseDocument(QJsonDocument(QJsonArray{release("v100.0.0-beta.1", true), release("v99.0.0")}));
         QCOMPARE(portable.newVersion(), QStringLiteral("99.0.0"));
         QVERIFY(!portable.startupBusy());
         QVERIFY(!portable.m_manualInstall);
+    }
+    void editionsUseTheirOwnInstallers() {
+        const QString full = QStringLiteral("OpenSpeak-Full-Setup-");
+        const QString digest = QStringLiteral("sha256:") + QString(64, 'a');
+        auto both = release("v1.2.0");
+        auto assets = both.value("assets").toArray();
+        assets.append(release("v1.2.0", false, digest, full).value("assets").toArray().at(0));
+        both["assets"] = assets;
+        QCOMPARE(selectInstallerRelease(QJsonArray{both}, false, "lite").value("filename").toString(), QStringLiteral("OpenSpeak-Setup-1.2.0.exe"));
+        QCOMPARE(selectInstallerRelease(QJsonArray{both}, false, "full").value("filename").toString(), QStringLiteral("OpenSpeak-Full-Setup-1.2.0.exe"));
+        QVERIFY(selectInstallerRelease(QJsonArray{release("v1.2.0")}, false, "full").isEmpty());
+        QCOMPARE(normalizeEdition(QStringLiteral(" FULL ")), QStringLiteral("full"));
+        QCOMPARE(normalizeEdition("qualquer"), QStringLiteral("lite"));
+
+        Settings settings(QStringLiteral("update-edition-test"), true);
+        settings.setPrereleaseUpdates(false);
+        settings.setUpdateEdition(QStringLiteral("full"));
+        const auto cleanup = qScopeGuard([&] { settings.setUpdateEdition(QString()); });
+        AutoUpdater updater(&settings);
+        updater.m_startupBusy = false;
+        updater.m_edition = QStringLiteral("lite");
+        QCOMPARE(updater.targetEdition(), QStringLiteral("full"));
+        // Mesma versão na outra edição: reinstala para trocar de canal.
+        updater.handleReleaseDocument(QJsonDocument(release("v" + updater.version(), false, digest, full)));
+        QVERIFY(updater.available());
+        // Nunca faz downgrade ao trocar de edição.
+        updater.handleReleaseDocument(QJsonDocument(release("v0.0.1", false, digest, full)));
+        QVERIFY(!updater.available());
+        // Sem troca, a mesma versão está atualizada.
+        updater.m_edition = QStringLiteral("full");
+        updater.handleReleaseDocument(QJsonDocument(release("v" + updater.version(), false, digest, full)));
+        QVERIFY(!updater.available());
     }
     void corruptedDownloadsAreRejected() {
         QTemporaryDir directory;

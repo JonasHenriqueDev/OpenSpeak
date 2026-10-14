@@ -8,6 +8,7 @@ Group=openspeak
 ExecStart=/usr/bin/python3 /opt/openspeak-monitor/monitor.py
 Environment=OPENSPEAK_METRICS_FILE=/run/openspeak/metrics.json
 Environment=MONITOR_TIMEZONE=America/Sao_Paulo
+EnvironmentFile=-/etc/openspeak-monitor.env
 StateDirectory=openspeak-monitor
 StateDirectoryMode=0750
 Restart=always

@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import threading
 import time
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
@@ -19,6 +20,10 @@ SNAPSHOT = Path(os.environ.get('OPENSPEAK_METRICS_FILE', '/run/openspeak/metrics
 TZ = ZoneInfo(os.environ.get('MONITOR_TIMEZONE', 'America/Sao_Paulo'))
 INTERVAL = 5
 RETENTION = 7 * 86400
+NTFY_SERVER = os.environ.get('NTFY_SERVER', 'https://ntfy.sh').rstrip('/')
+NTFY_TOPIC = os.environ.get('NTFY_TOPIC', '')
+MONTHLY_EGRESS = float(os.environ.get('MONITOR_MONTHLY_EGRESS_TB', '10')) * 1e12
+LINK_MBPS = float(os.environ.get('MONITOR_LINK_MBPS', '50'))
 lock = threading.Lock()
 latest = {}
 
@@ -145,6 +150,71 @@ class ClientMetrics:
         return room
 
 
+def notify(title, message, priority=4, tags=('warning',)):
+    # JSON publish keeps UTF-8 titles intact; HTTP headers would be latin-1 only.
+    if not NTFY_TOPIC:
+        return
+    body = json.dumps({'topic': NTFY_TOPIC, 'title': title, 'message': message,
+                       'priority': priority, 'tags': list(tags)}).encode()
+
+    def post():
+        try:
+            urllib.request.urlopen(urllib.request.Request(NTFY_SERVER, data=body, method='POST',
+                                   headers={'Content-Type': 'application/json'}), timeout=10).close()
+        except OSError as exc:
+            print(f'Notification failed: {exc}', flush=True)
+    threading.Thread(target=post, daemon=True).start()
+
+
+def projected_month_egress(month_tx, now, started):
+    """Extrapolates the observed part of the month to the whole month; 0 until a day of data exists."""
+    local = dt.datetime.fromtimestamp(now, TZ)
+    month_start = local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_end = (month_start + dt.timedelta(days=32)).replace(day=1)
+    observed = (local - max(month_start, dt.datetime.fromisoformat(started))).total_seconds()
+    if observed < 86400:
+        return 0
+    return month_tx / observed * (month_end - month_start).total_seconds()
+
+
+def alert_conditions(result, now):
+    """key -> (active, seconds it must persist, title, detail)."""
+    mem, disk, net = result['memory'], result['disk'], result['network']
+    memory_percent, disk_percent = 100 * mem['used'] / mem['total'], 100 * disk['used'] / disk['total']
+    tx_mbps = net['txBytesPerSecond'] * 8 / 1e6
+    projection = projected_month_egress(net['monthTx'], now, result['collectionStarted'])
+    return {
+        'offline': (not result['room']['online'], 30, 'OpenSpeak fora do ar',
+                    'O servidor nativo não atualiza o snapshot de métricas.'),
+        'memory': (memory_percent > 90, 300, 'RAM alta', f'Uso de memória em {memory_percent:.0f}%.'),
+        'cpu': (result['cpuPercent'] > 90, 600, 'CPU alta', f'CPU em {result["cpuPercent"]:.0f}% há 10 minutos.'),
+        'disk': (disk_percent > 85, 0, 'Disco quase cheio', f'Disco em {disk_percent:.0f}%.'),
+        'bandwidth': (tx_mbps > .8 * LINK_MBPS, 120, 'Banda de saída perto do limite',
+                      f'Saída em {tx_mbps:.0f} Mbps; o limite da VM é ~{LINK_MBPS:.0f} Mbps.'),
+        'egress': (projection > .8 * MONTHLY_EGRESS, 0, 'Tráfego mensal alto',
+                   f'Projeção de saída no mês: {projection / 1e12:.1f} TB de {MONTHLY_EGRESS / 1e12:.0f} TB.'),
+    }
+
+
+class Alerts:
+    """Fires once a condition persists, repeats at most every `repeat` seconds, and reports recovery."""
+    def __init__(self, send, repeat=3600):
+        self.send, self.repeat = send, repeat
+        self.since, self.fired = {}, {}
+
+    def check(self, conditions, now):
+        for key, (active, hold, title, detail) in conditions.items():
+            if not active:
+                self.since.pop(key, None)
+                if self.fired.pop(key, None) is not None:
+                    self.send(f'Normalizado: {title}', 'A condição deixou de ocorrer.', 3, ('white_check_mark',))
+                continue
+            since = self.since.setdefault(key, now)
+            if now - since >= hold and now - self.fired.get(key, float('-inf')) >= self.repeat:
+                self.fired[key] = now
+                self.send(title, detail, 4, ('warning',))
+
+
 def initialize():
     STATE.mkdir(parents=True, exist_ok=True)
     with database() as db:
@@ -158,6 +228,7 @@ def collect():
     global latest
     previous_net, previous_cpu, previous_time = network_counters(), cpu_counters(), time.monotonic()
     client_metrics = ClientMetrics()
+    alerts = Alerts(notify)
     prune_at = 0
     while True:
         try:
@@ -192,6 +263,7 @@ def collect():
                       'collectionStarted': started, 'timezone': str(TZ)}
             with lock:
                 latest = result
+            alerts.check(alert_conditions(result, now), now)
             previous_net, previous_cpu, previous_time = net, cpu, tick
         except Exception as exc:
             print(f'Collection failed: {type(exc).__name__}: {exc}', flush=True)
@@ -243,5 +315,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     initialize()
+    notify('Monitor iniciado', f'Monitor ativo em {os.uname().nodename}. Se não foi você, a VM pode ter reiniciado.',
+           2, ('information_source',))
     threading.Thread(target=collect, daemon=True).start()
     ThreadingHTTPServer(('127.0.0.1', int(os.environ.get('PORT', '9990'))), Handler).serve_forever()

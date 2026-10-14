@@ -74,6 +74,42 @@ class MonitoringTests(unittest.TestCase):
             with monitor.database() as db:
                 self.assertEqual(db.execute('SELECT rx,tx FROM totals').fetchone(), (123, 456))
 
+    def test_alerts_wait_repeat_and_recover(self):
+        sent = []
+        alerts = monitor.Alerts(lambda title, *_: sent.append(title), repeat=3600)
+        state = lambda active: {'cpu': (active, 600, 'CPU alta', '')}
+        alerts.check(state(True), 0)
+        alerts.check(state(True), 599)
+        self.assertEqual(sent, [])
+        alerts.check(state(True), 600)
+        alerts.check(state(True), 1200)
+        self.assertEqual(sent, ['CPU alta'])
+        alerts.check(state(True), 4200)
+        self.assertEqual(sent, ['CPU alta', 'CPU alta'])
+        alerts.check(state(False), 4205)
+        alerts.check(state(False), 4210)
+        self.assertEqual(sent[-1], 'Normalizado: CPU alta')
+        self.assertEqual(len(sent), 3)
+        alerts.check(state(True), 4215)
+        alerts.check(state(False), 4220)
+        self.assertEqual(len(sent), 3)
+
+    def test_monthly_egress_projection(self):
+        tz = monitor.TZ
+        started = monitor.dt.datetime(2026, 10, 1, tzinfo=tz).isoformat()
+        now = monitor.dt.datetime(2026, 10, 11, tzinfo=tz).timestamp()
+        self.assertAlmostEqual(monitor.projected_month_egress(10e12 / 31 * 10, now, started), 10e12, delta=1e6)
+        late = monitor.dt.datetime(2026, 10, 10, 12, tzinfo=tz).isoformat()
+        self.assertEqual(monitor.projected_month_egress(1e12, now, late), 0)
+        result = {'memory': {'used': 95, 'total': 100}, 'disk': {'used': 10, 'total': 100}, 'cpuPercent': 5,
+                  'room': {'online': True}, 'collectionStarted': started,
+                  'network': {'txBytesPerSecond': 0, 'monthTx': 9e12}}
+        conditions = monitor.alert_conditions(result, now)
+        self.assertTrue(conditions['memory'][0])
+        self.assertTrue(conditions['egress'][0])
+        self.assertFalse(conditions['offline'][0])
+        self.assertFalse(conditions['disk'][0])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -75,6 +75,32 @@ valide e recarregue o Caddy. A senha do painel é independente do admin cloud/Ve
 HTTP Basic Auth usa o diálogo de credenciais do navegador e pode permanecer em
 cache até fechar a sessão do navegador.
 
+## Alertas
+
+O monitor envia notificações pelo [ntfy](https://ntfy.sh) quando `NTFY_TOPIC` está
+definido em `/etc/openspeak-monitor.env` (fora do repositório, `chmod 640`, grupo `openspeak`):
+
+```sh
+NTFY_TOPIC=<tópico-secreto>
+# Opcionais: NTFY_SERVER=https://ntfy.sh  MONITOR_MONTHLY_EGRESS_TB=10  MONITOR_LINK_MBPS=50
+```
+
+O nome do tópico funciona como senha: quem o conhece lê e publica nele.
+
+| Alerta | Condição |
+|---|---|
+| OpenSpeak fora do ar | snapshot parado ou processo ausente por 30 s |
+| RAM alta | acima de 90% por 5 min |
+| CPU alta | acima de 90% por 10 min |
+| Disco quase cheio | acima de 85% |
+| Banda de saída | acima de 80% de `MONITOR_LINK_MBPS` por 2 min |
+| Tráfego mensal | projeção do mês acima de 80% de `MONITOR_MONTHLY_EGRESS_TB` (após 1 dia de dados no mês) |
+
+Cada alerta repete no máximo uma vez por hora enquanto persistir e envia "Normalizado"
+quando a condição some. Ao iniciar, o monitor envia "Monitor iniciado" (indica reinício
+da VM ou do serviço). Alertas internos não detectam a VM inteira fora do ar; para isso
+use um verificador externo (UptimeRobot) em `https://openspeak.duckdns.org/`.
+
 Testes: `python3 monitor/test_monitor.py`, `npm test` e `ctest` do servidor nativo.
 O teste nativo `tst_sfu_e2e` valida mídia para dois espectadores, os contadores
 RTP por sessão, endpoints, identificação do cliente e participantes no snapshot.

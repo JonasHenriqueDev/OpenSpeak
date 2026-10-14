@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(OpenSpeakNative VERSION 1.0.3 LANGUAGES CXX)
+project(OpenSpeakNative VERSION 1.0.4 LANGUAGES CXX)
 set(OPENSPEAK_RELEASE_VERSION "${PROJECT_VERSION}" CACHE STRING "Versão completa, incluindo sufixo de pré-release")
 
 set(CMAKE_CXX_STANDARD 20)

@@ -1,3 +1,10 @@
+# OpenSpeak 1.0.4 — atualização visível
+
+- A instalação automática mostra a barra de progresso em vez de rodar invisível.
+  Antes, o app fechava e nada aparecia por uns 15 segundos até reabrir.
+- Abrir o app durante a instalação mostra um aviso de que ele abrirá sozinho,
+  em vez de fechar de novo ou disparar outra instalação.
+
 # OpenSpeak 1.0.3 — edição lite e picture-in-picture
 
 - Nova edição **Lite**, agora a padrão (`OpenSpeak-Setup.exe`): somente o cliente

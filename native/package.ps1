@@ -3,7 +3,7 @@
 #   .\package.ps1                # compila Release antes
 #   .\package.ps1 -SkipBuild
 param(
-    [string]$Version = '1.0.3',
+    [string]$Version = '1.0.4',
     [switch]$SkipBuild,
     [string]$QtDir = 'C:\Qt\6.11.3\msvc2022_64'
 )

@@ -186,7 +186,8 @@ int AutoUpdater::runInstallHelper(const QString &file, const QString &sha256, qu
     }
     if (!verifyInstallerDigest(file, sha256)) return 1;
     // Não encerra outras instâncias nem reinicia o Windows. A elevação fica a cargo do UAC.
-    const QString args = QStringLiteral("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS /NORESTARTAPPLICATIONS /UPDATE=1 /RELAUNCH=%1").arg(restart ? 1 : 0);
+    // /SILENT mostra só a barra de progresso: o app fecha e a instalação fica visível.
+    const QString args = QStringLiteral("/SILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS /NORESTARTAPPLICATIONS /UPDATE=1 /RELAUNCH=%1").arg(restart ? 1 : 0);
     const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", reinterpret_cast<LPCWSTR>(file.utf16()),
         reinterpret_cast<LPCWSTR>(args.utf16()), nullptr, SW_HIDE));
     return result > 32 ? 0 : 1;

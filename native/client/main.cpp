@@ -24,6 +24,9 @@
 #include <QQuickWindow>
 #include <QQuickItem>
 #include <QTimer>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 using namespace openspeak;
 
@@ -65,10 +68,23 @@ int main(int argc, char *argv[])
     QCommandLineOption digestOpt(QStringLiteral("update-sha256"), QStringLiteral("SHA-256 do instalador."), QStringLiteral("hash"));
     QCommandLineOption waitPidOpt(QStringLiteral("wait-pid"), QStringLiteral("Processo que precisa encerrar antes da atualização."), QStringLiteral("pid"));
     QCommandLineOption restartOpt(QStringLiteral("restart-after-update"), QStringLiteral("Reabre o app após atualização solicitada."));
-    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt, cloudOpt, quitOpt, updateOpt, digestOpt, waitPidOpt, restartOpt});
+    QCommandLineOption afterUpdateOpt(QStringLiteral("after-update"), QStringLiteral("Aberto pelo instalador ao fim da atualização."));
+    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt, cloudOpt, quitOpt, updateOpt, digestOpt, waitPidOpt, restartOpt, afterUpdateOpt});
     parser.process(app);
     if (parser.isSet(updateOpt))
         return AutoUpdater::runInstallHelper(parser.value(updateOpt), parser.value(digestOpt), parser.value(waitPidOpt).toUInt(), parser.isSet(restartOpt));
+#ifdef Q_OS_WIN
+    // O instalador segura este mutex (SetupMutex) enquanto roda. Aberto no meio da
+    // atualização, o app não usaria arquivos pela metade nem dispararia outra instalação.
+    if (!parser.isSet(afterUpdateOpt)) {
+        if (HANDLE setup = OpenMutexW(SYNCHRONIZE, FALSE, L"OpenSpeakSetupMutex")) {
+            CloseHandle(setup);
+            MessageBoxW(nullptr, L"O OpenSpeak está sendo atualizado e vai abrir sozinho quando a instalação terminar.",
+                        L"OpenSpeak", MB_OK | MB_ICONINFORMATION);
+            return 0;
+        }
+    }
+#endif
 
     Settings settings(parser.value(profileOpt), parser.isSet(debugOpt));
     AutoUpdater updater(&settings);

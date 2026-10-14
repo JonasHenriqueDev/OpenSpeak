@@ -2,7 +2,7 @@
 ; Gerado por native/package.ps1 — que monta native/dist/OpenSpeak antes.
 
 #ifndef AppVersion
-  #define AppVersion "1.0.3"
+  #define AppVersion "1.0.4"
 #endif
 #ifndef Edition
   #define Edition "lite"
@@ -51,6 +51,8 @@ WizardStyle=modern
 SetupIconFile=..\client\assets\openspeak.ico
 DisableProgramGroupPage=yes
 CloseApplications=yes
+; O app recusa abrir enquanto este mutex existe (exceto o relançamento com --after-update).
+SetupMutex=OpenSpeakSetupMutex
 
 [Languages]
 Name: "brazilianportuguese"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
@@ -80,8 +82,8 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 
 [Run]
 ; Per-user setup does not modify machine-wide firewall rules.
-Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
-Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: RelaunchAfterUpdate
+Filename: "{app}\{#AppExe}"; Parameters: "--after-update"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Parameters: "--after-update"; Flags: nowait runasoriginaluser; Check: RelaunchAfterUpdate
 
 [Code]
 function RelaunchAfterUpdate(): Boolean;

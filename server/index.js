@@ -54,6 +54,8 @@ function serveStatic(req, res) {
     return;
   }
   if (pathname === '/') pathname = '/index.html';
+  // "/v/<versão>/..." é o mesmo arquivo (cache do proxy da atividade do Discord).
+  pathname = pathname.replace(/^\/v\/[\w.-]+\//, '/');
   const file = path.resolve(ROOT, '.' + pathname);
   if (!file.startsWith(ROOT + path.sep)) {
     res.writeHead(403).end();

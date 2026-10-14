@@ -9,6 +9,7 @@
 #include <QHttpServerResponse>
 #include <QHttpServerWebSocketUpgradeResponse>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QLoggingCategory>
 #include <QUrl>
 #include <QNetworkRequest>
@@ -71,7 +72,11 @@ ServerHost::ServerHost(Options options, QObject *parent)
 
     if (!m_options.webRoot.isEmpty()) {
         const QDir root(m_options.webRoot);
-        auto serve = [root](const QString &relative) -> QHttpServerResponse {
+        auto serve = [root](QString relative) -> QHttpServerResponse {
+            // "v/<versão>/..." é o mesmo arquivo: a atividade do Discord usa um caminho
+            // novo a cada publicação porque o proxy do Discord guarda JS/CSS em cache.
+            static const QRegularExpression versionPrefix(QStringLiteral("^v/[A-Za-z0-9._-]+/"));
+            relative.remove(versionPrefix);
             const QString clean = QDir::cleanPath(relative.isEmpty() ? QStringLiteral("index.html") : relative);
             const QString file = root.absoluteFilePath(clean);
             if (clean.startsWith(QLatin1String("..")) || !file.startsWith(root.absolutePath()) || !QFileInfo(file).isFile())

@@ -5,13 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>OpenSpeak — Discord</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css">
-  <link rel="stylesheet" href="css/activity.css">
+  <!-- "v/dev/" vira "v/<commit>/" na publicação: o proxy do Discord guarda JS/CSS em
+       cache, e um caminho novo garante a versão atual (os servidores ignoram o prefixo). -->
+  <link rel="stylesheet" href="v/dev/css/app.css">
+  <link rel="stylesheet" href="v/dev/css/activity.css">
 </head>
 <body>
   <div id="app"></div>
   <noscript>O OpenSpeak precisa de JavaScript.</noscript>
-  <script src="config.js"></script>
-  <script type="module" src="js/activity/main.js"></script>
+  <script src="v/dev/config.js"></script>
+  <script type="module" src="v/dev/js/activity/main.js"></script>
 </body>
 </html>

@@ -78,6 +78,22 @@ credenciais, ou se o usuário recusar, a atividade volta a pedir o nome.
 O HTTPS do servidor para a API do Discord usa o plugin de TLS do Qt
 (`tls/libqopensslbackend.so`, ao lado do binário) com o OpenSSL do sistema.
 
+## Cache do proxy do Discord
+
+O proxy do Discord guarda JS e CSS em cache e ignora o `Cache-Control: no-cache`
+do servidor; a atividade continuava antiga mesmo depois de reiniciar o Discord.
+Por isso `activity.html` carrega tudo por `v/dev/...` (os módulos relativos herdam
+o prefixo) e os servidores (nativo, `server/index.js` e Vercel) ignoram
+`v/<versão>/`. **Ao publicar**, troque `v/dev/` pelo hash do commit na cópia do
+`activity.html` que vai para o servidor:
+
+```sh
+sed -i "s#v/dev/#v/$(git rev-parse --short HEAD)/#g" public/activity.html
+```
+
+O `activity.html` em si chega novo porque o Discord o abre com parâmetros
+diferentes a cada sessão (`instance_id`, `frame_id`).
+
 ## Testar sem o Discord
 
 Abra `https://<servidor>/activity.html` no navegador. Use `?profile=nome` para

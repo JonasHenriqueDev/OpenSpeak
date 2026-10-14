@@ -139,6 +139,9 @@ Rectangle {
         minimumHeight: 135
         color: "black"
         title: tile.data_.name
+        // Sem janela-mãe: declarada dentro do tile, o Qt usaria a janela principal
+        // como transientParent e o Windows esconderia o PiP ao minimizar o app.
+        transientParent: null
         flags: Qt.Window | Qt.FramelessWindowHint | (Settings.pipPinned ? Qt.WindowStaysOnTopHint : 0)
         onVisibleChanged: if (!visible) tile.detach(pipVideo.videoSink)
 

@@ -23,6 +23,8 @@ class Settings : public QObject {
     Q_PROPERTY(QVariantMap lastStreamingConfig READ lastStreamingConfig WRITE setLastStreamingConfig NOTIFY changed)
     Q_PROPERTY(bool debug READ debug CONSTANT)
     Q_PROPERTY(QString connectionMode READ connectionMode WRITE setConnectionMode NOTIFY changed)
+    Q_PROPERTY(bool automaticUpdates READ automaticUpdates WRITE setAutomaticUpdates NOTIFY changed)
+    Q_PROPERTY(bool prereleaseUpdates READ prereleaseUpdates WRITE setPrereleaseUpdates NOTIFY changed)
 public:
     explicit Settings(const QString &profile, bool debug, QObject *parent = nullptr);
 
@@ -48,6 +50,10 @@ public:
     /// "tailnet" (padrão, sem servidor) ou "server" (servidor dedicado).
     QString connectionMode() const { return value("connectionMode", QStringLiteral("tailnet")).toString(); }
     void setConnectionMode(const QString &v) { set("connectionMode", v); }
+    bool automaticUpdates() const { return value("automaticUpdates", true).toBool(); }
+    void setAutomaticUpdates(bool v) { set("automaticUpdates", v); }
+    bool prereleaseUpdates() const { return value("prereleaseUpdates", false).toBool(); }
+    void setPrereleaseUpdates(bool v) { set("prereleaseUpdates", v); }
 
     Q_INVOKABLE bool isContact(const QString &uid) const { return contacts().contains(uid); }
     Q_INVOKABLE void toggleContact(const QString &uid);

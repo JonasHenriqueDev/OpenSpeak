@@ -1,3 +1,14 @@
+# OpenSpeak 1.0.0 — release estável
+
+- Atualizações do app instalado pelas releases do GitHub: canal estável por padrão,
+  com opção **Receber pré-releases**. Download automático em segundo plano,
+  validação SHA-256 e instalação ao fechar o app. Não interrompe transmissões.
+- Botão de atualizações na barra superior com versão, estado, verificação manual
+  e aplicação com reinício. Configurações e identidade são preservadas.
+- Link discreto no cliente web para o instalador da última release estável.
+- Identificação de versão/sistema do app nativo no monitor, métricas individuais
+  do SFU e correções das estatísticas SFU/P2P e dos controles em tela cheia no web.
+
 # OpenSpeak nativo 0.2.7
 
 - Modo **Servidor (SFU)**: o transmissor envia um fluxo só ao `openspeak-server`,

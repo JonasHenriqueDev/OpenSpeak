@@ -49,6 +49,10 @@ p { margin: 0; }
 .icon.big { width: 48px; height: 48px; }
 .spacer { flex: 1; }
 .muted { color: var(--text-dim); }
+.desktop-download { display: block; color: var(--text-dim); font-size: 12px; text-align: center; text-decoration: none; margin-top: 10px; }
+.desktop-download:hover, .desktop-download:focus-visible { color: var(--accent); text-decoration: underline; }
+.desktop-download.compact { display: inline-flex; margin: 0 8px; white-space: nowrap; }
+@media (max-width: 600px) { .desktop-download.compact { font-size: 11px; margin: 0 3px; } }
 .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .row { display: flex; gap: 8px; align-items: center; }
 .tag {

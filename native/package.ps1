@@ -2,7 +2,7 @@
 #   .\package.ps1                # compila Release antes
 #   .\package.ps1 -SkipBuild
 param(
-    [string]$Version = '0.2.7',
+    [string]$Version = '1.0.0',
     [switch]$SkipBuild,
     [string]$QtDir = 'C:\Qt\6.11.3\msvc2022_64'
 )
@@ -12,7 +12,7 @@ $release = Join-Path $here 'build\Release'
 $staging = Join-Path $here 'dist\OpenSpeak'
 
 if (-not $SkipBuild) {
-    & (Join-Path $here 'build.ps1')
+    & (Join-Path $here 'build.ps1') -Version $Version
     if ($LASTEXITCODE) { Write-Error 'build/testes falharam'; exit 1 }
 }
 
@@ -53,6 +53,9 @@ $iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFile
 if (-not $iscc) { Write-Error 'Inno Setup 6 não encontrado (winget install JRSoftware.InnoSetup)'; exit 1 }
 & $iscc "/DAppVersion=$Version" (Join-Path $here 'installer\OpenSpeak.iss')
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+# Nome fixo para /releases/latest/download/OpenSpeak-Setup.exe; publique em cada release.
+Copy-Item (Join-Path $here "dist\OpenSpeak-Setup-$Version.exe") (Join-Path $here 'dist\OpenSpeak-Setup.exe') -Force
 
 # 5) Distribuição portátil com as mesmas dependências do instalador.
 Compress-Archive -Path $staging -DestinationPath (Join-Path $here "dist\OpenSpeak-$Version-portable.zip") -Force

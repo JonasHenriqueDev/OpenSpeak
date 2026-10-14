@@ -2,7 +2,7 @@
 ; Gerado por native/package.ps1 — que monta native/dist/OpenSpeak antes.
 
 #ifndef AppVersion
-  #define AppVersion "0.2.7"
+  #define AppVersion "1.0.0"
 #endif
 #define AppName "OpenSpeak"
 #define AppExe "OpenSpeak.exe"
@@ -49,12 +49,19 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""OpenSpeak"" dir=in action=allow program=""{app}\{#AppExe}"" enable=yes profile=any"; Flags: runhidden
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""OpenSpeak Server"" dir=in action=allow program=""{app}\openspeak-server.exe"" enable=yes profile=any"; Flags: runhidden
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: RelaunchAfterUpdate
 
 [UninstallRun]
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""OpenSpeak"""; Flags: runhidden; RunOnceId: "fw1"
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""OpenSpeak Server"""; Flags: runhidden; RunOnceId: "fw2"
 
 [Code]
+function RelaunchAfterUpdate(): Boolean;
+begin
+  Result := (ExpandConstant('{param:UPDATE|0}') = '1') and
+            (ExpandConstant('{param:RELAUNCH|0}') = '1');
+end;
+
 // O único requisito externo é o Tailscale: avisa se não estiver instalado.
 function TailscaleInstalled(): Boolean;
 begin

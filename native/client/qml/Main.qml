@@ -19,7 +19,7 @@ ApplicationWindow {
         color: Theme.contrast
         MouseArea {
             anchors.fill: parent
-            anchors.rightMargin: 138
+            anchors.rightMargin: 174
             onPressed: window.startSystemMove()
             onDoubleClicked: window.toggleMaximized()
         }
@@ -30,6 +30,15 @@ ApplicationWindow {
             Icon { name: "logo"; size: 16; color: Theme.accent }
             Label { text: "OpenSpeak"; color: Theme.textDim; font.pixelSize: 12; font.weight: Font.DemiBold }
             Item { Layout.fillWidth: true }
+            ToolButton {
+                Layout.preferredWidth: 36
+                Layout.preferredHeight: 34
+                Accessible.name: "Atualizações do OpenSpeak"
+                ToolTip.visible: hovered
+                ToolTip.text: "Atualizações · " + Updater.version
+                contentItem: Icon { name: "settings"; size: 16 }
+                onClicked: updatesDialog.open()
+            }
             Repeater {
                 model: ["minimize", "maximize", "close"]
                 delegate: ToolButton {
@@ -65,6 +74,52 @@ ApplicationWindow {
     function toggleMaximized() {
         if (visibility === Window.Maximized) showNormal()
         else showMaximized()
+    }
+    Dialog {
+        id: updatesDialog
+        objectName: "updatesDialog"
+        title: "Atualizações · OpenSpeak " + Updater.version
+        anchors.centerIn: parent
+        width: Math.min(480, window.width - 40)
+        modal: true
+        standardButtons: Dialog.Close
+        contentItem: ColumnLayout {
+            objectName: "updatesContent"
+            spacing: 12
+            CheckBox {
+                text: "Atualizações automáticas"
+                checked: Settings.automaticUpdates
+                onToggled: Settings.automaticUpdates = checked
+            }
+            CheckBox {
+                text: "Receber pré-releases"
+                checked: Settings.prereleaseUpdates
+                onToggled: Settings.prereleaseUpdates = checked
+            }
+            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
+                text: Settings.prereleaseUpdates ? "Canal pré: releases estáveis e versões de teste mais novas." : "Canal estável: recebe somente releases, sem pré-releases." }
+            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: Updater.status }
+            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
+                text: Updater.installed ? "O instalador é baixado em segundo plano e aplicado ao fechar o app, preservando suas configurações. O Windows pode solicitar permissão de administrador." : "Versão portátil: a atualização automática por instalador está disponível no app instalado." }
+            RowLayout {
+                Button { text: "Verificar agora"; enabled: !Updater.busy; onClicked: Updater.check() }
+                Button { text: "Baixar atualização"; visible: Updater.installed && Updater.available && !Updater.ready; enabled: !Updater.busy; onClicked: Updater.downloadUpdate() }
+                Button { text: "Aplicar e reiniciar"; visible: Updater.ready; onClicked: installDialog.open() }
+            }
+            Button { text: "Página de downloads"; flat: true; onClicked: Qt.openUrlExternally("https://github.com/JonasHenriqueDev/OpenSpeak/releases") }
+        }
+    }
+    Dialog {
+        id: installDialog
+        title: "Atualizar OpenSpeak"
+        anchors.centerIn: parent
+        modal: true
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        Label { text: "O app será fechado e reaberto após a atualização.\nAs conexões e transmissões atuais serão encerradas."; wrapMode: Text.WordWrap }
+        onAccepted: Updater.installNow()
+    }
+    Component.onCompleted: {
+        if (DebugOpen === "updates") Qt.callLater(() => updatesDialog.open())
     }
     // Delegate resizing to Windows so edge drags retain native behavior.
     Repeater {

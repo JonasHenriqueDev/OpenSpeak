@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(OpenSpeakNative VERSION 0.2.7 LANGUAGES CXX)
+project(OpenSpeakNative VERSION 1.0.0 LANGUAGES CXX)
+set(OPENSPEAK_RELEASE_VERSION "${PROJECT_VERSION}" CACHE STRING "Versão completa, incluindo sufixo de pré-release")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +38,7 @@ endif()
 
 # ---------------------------------------------------------------- common
 add_library(openspeak_common INTERFACE)
+target_compile_definitions(openspeak_common INTERFACE OPENSPEAK_VERSION="${OPENSPEAK_RELEASE_VERSION}")
 target_include_directories(openspeak_common INTERFACE common)
 
 # Sessão WebRTC base + ajustes de SDP, comuns ao cliente e ao relay do servidor.
@@ -105,7 +107,7 @@ if(OPENSPEAK_BUILD_TESTS)
         add_subdirectory(tests/client)
         add_test(NAME tst_windowthumbnail COMMAND tst_windowthumbnail)
         set_tests_properties(tst_windowthumbnail PROPERTIES TIMEOUT 15)
-        foreach(panel setup source view-menu)
+        foreach(panel setup source view-menu updates)
             add_test(NAME ui_${panel} COMMAND OpenSpeak --ui-smoke-test --profile ui-smoke-${panel} --open ${panel})
             set_tests_properties(ui_${panel} PROPERTIES TIMEOUT 15 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")
         endforeach()

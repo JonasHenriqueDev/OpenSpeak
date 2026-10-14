@@ -1,0 +1,160 @@
+#include "AutoUpdater.h"
+#include "UpdatePolicy.h"
+#include <QCoreApplication>
+#include <QCryptographicHash>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonDocument>
+#include <QNetworkRequest>
+#include <QProcess>
+#include <QSaveFile>
+#include <QStandardPaths>
+#include <memory>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
+namespace openspeak {
+namespace {
+QString cachePath() { return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/updates"); }
+QNetworkRequest requestFor(const QUrl &url) {
+    QNetworkRequest request(url);
+    request.setRawHeader("User-Agent", "OpenSpeak/" OPENSPEAK_VERSION);
+    request.setRawHeader("Accept", "application/vnd.github+json");
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setTransferTimeout(30'000);
+    return request;
+}
+}
+AutoUpdater::AutoUpdater(Settings *settings, QObject *parent)
+    : QObject(parent), m_settings(settings), m_network(this),
+      m_previousAuto(settings->automaticUpdates()), m_previousPre(settings->prereleaseUpdates()) {
+    connect(settings, &Settings::changed, this, &AutoUpdater::settingsChanged);
+    m_timer.setInterval(6 * 60 * 60 * 1000);
+    connect(&m_timer, &QTimer::timeout, this, [this] { if (m_settings->automaticUpdates()) check(); });
+    m_timer.start();
+    QTimer::singleShot(15'000, this, [this] {
+        if (m_settings->automaticUpdates()) check();
+        else setStatus(QStringLiteral("Atualizações automáticas desativadas."));
+    });
+}
+QString AutoUpdater::version() const { return QStringLiteral(OPENSPEAK_VERSION); }
+bool AutoUpdater::installed() const { return QFileInfo::exists(QCoreApplication::applicationDirPath() + QStringLiteral("/unins000.exe")); }
+void AutoUpdater::setStatus(const QString &status, bool busy) { m_status = status; m_busy = busy; emit changed(); }
+void AutoUpdater::settingsChanged() {
+    if (m_previousAuto == m_settings->automaticUpdates() && m_previousPre == m_settings->prereleaseUpdates()) return;
+    m_previousAuto = m_settings->automaticUpdates(); m_previousPre = m_settings->prereleaseUpdates();
+    ++m_generation;
+    if (m_reply) m_reply->abort();
+    m_readyFile.clear(); m_offer = {}; m_busy = false;
+    if (m_previousAuto) check();
+    else setStatus(QStringLiteral("Atualizações automáticas desativadas."));
+}
+void AutoUpdater::check() {
+    if (m_busy) return;
+    const int generation = ++m_generation;
+    m_readyFile.clear(); m_offer = {};
+    setStatus(QStringLiteral("Consultando releases do GitHub…"), true);
+    const bool pre = m_settings->prereleaseUpdates();
+    const QUrl url(pre ? QStringLiteral("https://api.github.com/repos/JonasHenriqueDev/OpenSpeak/releases?per_page=100")
+                       : QStringLiteral("https://api.github.com/repos/JonasHenriqueDev/OpenSpeak/releases/latest"));
+    auto *reply = m_network.get(requestFor(url)); m_reply = reply;
+    auto payload = std::make_shared<QByteArray>();
+    connect(reply, &QNetworkReply::readyRead, this, [reply, payload] {
+        payload->append(reply->readAll());
+        if (payload->size() > 2 * 1024 * 1024) reply->abort();
+    });
+    connect(reply, &QNetworkReply::finished, this, [this, reply, payload, generation, pre] {
+        reply->deleteLater();
+        if (generation != m_generation) return;
+        if (reply->error() != QNetworkReply::NoError) { setStatus(QStringLiteral("Não foi possível verificar atualizações. Tente novamente mais tarde.")); return; }
+        payload->append(reply->readAll());
+        const auto doc = QJsonDocument::fromJson(*payload);
+        if (doc.isNull() || (!doc.isArray() && !doc.isObject())) {
+            setStatus(QStringLiteral("O GitHub retornou uma resposta inválida. Tente novamente mais tarde.")); return;
+        }
+        m_offer = selectInstallerRelease(doc.isArray() ? doc.array() : QJsonArray{doc.object()}, pre);
+        if (m_offer.isEmpty()) {
+            setStatus(QStringLiteral("Não há um instalador verificado disponível neste canal.")); return;
+        }
+        if (compareReleaseVersions(m_offer.value("version").toString(), version()) <= 0) {
+            m_offer = {}; setStatus(QStringLiteral("OpenSpeak %1 está atualizado neste canal.").arg(version())); return;
+        }
+        setStatus(QStringLiteral("Nova versão %1 disponível.").arg(m_offer.value("version").toString()));
+        if (m_settings->automaticUpdates() && installed()) downloadUpdate();
+        else if (!installed()) setStatus(QStringLiteral("Nova versão %1 disponível. Na versão portátil, use o instalador para atualizar.").arg(m_offer.value("version").toString()));
+    });
+}
+void AutoUpdater::downloadUpdate() {
+    if (m_busy || m_offer.isEmpty() || !installed()) return;
+    const QString file = cachePath() + QStringLiteral("/OpenSpeak-Setup-%1.exe").arg(m_offer.value("version").toString());
+    const QString digest = m_offer.value("sha256").toString();
+    const QString newVersion = m_offer.value("version").toString();
+    if (verifyInstallerDigest(file, digest)) {
+        m_readyFile = file; setStatus(QStringLiteral("Versão %1 pronta. ").arg(newVersion) + (m_settings->automaticUpdates()
+            ? QStringLiteral("Será instalada ao fechar o app.") : QStringLiteral("Use Aplicar e reiniciar para instalar."))); return;
+    }
+    if (!QDir().mkpath(cachePath())) { setStatus(QStringLiteral("Não foi possível criar a pasta de atualização.")); return; }
+    auto output = std::make_shared<QSaveFile>(file);
+    if (!output->open(QIODevice::WriteOnly)) { setStatus(QStringLiteral("Não foi possível salvar o instalador.")); return; }
+    const auto offer = m_offer;
+    const int generation = m_generation;
+    auto hash = std::make_shared<QCryptographicHash>(QCryptographicHash::Sha256);
+    auto count = std::make_shared<qint64>(0);
+    auto *reply = m_network.get(requestFor(QUrl(offer.value("url").toString()))); m_reply = reply;
+    setStatus(QStringLiteral("Baixando OpenSpeak %1 em segundo plano…").arg(newVersion), true);
+    const auto read = [reply, output, hash, count, offer] {
+        const auto bytes = reply->readAll(); *count += bytes.size();
+        if (*count > qint64(offer.value("size").toDouble()) || output->write(bytes) != bytes.size()) { reply->abort(); return; }
+        hash->addData(bytes);
+    };
+    connect(reply, &QNetworkReply::readyRead, this, read);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, output, hash, count, offer, generation, file, read] {
+        reply->deleteLater();
+        if (generation != m_generation) { output->cancelWriting(); return; }
+        read();
+        if (reply->error() != QNetworkReply::NoError || *count != qint64(offer.value("size").toDouble())
+            || QString::fromLatin1(hash->result().toHex()) != offer.value("sha256").toString() || !output->commit()) {
+            output->cancelWriting(); setStatus(QStringLiteral("Download não validado. Nenhuma atualização será instalada.")); return;
+        }
+        m_readyFile = file;
+        setStatus(QStringLiteral("Versão %1 pronta. ").arg(offer.value("version").toString()) + (m_settings->automaticUpdates()
+            ? QStringLiteral("Será instalada ao fechar o app.") : QStringLiteral("Use Aplicar e reiniciar para instalar.")));
+    });
+}
+void AutoUpdater::installNow() {
+    if (!ready()) return;
+    m_manualInstall = true;
+    QCoreApplication::quit();
+}
+void AutoUpdater::installOnExit() {
+    if (!installed() || !ready() || (!m_manualInstall && !m_settings->automaticUpdates())) return;
+    if (m_offer.value("prerelease").toBool() && !m_settings->prereleaseUpdates()) return;
+    QStringList args{QStringLiteral("--apply-update"), m_readyFile, QStringLiteral("--update-sha256"), m_offer.value("sha256").toString(),
+                     QStringLiteral("--wait-pid"), QString::number(QCoreApplication::applicationPid())};
+    if (m_manualInstall) args.append(QStringLiteral("--restart-after-update"));
+    QProcess::startDetached(QCoreApplication::applicationFilePath(), args);
+}
+int AutoUpdater::runInstallHelper(const QString &file, const QString &sha256, quint32 parentPid, bool restart) {
+#ifdef Q_OS_WIN
+    const QFileInfo info(file);
+    if (info.absolutePath() != QDir(cachePath()).absolutePath() || !info.fileName().startsWith(QLatin1String("OpenSpeak-Setup-"))
+        || !info.fileName().endsWith(QLatin1String(".exe")) || !verifyInstallerDigest(file, sha256)) return 1;
+    if (HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, parentPid)) {
+        const auto result = WaitForSingleObject(process, 90'000); CloseHandle(process);
+        if (result != WAIT_OBJECT_0) return 1;
+    }
+    if (!verifyInstallerDigest(file, sha256)) return 1;
+    // Não encerra outras instâncias nem reinicia o Windows. A elevação fica a cargo do UAC.
+    const QString args = QStringLiteral("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /NOCLOSEAPPLICATIONS /NORESTARTAPPLICATIONS /UPDATE=1 /RELAUNCH=%1").arg(restart ? 1 : 0);
+    const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(nullptr, L"open", reinterpret_cast<LPCWSTR>(file.utf16()),
+        reinterpret_cast<LPCWSTR>(args.utf16()), nullptr, SW_HIDE));
+    return result > 32 ? 0 : 1;
+#else
+    Q_UNUSED(file); Q_UNUSED(sha256); Q_UNUSED(parentPid); Q_UNUSED(restart);
+    return 1;
+#endif
+}
+}

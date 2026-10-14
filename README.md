@@ -11,6 +11,10 @@ interface de streaming do TeamSpeak 6. A análise do cliente original está em
 
 ## App nativo (recomendado)
 
+Baixe o [instalador da última release estável](https://github.com/JonasHenriqueDev/OpenSpeak/releases/latest/download/OpenSpeak-Setup.exe).
+A partir da 1.0.0, o app instalado atualiza automaticamente e oferece um canal
+opcional de pré-releases. [Downloads e atualizações](docs/ATUALIZACOES.md).
+
 Instale o `OpenSpeak-Setup-<versão>.exe` e o [Tailscale](https://tailscale.com/download/windows).
 Abra o app e entre: todos da mesma tailnet aparecem automaticamente, sem IP nem
 servidor. Detalhes em [native/README.md](native/README.md).

@@ -110,7 +110,7 @@ void WebSocketConnection::sendCommand(const QString &cmd, const QJsonObject &arg
     timer->start(CommandTimeoutMs);
     QJsonObject outgoing = args;
     if (cmd == "login") {
-        outgoing["clientInfo"] = QJsonObject{{"name", "OpenSpeak"}, {"version", "0.2.7"},
+        outgoing["clientInfo"] = QJsonObject{{"name", "OpenSpeak"}, {"version", QStringLiteral(OPENSPEAK_VERSION)},
                                              {"kind", "native"}, {"platform", QSysInfo::prettyProductName()}};
     }
     if (m_cloud && cmd == "login") {

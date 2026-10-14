@@ -19,6 +19,12 @@ const deployment = window.OpenSpeakConfig || {};
 deployment.tailscaleOnly ||= location.hostname.endsWith('.ts.net');
 window.OpenSpeakConfig = deployment;
 const entryParams = new URLSearchParams(location.search);
+const INSTALLER_URL = 'https://github.com/JonasHenriqueDev/OpenSpeak/releases/latest/download/OpenSpeak-Setup.exe';
+function installerLink(compact = false) {
+  return h('a.desktop-download', { href: INSTALLER_URL, title: 'Baixar o instalador Windows da última versão estável',
+    'aria-label': 'Baixar OpenSpeak para Windows — última versão estável', class: compact ? 'compact' : '' },
+    compact ? 'App Windows ↓' : 'Baixar app para Windows ↓');
+}
 
 const root = document.getElementById('app');
 const toasts = new Toasts();
@@ -102,7 +108,8 @@ function renderLogin(message = '') {
   deployment.cloudSignaling ? h('label.field', h('span.field-label', 'IP Tailscale deste PC'), tailnetIp, ipHint) : null,
   deployment.cloudSignaling ? h('button.btn.ghost', { type: 'button', on: { click: detectIp } }, 'Detectar IP automaticamente') : null,
   submit,
-  status);
+  status,
+  installerLink());
   replaceChildren(root, h('div.login', form));
   nick.focus();
   if (deployment.cloudSignaling) void detectIp();
@@ -159,6 +166,7 @@ class App {
           h('span.server-name', icon('server'), hd.serverName),
           h('span.spacer'),
           this.statusBar,
+          installerLink(true),
           h('button.btn.ghost.small', { title: t('app.settings'), on: { click: ev => this.#settingsPopover(ev.currentTarget) } }, icon('settings')),
           h('button.btn.ghost.small', { on: { click: () => hd.disconnect() } }, icon('leave'), t('app.disconnect'))),
         h('div.app-body',

@@ -6,6 +6,7 @@ add_library(openspeak_engine STATIC
     core/ServerConnection.cpp core/ServerConnection.h
     core/ConnectionHandler.cpp core/ConnectionHandler.h
     core/Settings.cpp core/Settings.h
+    core/AutoUpdater.cpp core/AutoUpdater.h core/UpdatePolicy.cpp core/UpdatePolicy.h
     mesh/PeerDirectory.cpp mesh/PeerDirectory.h
     mesh/MeshConnection.cpp mesh/MeshConnection.h
     media/VideoSource.cpp media/VideoSource.h
@@ -29,7 +30,7 @@ target_link_libraries(openspeak_engine PUBLIC
     openspeak_rtc
     Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::WebSockets
     openspeak_ffmpeg
-    ole32 mmdevapi d3d11 dxgi dwmapi gdi32 user32
+    ole32 mmdevapi d3d11 dxgi dwmapi gdi32 user32 shell32
 )
 target_link_libraries(openspeak_engine PRIVATE Qt6::MultimediaPrivate dwmapi)
 target_compile_definitions(openspeak_engine PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)

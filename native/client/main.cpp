@@ -12,6 +12,7 @@
 #include "Settings.h"
 #include "SourceThumbnails.h"
 #include "WindowThumbnail.h"
+#include "AutoUpdater.h"
 
 #include <QCommandLineParser>
 #include <QGuiApplication>
@@ -39,6 +40,7 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("OpenSpeak"));
     QGuiApplication::setOrganizationName(QStringLiteral("OpenSpeak"));
+    QGuiApplication::setApplicationVersion(QStringLiteral(OPENSPEAK_VERSION));
     QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/assets/openspeak.ico")));
     QQuickStyle::setStyle(QStringLiteral("FluentWinUI3"));
     QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
@@ -59,10 +61,19 @@ int main(int argc, char *argv[])
     QCommandLineOption uiSmokeOpt(QStringLiteral("ui-smoke-test"), QStringLiteral("Valida o layout QML em 900x560 e encerra (sem conectar)."));
     QCommandLineOption cloudOpt(QStringLiteral("cloud"), QStringLiteral("Conecta à sala web pública."));
     QCommandLineOption quitOpt(QStringLiteral("quit-after"), QStringLiteral("Encerra o teste após N segundos (requer --debug)."), QStringLiteral("segundos"));
-    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt, cloudOpt, quitOpt});
+    QCommandLineOption updateOpt(QStringLiteral("apply-update"), QStringLiteral("Auxiliar interno de atualização."), QStringLiteral("arquivo"));
+    QCommandLineOption digestOpt(QStringLiteral("update-sha256"), QStringLiteral("SHA-256 do instalador."), QStringLiteral("hash"));
+    QCommandLineOption waitPidOpt(QStringLiteral("wait-pid"), QStringLiteral("Processo que precisa encerrar antes da atualização."), QStringLiteral("pid"));
+    QCommandLineOption restartOpt(QStringLiteral("restart-after-update"), QStringLiteral("Reabre o app após atualização solicitada."));
+    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt, cloudOpt, quitOpt, updateOpt, digestOpt, waitPidOpt, restartOpt});
     parser.process(app);
+    if (parser.isSet(updateOpt))
+        return AutoUpdater::runInstallHelper(parser.value(updateOpt), parser.value(digestOpt), parser.value(waitPidOpt).toUInt(), parser.isSet(restartOpt));
 
     Settings settings(parser.value(profileOpt), parser.isSet(debugOpt));
+    AutoUpdater updater(&settings);
+    if (!parser.isSet(debugOpt) && !parser.isSet(uiSmokeOpt))
+        QObject::connect(&app, &QCoreApplication::aboutToQuit, &updater, &AutoUpdater::installOnExit);
     if (parser.isSet(uiSmokeOpt)) settings.setAdvancedMode(true);
     if (parser.isSet(serverOpt)) {
         settings.setServerUrl(parser.value(serverOpt));
@@ -84,6 +95,7 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     qmlRegisterType<WindowThumbnail>("OpenSpeak.Native", 1, 0, "WindowThumbnail");
     engine.rootContext()->setContextProperty(QStringLiteral("Settings"), &settings);
+    engine.rootContext()->setContextProperty(QStringLiteral("Updater"), &updater);
     engine.rootContext()->setContextProperty(QStringLiteral("Server"), &handler);
     engine.rootContext()->setContextProperty(QStringLiteral("Screenshare"), &screenshare);
     engine.rootContext()->setContextProperty(QStringLiteral("StreamLayout"), &layout);
@@ -101,7 +113,12 @@ int main(int argc, char *argv[])
         window->resize(900, 560);
         QTimer::singleShot(4500, &app, [&app, window, panel = parser.value(openOpt)] {
             bool valid = !window->grabWindow().isNull();
-            if (panel != "view-menu") {
+            if (panel == "updates") {
+                auto *dialog = window->findChild<QObject *>(QStringLiteral("updatesDialog"));
+                valid = valid && dialog && dialog->property("visible").toBool()
+                    && dialog->property("width").toDouble() >= 400
+                    && dialog->property("height").toDouble() < window->height();
+            } else if (panel != "view-menu") {
                 auto *grid = findVisualItem(window->contentItem(), QStringLiteral("sourceGrid"));
                 valid = valid && grid && grid->isVisible() && grid->height() >= 120 && grid->width() >= 200;
                 if (panel == "setup") {

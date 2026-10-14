@@ -34,20 +34,105 @@ export class StreamTile {
     this.video = h('video.tile-video', { autoplay: true, playsInline: true });
     this.overlay = h('div.tile-overlay');
     this.el = h('div.video-stream', { dataset: { stream: streamIdentifier } }, this.video, this.overlay);
-    this.el.addEventListener('dblclick', () => this.toggleFullscreen());
+    this.el.addEventListener('dblclick', () => (this.pipWindow ? this.togglePip() : this.toggleFullscreen()));
     this._disposeFullscreenIdle = installFullscreenIdle(this.el);
     this._srcObject = null;
+    this.pipWindow = null;
+    // Ocupa o lugar do quadro na grade enquanto ele está na janela de PiP.
+    this.placeholder = h('div.video-stream.pip-placeholder', { on: { click: () => this.togglePip() } },
+      icon('pip', 'big'), h('span', t('video.stream.in_pip')),
+      h('button.btn.small', t('video.action.pip.close')));
   }
 
   setRect({ x, y, w, h: height }, focused = false) {
-    Object.assign(this.el.style, { transform: `translate(${x}px, ${y}px)`, width: `${w}px`, height: `${height}px` });
-    this.el.classList.toggle('focused', !!focused);
-    this.el.classList.toggle('small', height < 160);
+    for (const el of [this.el, this.placeholder]) {
+      Object.assign(el.style, { transform: `translate(${x}px, ${y}px)`, width: `${w}px`, height: `${height}px` });
+      el.classList.toggle('focused', !!focused);
+      el.classList.toggle('small', height < 160);
+    }
+  }
+
+  setHidden(hidden) {
+    this.placeholder.hidden = hidden;
+    this.el.hidden = hidden && !this.pipWindow;
   }
 
   toggleFullscreen() {
     if (document.fullscreenElement === this.el) document.exitFullscreen();
     else this.el.requestFullscreen?.().catch(() => {});
+  }
+
+  // -------------------------------------------------- picture-in-picture
+
+  static get documentPipSupported() {
+    return 'documentPictureInPicture' in window;
+  }
+
+  /**
+   * Document Picture-in-Picture (Chromium 116+): o próprio quadro, com os
+   * controles, vai para uma janela flutuante que o navegador mantém por cima de
+   * todos os apps. Sem a API, cai no PiP do <video> (ação "desligar" da Media Session).
+   */
+  async togglePip() {
+    if (this.pipWindow) return this.pipWindow.close();
+    if (document.pictureInPictureElement === this.video) return document.exitPictureInPicture().catch(() => {});
+    if (StreamTile.documentPipSupported) {
+      try { return await this.#openDocumentPip(); } catch (err) { console.warn('[pip]', err); }
+    }
+    this.#setHangupAction();
+    return this.video.requestPictureInPicture?.().catch(() => {});
+  }
+
+  async #openDocumentPip() {
+    const { videoWidth: vw, videoHeight: vh } = this.video;
+    const width = 480;
+    const height = vw && vh ? Math.round(width * vh / vw) : 270;
+    const win = await window.documentPictureInPicture.requestWindow({ width, height });
+    for (const sheet of document.styleSheets) {
+      if (sheet.href) {
+        win.document.head.append(h('link', { rel: 'stylesheet', href: sheet.href }));
+      } else {
+        try { win.document.head.append(h('style', [...sheet.cssRules].map(r => r.cssText).join('\n'))); } catch {}
+      }
+    }
+    win.document.title = this.model?.info?.name ?? 'OpenSpeak';
+    win.document.body.classList.add('pip-body');
+    if (document.fullscreenElement === this.el) await document.exitFullscreen().catch(() => {});
+    this.el.replaceWith(this.placeholder);
+    this.el.classList.add('in-pip');
+    this.el.hidden = false;
+    this.pipWindow = win;
+    win.document.body.append(this.el);
+    this.video.play().catch(() => {});
+    win.addEventListener('pagehide', () => this.#restoreFromPip(), { once: true });
+    if (this.model) this.update(this.model);
+  }
+
+  #restoreFromPip() {
+    this.pipWindow = null;
+    this.el.classList.remove('in-pip');
+    if (this.destroyed) return;
+    this.el.hidden = this.placeholder.hidden;
+    if (this.placeholder.isConnected) this.placeholder.replaceWith(this.el);
+    this.video.play().catch(() => {});
+    if (this.model) this.update(this.model);
+  }
+
+  #setHangupAction() {
+    const a = this.actions;
+    const id = this.streamIdentifier;
+    try {
+      navigator.mediaSession?.setActionHandler('hangup', () => {
+        document.exitPictureInPicture().catch(() => {});
+        if (this.model?.kind === 'own') a.stopStream(id);
+        else a.leaveStream(id);
+      });
+    } catch {}
+  }
+
+  #pipButton() {
+    const inPip = !!this.pipWindow;
+    return btn('pip', t(inPip ? 'video.action.pip.close' : 'video.action.pip.open'), () => this.togglePip(), inPip ? 'active' : '');
   }
 
   #attach(mediaStream, { muted }) {
@@ -100,8 +185,9 @@ export class StreamTile {
           pending ? h('span.btn-badge', String(pending)) : null),
         btn('chart', t('video.action.stats'), () => a.showStats(id)),
         h('span.spacer'),
-        btn(m.isFocused ? 'grid' : 'focus', t(m.isFocused ? 'video.action.unfocus' : 'video.action.focus'), () => a.toggleFocus(id)),
-        btn(document.fullscreenElement === this.el ? 'fullscreenExit' : 'fullscreen', t('video.action.fullscreen.open'), () => this.toggleFullscreen()),
+        this.pipWindow ? null : btn(m.isFocused ? 'grid' : 'focus', t(m.isFocused ? 'video.action.unfocus' : 'video.action.focus'), () => a.toggleFocus(id)),
+        this.#pipButton(),
+        this.pipWindow ? null : this.#fullscreenButton(),
         btn('stop', t('video.action.stop_stream'), () => a.stopStream(id), 'danger'),
       ),
     );
@@ -126,9 +212,10 @@ export class StreamTile {
           this.#volumeControl(),
           btn('chart', t('video.action.stats'), () => a.showStats(id)),
           h('span.spacer'),
-          btn('eyeOff', t('video.stream.hide_stream'), () => a.hideStream(id)),
-          btn(m.isFocused ? 'grid' : 'focus', t(m.isFocused ? 'video.action.unfocus' : 'video.action.focus'), () => a.toggleFocus(id)),
-          btn('fullscreen', t('video.action.fullscreen.open'), () => this.toggleFullscreen()),
+          this.pipWindow ? null : btn('eyeOff', t('video.stream.hide_stream'), () => a.hideStream(id)),
+          this.pipWindow ? null : btn(m.isFocused ? 'grid' : 'focus', t(m.isFocused ? 'video.action.unfocus' : 'video.action.focus'), () => a.toggleFocus(id)),
+          this.#pipButton(),
+          this.pipWindow ? null : this.#fullscreenButton(),
           btn('leave', t('video.action.leave'), () => a.leaveStream(id), 'danger'),
         ),
       );
@@ -136,6 +223,7 @@ export class StreamTile {
     }
 
     this.#attach(null, { muted: true });
+    this.pipWindow?.close(); // parou de assistir
     const thumb = info.thumbnail;
     const card = h('div.stream-preview',
       thumb ? h('div.stream-preview__thumb', { style: { backgroundImage: `url("${thumb}")` } }) : null,
@@ -171,6 +259,11 @@ export class StreamTile {
     return h('div.stream-preview__status',
       h('div.status-pill', h('span.spinner'), t(key)),
       h('button.btn.ghost', { on: { click: () => a.leaveStream(id) } }, t('video.action.join.abort')));
+  }
+
+  #fullscreenButton() {
+    const on = document.fullscreenElement === this.el;
+    return btn(on ? 'fullscreenExit' : 'fullscreen', t(on ? 'video.action.fullscreen.close' : 'video.action.fullscreen.open'), () => this.toggleFullscreen());
   }
 
   #topBar(m, ...prefix) {
@@ -213,8 +306,12 @@ export class StreamTile {
   }
 
   destroy() {
+    this.destroyed = true;
+    this.pipWindow?.close();
+    if (document.pictureInPictureElement === this.video) document.exitPictureInPicture().catch(() => {});
     this._disposeFullscreenIdle();
     this.video.srcObject = null;
+    this.placeholder.remove();
     this.el.remove();
   }
 }

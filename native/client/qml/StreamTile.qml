@@ -55,12 +55,21 @@ Rectangle {
             attach(video.videoSink)
         if (fullscreenWindow.visible)
             attach(fullscreenVideo.videoSink)
+        if (pipWindow.visible)
+            attach(pipVideo.videoSink)
     }
-    onStatusChanged: refreshAttachment()
+    onStatusChanged: {
+        refreshAttachment()
+        if (!playing)
+            pipWindow.close()
+        else if (DebugOpen === "pip" && status === "playing") // depuração: --open pip
+            Qt.callLater(openPip)
+    }
     Component.onCompleted: refreshAttachment()
     Component.onDestruction: {
         detach(video.videoSink)
         detach(fullscreenVideo.videoSink)
+        detach(pipVideo.videoSink)
     }
 
     VideoOutput {
@@ -98,6 +107,166 @@ Rectangle {
         Shortcut { sequence: "Esc"; onActivated: fullscreenWindow.close() }
         TapHandler { onDoubleTapped: fullscreenWindow.close() }
     }
+
+    // ---------------------------------------------------- picture-in-picture
+    // Janela pequena sem borda, arrastável e redimensionável, com os controles
+    // principais. Fixada (padrão), fica por cima de todos os apps.
+    function openPip() {
+        if (!tile.playing)
+            return
+        if (!pipWindow.visible) {
+            // Canto inferior direito da tela do app (margem para a barra de tarefas).
+            pipWindow.x = tile.Screen.virtualX + tile.Screen.width - pipWindow.width - 24
+            pipWindow.y = tile.Screen.virtualY + tile.Screen.height - pipWindow.height - 72
+        }
+        pipWindow.show()
+        pipWindow.raise()
+        attach(pipVideo.videoSink)
+    }
+    function closePip() {
+        pipWindow.close()
+        const main = tile.Window.window
+        if (main) {
+            main.raise()
+            main.requestActivate()
+        }
+    }
+    Window {
+        id: pipWindow
+        width: 480
+        height: 270
+        minimumWidth: 240
+        minimumHeight: 135
+        color: "black"
+        title: tile.data_.name
+        flags: Qt.Window | Qt.FramelessWindowHint | (Settings.pipPinned ? Qt.WindowStaysOnTopHint : 0)
+        onVisibleChanged: if (!visible) tile.detach(pipVideo.videoSink)
+
+        VideoOutput {
+            id: pipVideo
+            anchors.fill: parent
+            fillMode: VideoOutput.PreserveAspectFit
+            opacity: tile.data_.paused ? 0.35 : 1
+        }
+        HoverHandler { id: pipHover }
+        // Arrasta a janela por qualquer ponto do vídeo; duplo clique volta ao app.
+        DragHandler {
+            target: null
+            onActiveChanged: if (active) pipWindow.startSystemMove()
+        }
+        TapHandler { onDoubleTapped: tile.closePip() }
+        Shortcut { sequence: "Esc"; onActivated: tile.closePip() }
+
+        Rectangle {
+            anchors.centerIn: parent
+            visible: tile.data_.paused
+            radius: 16
+            color: Qt.rgba(0, 0, 0, 0.6)
+            implicitWidth: pipPaused.implicitWidth + 24
+            implicitHeight: 32
+            RowLayout {
+                id: pipPaused
+                anchors.centerIn: parent
+                Icon { name: "pause"; size: 16 }
+                Label { text: I18n.t("video.stream.paused"); color: Theme.text }
+            }
+        }
+
+        Rectangle {
+            anchors.top: parent.top
+            width: parent.width
+            height: 36
+            opacity: pipHover.hovered ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 150 } }
+            gradient: Gradient {
+                GradientStop { position: 0; color: Qt.rgba(0, 0, 0, 0.75) }
+                GradientStop { position: 1; color: "transparent" }
+            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 10
+                anchors.rightMargin: 4
+                spacing: 2
+                Label {
+                    Layout.fillWidth: true
+                    text: tile.data_.name + (tile.own ? "" : "  ·  " + tile.data_.ownerName)
+                    elide: Text.ElideRight
+                    color: Theme.text
+                    font.weight: Font.DemiBold
+                }
+                PipButton {
+                    iconName: "pin"
+                    iconColor: Settings.pipPinned ? Theme.accent : "white"
+                    tip: Settings.pipPinned ? I18n.t("video.action.pip.unpin") : I18n.t("video.action.pip.pin")
+                    onClicked: Settings.pipPinned = !Settings.pipPinned
+                }
+                PipButton { iconName: "close"; tip: I18n.t("video.action.pip.close"); onClicked: tile.closePip() }
+            }
+        }
+
+        Rectangle {
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: 40
+            opacity: pipHover.hovered ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 150 } }
+            gradient: Gradient {
+                GradientStop { position: 0; color: "transparent" }
+                GradientStop { position: 1; color: Qt.rgba(0, 0, 0, 0.75) }
+            }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 6
+                anchors.rightMargin: 22
+                spacing: 2
+                PipButton {
+                    visible: tile.own
+                    iconName: tile.data_.paused ? "play" : "pause"
+                    tip: tile.data_.paused ? I18n.t("video.action.resume") : I18n.t("video.action.pause")
+                    onClicked: Screenshare.setPaused(tile.streamId, !tile.data_.paused)
+                }
+                PipButton {
+                    visible: !tile.own
+                    iconName: tile.data_.audioBlocked || volumeSlider.value === 0 ? "mute" : "volume"
+                    tip: I18n.t("video.action.volume")
+                    onClicked: volumeSlider.value = volumeSlider.value === 0 ? 1 : 0
+                }
+                Slider {
+                    visible: !tile.own && pipWindow.width >= 320
+                    Layout.preferredWidth: 90
+                    from: 0; to: 1
+                    value: volumeSlider.value
+                    onMoved: volumeSlider.value = value
+                }
+                Item { Layout.fillWidth: true }
+                PipButton {
+                    visible: tile.own
+                    iconName: "stop"
+                    iconColor: Theme.danger
+                    tip: I18n.t("video.action.stop_stream")
+                    onClicked: Screenshare.stopStream(tile.streamId)
+                }
+                PipButton {
+                    visible: !tile.own
+                    iconName: "leave"
+                    iconColor: Theme.danger
+                    tip: I18n.t("video.action.leave")
+                    onClicked: Screenshare.leaveStream(tile.streamId)
+                }
+            }
+        }
+
+        // Alça de redimensionamento (canto inferior direito).
+        MouseArea {
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            width: 18
+            height: 18
+            cursorShape: Qt.SizeFDiagCursor
+            onPressed: pipWindow.startSystemResize(Qt.RightEdge | Qt.BottomEdge)
+        }
+    }
+
 
     // ---------------------------------------------- cartão (não assistindo)
     Item {
@@ -307,6 +476,19 @@ Rectangle {
         ToolTip.text: tip
     }
 
+    component PipButton: ToolButton {
+        property string iconName
+        property string tip
+        property color iconColor: "white"
+        padding: 3
+        implicitWidth: 30
+        implicitHeight: 30
+        contentItem: Item {}
+        Icon { anchors.centerIn: parent; name: parent.iconName; color: parent.iconColor; size: 17 }
+        ToolTip.visible: hovered
+        ToolTip.text: tip
+    }
+
     Rectangle {
         anchors.bottom: parent.bottom
         width: parent.width
@@ -383,6 +565,13 @@ Rectangle {
                 iconName: tile.focused ? "grid" : "focus"
                 tip: tile.focused ? I18n.t("video.action.unfocus") : I18n.t("video.action.focus")
                 onClicked: tile.toggleFocus()
+            }
+            TileButton {
+                visible: tile.playing
+                iconName: "pip"
+                iconColor: pipWindow.visible ? Theme.accent : "white"
+                tip: pipWindow.visible ? I18n.t("video.action.pip.close") : I18n.t("video.action.pip.open")
+                onClicked: pipWindow.visible ? tile.closePip() : tile.openPip()
             }
             TileButton { visible: tile.playing; iconName: "fullscreen"; tip: I18n.t("video.action.fullscreen.open"); onClicked: tile.openFullscreen() }
             TileButton {

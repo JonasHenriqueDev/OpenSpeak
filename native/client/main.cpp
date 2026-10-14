@@ -56,7 +56,7 @@ int main(int argc, char *argv[])
     QCommandLineOption shotOpt(QStringLiteral("screenshot"), QStringLiteral("Salva capturas da janela (prefixo)."), QStringLiteral("arquivo"));
     QCommandLineOption autoStreamOpt(QStringLiteral("autostream"), QStringLiteral("Inicia um stream de teste (requer --debug)."));
     QCommandLineOption meshPortOpt(QStringLiteral("mesh-port"), QStringLiteral("Porta da malha na tailnet (padrão 9987)."), QStringLiteral("porta"));
-    QCommandLineOption openOpt(QStringLiteral("open"), QStringLiteral("Abre um painel ao iniciar: setup | setup-windows | setup-cameras | source | settings | stats | viewers."), QStringLiteral("painel"));
+    QCommandLineOption openOpt(QStringLiteral("open"), QStringLiteral("Abre um painel ao iniciar: setup | setup-windows | setup-cameras | source | settings | stats | viewers | pip."), QStringLiteral("painel"));
     QCommandLineOption autoJoinOpt(QStringLiteral("autojoin"), QStringLiteral("Assiste ao primeiro stream do canal."));
     QCommandLineOption uiSmokeOpt(QStringLiteral("ui-smoke-test"), QStringLiteral("Valida o layout QML em 900x560 e encerra (sem conectar)."));
     QCommandLineOption cloudOpt(QStringLiteral("cloud"), QStringLiteral("Conecta à sala web pública."));

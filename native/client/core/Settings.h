@@ -24,6 +24,7 @@ class Settings : public QObject {
     Q_PROPERTY(bool debug READ debug CONSTANT)
     Q_PROPERTY(QString connectionMode READ connectionMode WRITE setConnectionMode NOTIFY changed)
     Q_PROPERTY(bool automaticUpdates READ automaticUpdates WRITE setAutomaticUpdates NOTIFY changed)
+    Q_PROPERTY(bool pipPinned READ pipPinned WRITE setPipPinned NOTIFY changed)
     Q_PROPERTY(bool prereleaseUpdates READ prereleaseUpdates WRITE setPrereleaseUpdates NOTIFY changed)
 public:
     explicit Settings(const QString &profile, bool debug, QObject *parent = nullptr);
@@ -52,6 +53,9 @@ public:
     void setConnectionMode(const QString &v) { set("connectionMode", v); }
     bool automaticUpdates() const { return value("automaticUpdates", true).toBool(); }
     void setAutomaticUpdates(bool v) { set("automaticUpdates", v); }
+    /// Janela picture-in-picture por cima de todos os apps.
+    bool pipPinned() const { return value("pipPinned", true).toBool(); }
+    void setPipPinned(bool v) { set("pipPinned", v); }
     bool prereleaseUpdates() const { return value("prereleaseUpdates", false).toBool(); }
     void setPrereleaseUpdates(bool v) { set("prereleaseUpdates", v); }
 

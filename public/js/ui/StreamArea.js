@@ -122,10 +122,10 @@ export class StreamArea {
       const item = items[rect.index];
       const tile = this.tiles.get(item.info.streamIdentifier);
       tile.setRect(rect, rect.focused);
-      tile.el.hidden = false;
+      tile.setHidden(false);
       visible.add(item.info.streamIdentifier);
     }
-    for (const [id, tile] of this.tiles) if (!visible.has(id)) tile.el.hidden = true;
+    for (const [id, tile] of this.tiles) if (!visible.has(id)) tile.setHidden(true);
     const pageable = focusIndex >= 0 ? items.length - 1 : items.length;
     this.pagerPrev.hidden = this.offset <= 0;
     this.pagerNext.hidden = this.offset + this.perPage >= pageable || this.perPage === 0;

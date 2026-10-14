@@ -46,6 +46,10 @@ class MonitoringTests(unittest.TestCase):
         self.assertIsNone(restarted['clients'][0]['sfuUploadBytesPerSecond'])
         metrics.enrich({'clients': [], 'streams': []})
         self.assertEqual(metrics.previous, {})
+        # Sessões sem os contadores de mídia não derrubam a coleta.
+        partial = snapshot(26000, 0, 0)
+        partial['mediaSessions'] = [{'clid': 2, 'streamId': 's1', 'role': 'viewer'}]
+        self.assertEqual(metrics.enrich(partial)['clients'][1]['sfuDownloadBytes'], 0)
 
     def test_network_handles_reboot_and_new_interfaces(self):
         self.assertEqual(monitor.counter_delta({'ens3': (100, 200)}, {'ens3': (130, 280)}), (30, 80))

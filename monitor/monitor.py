@@ -135,7 +135,7 @@ class ClientMetrics:
                 if session:
                     activity.update(session)
                     activity['uploadBytesPerSecond'], activity['downloadBytesPerSecond'] = rates(
-                        (pid, stream['id'], clid, role), session['mediaRxBytes'], session['mediaTxBytes'])
+                        (pid, stream['id'], clid, role), session.get('mediaRxBytes', 0), session.get('mediaTxBytes', 0))
                 clients[clid]['activities'].append(activity)
 
         for client in clients.values():

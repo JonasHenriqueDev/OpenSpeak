@@ -13,6 +13,10 @@ import { WsVideoPlayer } from './WsVideoPlayer.js';
 
 const discord = discordContext();
 const rpc = discord?.clientId ? new DiscordRpc(discord) : null;
+// Login com a conta do Discord (OAuth2): desligado por padrão; liga com
+// discordLogin: true no config.js e as credenciais no servidor.
+const discordLogin = !!rpc && globalThis.OpenSpeakConfig?.discordLogin === true;
+let changingName = false;
 
 const app = document.getElementById('app');
 const handler = new ConnectionHandler();
@@ -87,7 +91,9 @@ function renderLobby() {
   replaceChildren(app, h('div.act-lobby',
     h('header.act-top',
       h('div.act-brand', icon('logo'), h('span', handler.serverName || 'OpenSpeak')),
-      h('span.act-dim', handler.ownClient?.nickname ?? ''),
+      h('div.act-me',
+        h('span.act-dim', handler.ownClient?.nickname ?? ''),
+        h('button.btn.small.ghost', { on: { click: changeName } }, 'Trocar nome')),
     ),
     lobbyNotice ? h('div.act-notice', icon('info'), lobbyNotice) : null,
     !sfu ? h('div.act-notice.warn', icon('warning'), 'Este servidor não tem o modo Servidor (SFU); não é possível assistir pelo Discord.') : null,
@@ -289,8 +295,15 @@ handler.on('changed', () => { if (!watching && handler.connection.connected) ren
 handler.on('streamupdated', () => { if (!watching && handler.connection.connected) renderLobby(); }); // miniaturas
 handler.on('disconnected', () => {
   closePlayer();
-  renderLogin('A conexão com o servidor caiu.');
+  renderLogin(changingName ? '' : 'A conexão com o servidor caiu.');
+  changingName = false;
 });
+
+/** Sai do servidor e volta ao formulário para entrar com outro nome. */
+function changeName() {
+  changingName = true;
+  handler.disconnect();
+}
 document.addEventListener('fullscreenchange', () => {
   if (!watching) return;
   const on = !!document.fullscreenElement;
@@ -300,7 +313,7 @@ document.addEventListener('fullscreenchange', () => {
 
 async function start() {
   let nickname = settings.get('nickname');
-  if (rpc) {
+  if (discordLogin) {
     replaceChildren(app, h('div.act-center', h('div.act-card',
       h('div.act-brand', icon('logo'), h('span', 'OpenSpeak')),
       h('p.act-dim', 'Entrando com sua conta do Discord…'))));

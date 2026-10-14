@@ -44,9 +44,13 @@ O servidor precisa estar com a versão que tem o `SfuWsViewer`.
 
 Ícone 1024×1024 para o portal: `docs/discord-app-icon-1024.png`.
 
-## Nome do Discord como apelido
+## Nome do Discord como apelido (desligado)
 
-Dentro do Discord, a atividade entra com o nome de exibição da conta, no formato
+Por padrão a atividade pede o nome (e tem **Trocar nome** na lista de
+transmissões). Para ligar o login com a conta do Discord, além dos passos abaixo,
+defina `discordLogin: true` no `config.js` servido pelo servidor.
+
+Com ele ligado, a atividade entra com o nome de exibição da conta, no formato
 `Nome (discord)`. O SDK só libera o usuário depois de um login OAuth2 (escopo
 `identify`), e trocar o código pelo token exige o **client secret**, que fica só
 no servidor (`POST /api/discord/token`).

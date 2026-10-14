@@ -18,6 +18,7 @@
 
 .act-lobby { max-width: 1400px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 .act-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.act-me { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .act-notice {
   display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radius);
   background: var(--accent-soft); color: var(--text);

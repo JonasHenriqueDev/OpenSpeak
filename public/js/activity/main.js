@@ -170,7 +170,8 @@ function openPlayer(stream, audio) {
   syncVolume();
   const fsBtn = h('button.act-icon', { title: 'Tela cheia', on: { click: () => toggleFullscreen() } }, icon('fullscreen'));
   let fill = readFill();
-  const fillBtn = h('button.act-icon', { on: { click: () => { fill = !fill; saveFill(fill); syncFill(); fit(); } } });
+  const toggleFill = () => { fill = !fill; saveFill(fill); syncFill(); fit(); };
+  const fillBtn = h('button.act-icon', { on: { click: toggleFill } });
   const syncFill = () => {
     replaceChildren(fillBtn, icon(fill ? 'grid' : 'focus'));
     fillBtn.title = fill ? 'Mostrar a imagem inteira' : 'Preencher a área (corta as bordas)';
@@ -192,10 +193,11 @@ function openPlayer(stream, audio) {
     stats,
     WsAudioPlayer.supported ? h('div.act-volume-wrap', volumeBtn, volume) : null,
     fillBtn,
-    fsBtn,
+    // O Discord bloqueia a Fullscreen API no iframe da atividade: a área máxima é a que ele reserva.
+    discord ? null : fsBtn,
   );
   const el = h('div.act-player', canvas, status, bar);
-  el.addEventListener('dblclick', () => toggleFullscreen());
+  el.addEventListener('dblclick', () => (discord ? toggleFill() : toggleFullscreen()));
   const resizeObserver = new ResizeObserver(fit);
   resizeObserver.observe(el);
   const player = new WsVideoPlayer({

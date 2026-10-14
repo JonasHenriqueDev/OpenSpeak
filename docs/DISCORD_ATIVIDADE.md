@@ -19,8 +19,13 @@ usa o player normal:
    WebCodecs num `<canvas>` (`js/activity/WsVideoPlayer.js`).
 
 O player mostra a imagem inteira, com faixas onde a proporção da transmissão não
-bate com a área que o Discord dá à atividade. O botão **Preencher** corta as
-bordas para ocupar a área toda.
+bate com a área que o Discord dá à atividade. O botão **Preencher** (ou duplo
+clique no vídeo) corta as bordas para ocupar a área toda.
+
+O Discord bloqueia a Fullscreen API no iframe da atividade e, mesmo na tela cheia
+dele, reserva faixas em cima e embaixo para o cabeçalho e os controles da chamada
+(numa tela 1920×1080 a atividade recebe ~1920×840). Por isso o botão de tela
+cheia não aparece dentro do Discord; tela cheia de verdade só no app ou na web.
 
 Limitações do protótipo:
 

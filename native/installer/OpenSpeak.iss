@@ -80,6 +80,10 @@ Name: "{group}\Servidor dedicado OpenSpeak"; Filename: "{app}\openspeak-server.e
 Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
+[Registry]
+; "Iniciar com o Windows" é ligado pelo app; a desinstalação apaga a entrada (sem criá-la).
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "OpenSpeak"; Flags: uninsdeletevalue dontcreatekey
+
 [Run]
 ; Per-user setup does not modify machine-wide firewall rules.
 Filename: "{app}\{#AppExe}"; Parameters: "--after-update"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent

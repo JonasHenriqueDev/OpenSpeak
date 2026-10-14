@@ -37,7 +37,8 @@ target_compile_definitions(openspeak_engine PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
 
 # ---------------------------------------------------------------- app
 find_package(Qt6 REQUIRED COMPONENTS MultimediaPrivate)
-qt_add_executable(OpenSpeak WIN32 main.cpp WindowThumbnail.cpp WindowThumbnail.h assets/OpenSpeak.rc)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
+qt_add_executable(OpenSpeak WIN32 main.cpp WindowThumbnail.cpp WindowThumbnail.h TrayIcon.cpp TrayIcon.h assets/OpenSpeak.rc)
 qt_add_resources(OpenSpeak app_icon PREFIX "/" FILES assets/openspeak.ico)
 set_target_properties(OpenSpeak PROPERTIES OUTPUT_NAME "OpenSpeak")
 
@@ -62,7 +63,8 @@ qt_add_qml_module(OpenSpeak
         qml/I18n.js
 )
 
-target_link_libraries(OpenSpeak PRIVATE openspeak_engine Qt6::Quick Qt6::QuickControls2 Qt6::MultimediaPrivate dwmapi)
+# Widgets: QSystemTrayIcon/QMenu do ícone na bandeja. Network: QLocalServer (instância única).
+target_link_libraries(OpenSpeak PRIVATE openspeak_engine Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Network Qt6::MultimediaPrivate dwmapi)
 
 if(OPENSPEAK_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)

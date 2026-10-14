@@ -9,7 +9,8 @@ ApplicationWindow {
     height: 840
     minimumWidth: 900
     minimumHeight: 560
-    visible: true
+    // Aberto pelo Windows com "Iniciar minimizado na bandeja": começa escondido.
+    visible: !StartHidden
     title: Server.connected ? "OpenSpeak — " + Server.serverName : "OpenSpeak"
     color: Theme.background
     flags: Qt.Window | Qt.FramelessWindowHint
@@ -19,7 +20,7 @@ ApplicationWindow {
         color: Theme.contrast
         MouseArea {
             anchors.fill: parent
-            anchors.rightMargin: 210
+            anchors.rightMargin: 246
             onPressed: window.startSystemMove()
             onDoubleClicked: window.toggleMaximized()
         }
@@ -51,6 +52,16 @@ ApplicationWindow {
                 ToolTip.text: "Atualizações · " + Updater.version
                 contentItem: Icon { name: "download"; size: 16 }
                 onClicked: updatesDialog.open()
+            }
+            ToolButton {
+                objectName: "preferencesButton"
+                Layout.preferredWidth: 36
+                Layout.preferredHeight: 34
+                Accessible.name: I18n.t("app.prefs.tooltip")
+                ToolTip.visible: hovered
+                ToolTip.text: I18n.t("app.prefs.tooltip")
+                contentItem: Icon { name: "settings"; size: 16 }
+                onClicked: preferencesDialog.open()
             }
             Repeater {
                 model: ["minimize", "maximize", "close"]
@@ -87,6 +98,102 @@ ApplicationWindow {
     function toggleMaximized() {
         if (visibility === Window.Maximized) showNormal()
         else showMaximized()
+    }
+
+    // ------------------------------------------------------ bandeja do sistema
+    // O X esconde a janela na bandeja (Settings.minimizeToTray); "Sair" encerra de fato.
+    property bool quitting: false
+    property bool restoreMaximized: false
+    onVisibilityChanged: function() {
+        if (window.visibility === Window.Maximized) restoreMaximized = true
+        else if (window.visibility === Window.Windowed) restoreMaximized = false
+    }
+    onClosing: function(close) {
+        if (quitting) return
+        if (Settings.minimizeToTray && Tray.visible) {
+            close.accepted = false
+            hideToTray()
+            return
+        }
+        quitApp()
+    }
+    function hideToTray() {
+        window.hide()
+        if (!Settings.trayNoticeShown) {
+            Tray.showMessage(I18n.t("app.tray.notice.title"), I18n.t("app.tray.notice.text"))
+            Settings.trayNoticeShown = true
+        }
+    }
+    function showFromTray() {
+        if (!window.visible || window.visibility === Window.Minimized) {
+            if (restoreMaximized) window.showMaximized()
+            else window.showNormal()
+        }
+        window.raise()
+        window.requestActivate()
+    }
+    function quitApp() {
+        quitting = true
+        // Encerra as transmissões antes da conexão (aboutToQuit desconecta do servidor).
+        Screenshare.stopAllStreams()
+        Qt.quit()
+    }
+    Binding { target: Tray; property: "visible"; value: Tray.available && !UiSmoke }
+    Binding { target: Tray; property: "streaming"; value: Screenshare.streaming }
+    Binding { target: Tray; property: "audioMuted"; value: Screenshare.audioMuted }
+    Connections {
+        target: Tray
+        function onOpenRequested() { window.showFromTray() }
+        function onMessageClicked() { window.showFromTray() }
+        function onStopStreamingRequested() { Screenshare.stopAllStreams() }
+        function onToggleMuteRequested() { Screenshare.audioMuted = !Screenshare.audioMuted }
+        function onSettingsRequested() { window.showFromTray(); preferencesDialog.open() }
+        function onQuitRequested() { window.quitApp() }
+    }
+    Dialog {
+        id: preferencesDialog
+        objectName: "preferencesDialog"
+        title: I18n.t("app.prefs.title")
+        anchors.centerIn: parent
+        width: Math.min(480, window.width - 40)
+        modal: true
+        standardButtons: Dialog.Close
+        contentItem: ColumnLayout {
+            spacing: 10
+            Label { text: I18n.t("app.prefs.section.tray"); font.weight: Font.DemiBold }
+            CheckBox {
+                objectName: "minimizeToTray"
+                text: I18n.t("app.prefs.minimize_to_tray")
+                enabled: Tray.available
+                checked: Settings.minimizeToTray
+                onToggled: Settings.minimizeToTray = checked
+            }
+            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
+                text: Tray.available ? I18n.t("app.prefs.minimize_to_tray.hint") : I18n.t("app.prefs.tray_unavailable") }
+            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.startup"); font.weight: Font.DemiBold }
+            CheckBox {
+                objectName: "launchAtStartup"
+                text: I18n.t("app.prefs.launch_at_startup")
+                checked: Settings.launchAtStartup
+                onToggled: Settings.launchAtStartup = checked
+            }
+            CheckBox {
+                objectName: "startMinimized"
+                Layout.leftMargin: 24
+                text: I18n.t("app.prefs.start_minimized")
+                enabled: Settings.launchAtStartup && Tray.available
+                checked: Settings.startMinimized
+                onToggled: Settings.startMinimized = checked
+            }
+            Label { Layout.fillWidth: true; Layout.leftMargin: 24; wrapMode: Text.WordWrap; color: Theme.textDim
+                text: I18n.t("app.prefs.start_minimized.hint") }
+            Button {
+                Layout.topMargin: 6
+                text: I18n.t("app.prefs.quit")
+                flat: true
+                onClicked: window.quitApp()
+            }
+        }
     }
     Dialog {
         id: updatesDialog
@@ -153,6 +260,16 @@ ApplicationWindow {
     }
     Component.onCompleted: {
         if (DebugOpen === "updates") Qt.callLater(() => updatesDialog.open())
+        if (DebugOpen === "preferences") Qt.callLater(() => preferencesDialog.open())
+        Tray.texts = {
+            open: I18n.t("app.tray.open"),
+            stop: I18n.t("app.tray.stop"),
+            mute: I18n.t("app.tray.mute"),
+            settings: I18n.t("app.tray.settings"),
+            quit: I18n.t("app.tray.quit"),
+            tooltip: I18n.t("app.tray.tooltip"),
+            tooltipStreaming: I18n.t("app.tray.tooltip.streaming")
+        }
 
     }
     // Delegate resizing to Windows so edge drags retain native behavior.
@@ -245,6 +362,8 @@ ApplicationWindow {
             toasts.show({ key: key, kind: "info", text: I18n.t(key) })
         }
         function onJoinRequest(id, clid, nickname) {
+            if (!window.visible || window.visibility === Window.Minimized)
+                Tray.showMessage(I18n.t("app.tray.join_request.title"), I18n.t("video.join.request.notification", { user: nickname }))
             toasts.show({
                 key: "join:" + id + ":" + clid,
                 kind: "request",

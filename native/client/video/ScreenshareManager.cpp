@@ -362,7 +362,7 @@ void ScreenshareManager::updateInboundMute()
     bool watching = false;
     for (InboundView &v : m_inbound)
         if (v.session) {
-            v.session->setVolume(mute ? 0.0 : v.volume);
+            v.session->setVolume(effectiveVolume(v));
             watching = true;
         }
     if (mute && watching)
@@ -450,6 +450,15 @@ void ScreenshareManager::stopStream(const QString &id)
         return;
     disposeOwn(id);
     m_conn->sendCommand(QStringLiteral("stopstream"), {{"streamIdentifier", id}});
+}
+
+void ScreenshareManager::stopAllStreams()
+{
+    QStringList ids;
+    for (const auto &[id, own] : m_own)
+        ids.append(id);
+    for (const QString &id : ids)
+        stopStream(id);
 }
 
 void ScreenshareManager::setPaused(const QString &id, bool paused)
@@ -633,6 +642,22 @@ void ScreenshareManager::detachVideo(const QString &id, QVideoSink *sink)
         it->session->removeVideoSink(sink);
 }
 
+double ScreenshareManager::effectiveVolume(const InboundView &view) const
+{
+    return m_inboundMuted || m_userMuted ? 0.0 : view.volume;
+}
+
+void ScreenshareManager::setAudioMuted(bool muted)
+{
+    if (muted == m_userMuted)
+        return;
+    m_userMuted = muted;
+    for (InboundView &v : m_inbound)
+        if (v.session)
+            v.session->setVolume(effectiveVolume(v));
+    emit audioMutedChanged();
+}
+
 void ScreenshareManager::setVolume(const QString &id, double volume)
 {
     auto it = m_inbound.find(id);
@@ -640,7 +665,7 @@ void ScreenshareManager::setVolume(const QString &id, double volume)
         return;
     it->volume = volume;
     if (it->session)
-        it->session->setVolume(m_inboundMuted ? 0.0 : volume);
+        it->session->setVolume(effectiveVolume(*it));
 }
 
 // ============================================================ notificações
@@ -848,7 +873,7 @@ void ScreenshareManager::onJoinResponse(const QJsonObject &a)
     }, this);
     if (!relay && (m_handler->cloudMode() || (!m_handler->meshMode() && QUrl(m_settings->serverUrl()).host().endsWith(QLatin1String(".ts.net")))) && m_handler->directory())
         session->setBindAddress(m_handler->directory()->self().address.toString());
-    session->setVolume(m_inboundMuted ? 0.0 : it->volume);
+    session->setVolume(effectiveVolume(*it));
     if (m_inboundMuted)
         emit noticeOccurred(QStringLiteral("video.audio.discord.inbound_muted"));
     it->session = session;

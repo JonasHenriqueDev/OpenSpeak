@@ -9,7 +9,7 @@ executável.
 
 | Componente | Licença | Uso |
 |---|---|---|
-| [Qt 6](https://www.qt.io/) (Core, Gui, Quick, QuickControls2, Multimedia, Network, WebSockets) | LGPL-3.0 | Interface, captura, rede. Carregado como DLLs substituíveis |
+| [Qt 6](https://www.qt.io/) (Core, Gui, Widgets, Quick, QuickControls2, Multimedia, Network, WebSockets) | LGPL-3.0 | Interface, captura, rede. Carregado como DLLs substituíveis |
 | [Qt HTTP Server](https://doc.qt.io/qt-6/qthttpserver-index.html) | GPL-3.0 | Servidor dedicado |
 | [FFmpeg](https://ffmpeg.org/) (avcodec, swscale, swresample, avutil) | LGPL-2.1-or-later | Codificação/decodificação de vídeo e áudio |
 | [libdatachannel](https://github.com/paullouisageneau/libdatachannel) | MPL-2.0 | WebRTC |

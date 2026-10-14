@@ -13,10 +13,13 @@
 #include "SourceThumbnails.h"
 #include "WindowThumbnail.h"
 #include "AutoUpdater.h"
+#include "TrayIcon.h"
 
+#include <QApplication>
 #include <QCommandLineParser>
-#include <QGuiApplication>
 #include <QIcon>
+#include <QLocalServer>
+#include <QLocalSocket>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -40,7 +43,8 @@ static QQuickItem *findVisualItem(QQuickItem *root, const QString &name)
 
 int main(int argc, char *argv[])
 {
-    QGuiApplication app(argc, argv);
+    // QApplication (e não QGuiApplication) por causa do menu do ícone na bandeja.
+    QApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("OpenSpeak"));
     QGuiApplication::setOrganizationName(QStringLiteral("OpenSpeak"));
     QGuiApplication::setApplicationVersion(QStringLiteral(OPENSPEAK_VERSION));
@@ -69,7 +73,8 @@ int main(int argc, char *argv[])
     QCommandLineOption waitPidOpt(QStringLiteral("wait-pid"), QStringLiteral("Processo que precisa encerrar antes da atualização."), QStringLiteral("pid"));
     QCommandLineOption restartOpt(QStringLiteral("restart-after-update"), QStringLiteral("Reabre o app após atualização solicitada."));
     QCommandLineOption afterUpdateOpt(QStringLiteral("after-update"), QStringLiteral("Aberto pelo instalador ao fim da atualização."));
-    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt, cloudOpt, quitOpt, updateOpt, digestOpt, waitPidOpt, restartOpt, afterUpdateOpt});
+    QCommandLineOption autostartOpt(QStringLiteral("autostart"), QStringLiteral("Aberto pelo Windows ao entrar na conta."));
+    parser.addOptions({profileOpt, debugOpt, serverOpt, nickOpt, autoOpt, shotOpt, autoStreamOpt, autoJoinOpt, openOpt, meshPortOpt, uiSmokeOpt, cloudOpt, quitOpt, updateOpt, digestOpt, waitPidOpt, restartOpt, afterUpdateOpt, autostartOpt});
     parser.process(app);
     if (parser.isSet(updateOpt))
         return AutoUpdater::runInstallHelper(parser.value(updateOpt), parser.value(digestOpt), parser.value(waitPidOpt).toUInt(), parser.isSet(restartOpt));
@@ -86,7 +91,29 @@ int main(int argc, char *argv[])
     }
 #endif
 
+    // Uma instância por perfil: abrir de novo (atalho, menu Iniciar) só traz de volta a
+    // janela que está na bandeja. Depuração e testes podem abrir várias.
+    const bool singleInstance = !parser.isSet(debugOpt) && !parser.isSet(uiSmokeOpt) && !parser.isSet(shotOpt);
+    const QString instanceName = QStringLiteral("OpenSpeak-%1-%2")
+        .arg(qEnvironmentVariable("USERNAME"), parser.value(profileOpt).isEmpty() ? QStringLiteral("default") : parser.value(profileOpt));
+    if (singleInstance) {
+        QLocalSocket other;
+        other.connectToServer(instanceName);
+        if (other.waitForConnected(500)) {
+#ifdef Q_OS_WIN
+            AllowSetForegroundWindow(ASFW_ANY);
+#endif
+            other.write(parser.isSet(autostartOpt) ? "autostart" : "show");
+            other.waitForBytesWritten(500);
+            other.disconnectFromServer();
+            return 0;
+        }
+    }
+
     Settings settings(parser.value(profileOpt), parser.isSet(debugOpt));
+    settings.refreshLaunchAtStartup();
+    // A janela pode ficar escondida na bandeja; quem encerra é o "Sair" (Main.qml).
+    QApplication::setQuitOnLastWindowClosed(false);
     AutoUpdater updater(&settings);
     if (!parser.isSet(debugOpt) && !parser.isSet(uiSmokeOpt))
         QObject::connect(&app, &QCoreApplication::aboutToQuit, &updater, &AutoUpdater::installOnExit);
@@ -111,6 +138,21 @@ int main(int argc, char *argv[])
         QTimer::singleShot(qBound(1, parser.value(quitOpt).toInt(), 3600) * 1000, &app, &QCoreApplication::quit);
     StreamLayout layout;
     SourceThumbnails sourceThumbnails;
+    TrayIcon tray;
+    QLocalServer instanceServer;
+    if (singleInstance) {
+        QLocalServer::removeServer(instanceName);
+        instanceServer.listen(instanceName);
+        QObject::connect(&instanceServer, &QLocalServer::newConnection, &tray, [&] {
+            while (QLocalSocket *client = instanceServer.nextPendingConnection()) {
+                QObject::connect(client, &QLocalSocket::disconnected, client, &QObject::deleteLater);
+                QObject::connect(client, &QLocalSocket::readyRead, &tray, [&tray, client] {
+                    if (client->readAll().startsWith("show"))
+                        emit tray.openRequested();
+                });
+            }
+        });
+    }
 
     QQmlApplicationEngine engine;
     qmlRegisterType<WindowThumbnail>("OpenSpeak.Native", 1, 0, "WindowThumbnail");
@@ -124,6 +166,10 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("DebugOpen"), parser.value(openOpt));
     engine.rootContext()->setContextProperty(QStringLiteral("UiSmoke"), parser.isSet(uiSmokeOpt));
     engine.rootContext()->setContextProperty(QStringLiteral("LiteEdition"), lite);
+    engine.rootContext()->setContextProperty(QStringLiteral("Tray"), &tray);
+    // Aberto pelo Windows com "Iniciar minimizado": só o ícone na bandeja.
+    engine.rootContext()->setContextProperty(QStringLiteral("StartHidden"),
+        parser.isSet(autostartOpt) && settings.startMinimized() && tray.available() && !parser.isSet(uiSmokeOpt));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app, [] { QCoreApplication::exit(1); },
                      Qt::QueuedConnection);
     engine.loadFromModule(QStringLiteral("OpenSpeak"), QStringLiteral("Main"));
@@ -143,8 +189,8 @@ int main(int argc, char *argv[])
             } else if (panel == "startup") {
                 auto *startup = findVisualItem(window->contentItem(), QStringLiteral("startupScreen"));
                 valid = valid && startup && startup->isVisible() && startup->width() >= 800;
-            } else if (panel == "updates") {
-                auto *dialog = window->findChild<QObject *>(QStringLiteral("updatesDialog"));
+            } else if (panel == "updates" || panel == "preferences") {
+                auto *dialog = window->findChild<QObject *>(panel == "updates" ? QStringLiteral("updatesDialog") : QStringLiteral("preferencesDialog"));
                 valid = valid && dialog && dialog->property("visible").toBool()
                     && dialog->property("width").toDouble() >= 400
                     && dialog->property("height").toDouble() < window->height();

@@ -34,6 +34,8 @@ class ScreenshareManager : public QObject {
     Q_PROPERTY(QStringList encoders READ encoders CONSTANT)
     Q_PROPERTY(bool previewActive READ previewActive NOTIFY previewChanged)
     Q_PROPERTY(QString previewLabel READ previewLabel NOTIFY previewChanged)
+    Q_PROPERTY(bool streaming READ streaming NOTIFY itemsChanged)
+    Q_PROPERTY(bool audioMuted READ audioMuted WRITE setAudioMuted NOTIFY audioMutedChanged)
 public:
     ScreenshareManager(ConnectionHandler *handler, Settings *settings, QObject *parent = nullptr);
     ~ScreenshareManager() override;
@@ -43,6 +45,10 @@ public:
     QStringList encoders() const { return VideoEncoder::availableEncoders(); }
     bool previewActive() const { return m_preview && m_preview->isActive(); }
     QString previewLabel() const { return m_preview ? m_preview->label() : QString(); }
+    bool streaming() const { return !m_own.empty(); }
+    /// Silencia o áudio de todos os streams assistidos (ação da bandeja).
+    bool audioMuted() const { return m_userMuted; }
+    void setAudioMuted(bool muted);
 
     // --- fontes / pré-visualização (diálogo de setup)
     Q_INVOKABLE QVariantList sources(int type) const;
@@ -56,6 +62,7 @@ public:
     Q_INVOKABLE void updateStream(const QString &id, const QVariantMap &config);
     Q_INVOKABLE void changeSource(const QString &id);
     Q_INVOKABLE void stopStream(const QString &id);
+    Q_INVOKABLE void stopAllStreams();
     Q_INVOKABLE void setPaused(const QString &id, bool paused);
     Q_INVOKABLE QVariantMap ownConfig(const QString &id) const;
     Q_INVOKABLE void attachOwnPreview(const QString &id, QVideoSink *sink);
@@ -79,6 +86,7 @@ public:
 signals:
     void itemsChanged();
     void previewChanged();
+    void audioMutedChanged();
     void statsChanged(const QString &id);
     void joinRequest(const QString &id, int clid, const QString &nickname);
     void joinRequestResolved(const QString &id, int clid);
@@ -160,6 +168,7 @@ private:
     void collectStats();
     void notifyChanged();
     void updateInboundMute();
+    double effectiveVolume(const InboundView &view) const;
     QString errorMessage(const CommandResult &r) const;
 
     ConnectionHandler *m_handler;
@@ -176,6 +185,7 @@ private:
     // Com o Discord excluído, o OpenSpeak entra na captura da tela: o áudio de quem
     // você assiste vazaria para a sua transmissão, então ele é silenciado.
     bool m_inboundMuted = false;
+    bool m_userMuted = false;
 };
 
 } // namespace openspeak

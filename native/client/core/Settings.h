@@ -27,6 +27,10 @@ class Settings : public QObject {
     Q_PROPERTY(bool pipPinned READ pipPinned WRITE setPipPinned NOTIFY changed)
     Q_PROPERTY(bool prereleaseUpdates READ prereleaseUpdates WRITE setPrereleaseUpdates NOTIFY changed)
     Q_PROPERTY(QString updateEdition READ updateEdition WRITE setUpdateEdition NOTIFY changed)
+    Q_PROPERTY(bool minimizeToTray READ minimizeToTray WRITE setMinimizeToTray NOTIFY changed)
+    Q_PROPERTY(bool startMinimized READ startMinimized WRITE setStartMinimized NOTIFY changed)
+    Q_PROPERTY(bool launchAtStartup READ launchAtStartup WRITE setLaunchAtStartup NOTIFY changed)
+    Q_PROPERTY(bool trayNoticeShown READ trayNoticeShown WRITE setTrayNoticeShown NOTIFY changed)
 public:
     explicit Settings(const QString &profile, bool debug, QObject *parent = nullptr);
 
@@ -62,6 +66,20 @@ public:
     /// Edição recebida nas atualizações: "lite", "full" ou vazio (a instalada).
     QString updateEdition() const { return value("updateEdition").toString(); }
     void setUpdateEdition(const QString &v) { set("updateEdition", v); }
+    /// O X da janela esconde o app na bandeja em vez de sair.
+    bool minimizeToTray() const { return value("minimizeToTray", true).toBool(); }
+    void setMinimizeToTray(bool v) { set("minimizeToTray", v); }
+    /// Aberto pelo Windows (--autostart), começa só com o ícone na bandeja.
+    bool startMinimized() const { return value("startMinimized", false).toBool(); }
+    void setStartMinimized(bool v) { set("startMinimized", v); }
+    /// Entrada em HKCU\...\CurrentVersion\Run (não fica no QSettings do perfil).
+    bool launchAtStartup() const;
+    void setLaunchAtStartup(bool v);
+    /// Reescreve a entrada de inicialização com o caminho atual do .exe (versão portátil movida).
+    void refreshLaunchAtStartup();
+    /// Balão "continua rodando na bandeja" já exibido uma vez.
+    bool trayNoticeShown() const { return value("trayNoticeShown", false).toBool(); }
+    void setTrayNoticeShown(bool v) { set("trayNoticeShown", v); }
 
     Q_INVOKABLE bool isContact(const QString &uid) const { return contacts().contains(uid); }
     Q_INVOKABLE void toggleContact(const QString &uid);
@@ -74,6 +92,8 @@ signals:
 private:
     QVariant value(const QString &key, const QVariant &def = {}) const;
     void set(const QString &key, const QVariant &v);
+    QString startupEntryName() const;
+    QString startupCommand() const;
 
     QSettings m_settings;
     QString m_group;

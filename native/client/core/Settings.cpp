@@ -2,7 +2,11 @@
 #include "Presets.h"
 #include "Protocol.h"
 
+#include <QCoreApplication>
+#include <QDir>
 #include <QRandomGenerator>
+
+static const char RunKey[] = R"(HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run)";
 
 namespace openspeak {
 
@@ -51,6 +55,52 @@ QVariantMap Settings::lastStreamingConfig() const
     def("fps", p->fps);
     def("audioBitrate", p->audioBitrate);
     return cfg;
+}
+
+QString Settings::startupEntryName() const
+{
+    return m_group == QLatin1String("default") ? QStringLiteral("OpenSpeak") : QStringLiteral("OpenSpeak (%1)").arg(m_group);
+}
+
+QString Settings::startupCommand() const
+{
+    QString cmd = QStringLiteral("\"%1\" --autostart").arg(QDir::toNativeSeparators(QCoreApplication::applicationFilePath()));
+    if (m_group != QLatin1String("default"))
+        cmd += QStringLiteral(" --profile \"%1\"").arg(m_group);
+    return cmd;
+}
+
+bool Settings::launchAtStartup() const
+{
+#ifdef Q_OS_WIN
+    return QSettings(QLatin1String(RunKey), QSettings::NativeFormat).contains(startupEntryName());
+#else
+    return false;
+#endif
+}
+
+void Settings::setLaunchAtStartup(bool v)
+{
+#ifdef Q_OS_WIN
+    QSettings run(QLatin1String(RunKey), QSettings::NativeFormat);
+    if (v)
+        run.setValue(startupEntryName(), startupCommand());
+    else
+        run.remove(startupEntryName());
+    run.sync();
+    emit changed();
+#else
+    Q_UNUSED(v);
+#endif
+}
+
+void Settings::refreshLaunchAtStartup()
+{
+#ifdef Q_OS_WIN
+    QSettings run(QLatin1String(RunKey), QSettings::NativeFormat);
+    if (run.contains(startupEntryName()) && run.value(startupEntryName()).toString() != startupCommand())
+        run.setValue(startupEntryName(), startupCommand());
+#endif
 }
 
 void Settings::toggleContact(const QString &uid)

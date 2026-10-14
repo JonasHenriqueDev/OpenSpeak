@@ -141,12 +141,14 @@ ApplicationWindow {
     Binding { target: Tray; property: "visible"; value: Tray.available && !UiSmoke }
     Binding { target: Tray; property: "streaming"; value: Screenshare.streaming }
     Binding { target: Tray; property: "audioMuted"; value: Screenshare.audioMuted }
+    Binding { target: Tray; property: "soundsMuted"; value: !Settings.soundEffects }
     Connections {
         target: Tray
         function onOpenRequested() { window.showFromTray() }
         function onMessageClicked() { window.showFromTray() }
         function onStopStreamingRequested() { Screenshare.stopAllStreams() }
         function onToggleMuteRequested() { Screenshare.audioMuted = !Screenshare.audioMuted }
+        function onToggleSoundsRequested() { Settings.soundEffects = !Settings.soundEffects }
         function onSettingsRequested() { window.showFromTray(); preferencesDialog.open() }
         function onQuitRequested() { window.quitApp() }
     }
@@ -156,11 +158,54 @@ ApplicationWindow {
         title: I18n.t("app.prefs.title")
         anchors.centerIn: parent
         width: Math.min(480, window.width - 40)
+        height: Math.min(implicitHeight, parent.height - 40)
         modal: true
         standardButtons: Dialog.Close
-        contentItem: ColumnLayout {
+        // Rola quando a janela é baixa demais para todas as seções.
+        contentItem: ScrollView {
+            id: preferencesScroll
+            contentWidth: availableWidth
+            ColumnLayout {
+            width: preferencesScroll.availableWidth
             spacing: 10
-            Label { text: I18n.t("app.prefs.section.tray"); font.weight: Font.DemiBold }
+            Label { text: I18n.t("app.prefs.section.sounds"); font.weight: Font.DemiBold }
+            CheckBox {
+                objectName: "soundEffects"
+                text: I18n.t("app.prefs.sounds")
+                checked: Settings.soundEffects
+                onToggled: Settings.soundEffects = checked
+            }
+            RowLayout {
+                objectName: "soundTheme"
+                Layout.leftMargin: 24
+                spacing: 12
+                enabled: Settings.soundEffects
+                RadioButton {
+                    text: I18n.t("app.prefs.sounds.suave")
+                    checked: Settings.soundTheme !== "bolha"
+                    onClicked: { Settings.soundTheme = "suave"; Sounds.preview("suave", "entrar_sala") }
+                }
+                RadioButton {
+                    text: I18n.t("app.prefs.sounds.bolha")
+                    checked: Settings.soundTheme === "bolha"
+                    onClicked: { Settings.soundTheme = "bolha"; Sounds.preview("bolha", "entrar_sala") }
+                }
+            }
+            RowLayout {
+                Layout.leftMargin: 24
+                Layout.fillWidth: true
+                enabled: Settings.soundEffects
+                Label { text: I18n.t("app.prefs.sounds.volume"); color: Theme.textDim }
+                Slider {
+                    objectName: "soundVolume"
+                    Layout.fillWidth: true
+                    from: 0; to: 100; stepSize: 5
+                    value: Settings.soundVolume
+                    onMoved: Settings.soundVolume = value
+                    onPressedChanged: if (!pressed) Sounds.preview(Settings.soundTheme, "alguem_entrou")
+                }
+            }
+            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.tray"); font.weight: Font.DemiBold }
             CheckBox {
                 objectName: "minimizeToTray"
                 text: I18n.t("app.prefs.minimize_to_tray")
@@ -192,6 +237,7 @@ ApplicationWindow {
                 text: I18n.t("app.prefs.quit")
                 flat: true
                 onClicked: window.quitApp()
+            }
             }
         }
     }
@@ -265,6 +311,7 @@ ApplicationWindow {
             open: I18n.t("app.tray.open"),
             stop: I18n.t("app.tray.stop"),
             mute: I18n.t("app.tray.mute"),
+            muteSounds: I18n.t("app.tray.mute_sounds"),
             settings: I18n.t("app.tray.settings"),
             quit: I18n.t("app.tray.quit"),
             tooltip: I18n.t("app.tray.tooltip"),

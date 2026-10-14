@@ -16,6 +16,8 @@ TrayIcon::TrayIcon(QObject *parent) : QObject(parent)
     m_stop = m_menu->addAction(QString());
     m_mute = m_menu->addAction(QString());
     m_mute->setCheckable(true);
+    m_muteSounds = m_menu->addAction(QString());
+    m_muteSounds->setCheckable(true);
     m_menu->addSeparator();
     m_settings = m_menu->addAction(QString());
     m_menu->addSeparator();
@@ -25,6 +27,7 @@ TrayIcon::TrayIcon(QObject *parent) : QObject(parent)
     connect(m_open, &QAction::triggered, this, &TrayIcon::openRequested);
     connect(m_stop, &QAction::triggered, this, &TrayIcon::stopStreamingRequested);
     connect(m_mute, &QAction::triggered, this, &TrayIcon::toggleMuteRequested);
+    connect(m_muteSounds, &QAction::triggered, this, &TrayIcon::toggleSoundsRequested);
     connect(m_settings, &QAction::triggered, this, &TrayIcon::settingsRequested);
     connect(m_quit, &QAction::triggered, this, &TrayIcon::quitRequested);
     connect(m_tray, &QSystemTrayIcon::messageClicked, this, &TrayIcon::messageClicked);
@@ -72,6 +75,15 @@ void TrayIcon::setAudioMuted(bool v)
     emit changed();
 }
 
+void TrayIcon::setSoundsMuted(bool v)
+{
+    if (v == m_soundsMuted)
+        return;
+    m_soundsMuted = v;
+    refresh();
+    emit changed();
+}
+
 void TrayIcon::setTexts(const QVariantMap &texts)
 {
     m_texts = texts;
@@ -98,6 +110,8 @@ void TrayIcon::refresh()
     m_stop->setVisible(m_streaming);
     m_mute->setText(text("mute", QStringLiteral("Silenciar streams")));
     m_mute->setChecked(m_audioMuted);
+    m_muteSounds->setText(text("muteSounds", QStringLiteral("Silenciar efeitos sonoros")));
+    m_muteSounds->setChecked(m_soundsMuted);
     m_settings->setText(text("settings", QStringLiteral("Preferências…")));
     m_quit->setText(text("quit", QStringLiteral("Sair do OpenSpeak")));
     m_tray->setToolTip(m_streaming ? text("tooltipStreaming", QStringLiteral("OpenSpeak — transmitindo"))

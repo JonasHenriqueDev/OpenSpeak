@@ -16,7 +16,8 @@ class TrayIcon : public QObject {
     /// Estado refletido no menu (transmitindo / áudio silenciado).
     Q_PROPERTY(bool streaming READ streaming WRITE setStreaming NOTIFY changed)
     Q_PROPERTY(bool audioMuted READ audioMuted WRITE setAudioMuted NOTIFY changed)
-    /// Textos do menu vindos do I18n.js: open, stop, mute, settings, quit, tooltip, tooltipStreaming.
+    Q_PROPERTY(bool soundsMuted READ soundsMuted WRITE setSoundsMuted NOTIFY changed)
+    /// Textos do menu vindos do I18n.js: open, stop, mute, muteSounds, settings, quit, tooltip, tooltipStreaming.
     Q_PROPERTY(QVariantMap texts READ texts WRITE setTexts NOTIFY changed)
 public:
     explicit TrayIcon(QObject *parent = nullptr);
@@ -29,6 +30,8 @@ public:
     void setStreaming(bool v);
     bool audioMuted() const { return m_audioMuted; }
     void setAudioMuted(bool v);
+    bool soundsMuted() const { return m_soundsMuted; }
+    void setSoundsMuted(bool v);
     QVariantMap texts() const { return m_texts; }
     void setTexts(const QVariantMap &texts);
 
@@ -39,6 +42,7 @@ signals:
     void openRequested();
     void stopStreamingRequested();
     void toggleMuteRequested();
+    void toggleSoundsRequested();
     void settingsRequested();
     void quitRequested();
     /// Clique no balão de notificação.
@@ -53,9 +57,11 @@ private:
     QAction *m_open = nullptr;
     QAction *m_stop = nullptr;
     QAction *m_mute = nullptr;
+    QAction *m_muteSounds = nullptr;
     QAction *m_settings = nullptr;
     QAction *m_quit = nullptr;
     bool m_streaming = false;
     bool m_audioMuted = false;
+    bool m_soundsMuted = false;
     QVariantMap m_texts;
 };

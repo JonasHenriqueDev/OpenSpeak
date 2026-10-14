@@ -18,6 +18,12 @@ const STRINGS = {
   'app.settings': 'Configurações',
   'app.codec': 'Codec de vídeo preferido',
   'app.codec.auto': 'Automático',
+  'app.sounds': 'Efeitos sonoros',
+  'app.sounds.enabled': 'Tocar efeitos sonoros',
+  'app.sounds.theme': 'Estilo',
+  'app.sounds.suave': 'Suave',
+  'app.sounds.bolha': 'Bolha',
+  'app.sounds.volume': 'Volume dos efeitos',
 
   'error.viewer_limit_reached': 'Limite de espectadores atingido',
   'error.viewer_limit': 'Limite de espectadores atingido',

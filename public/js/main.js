@@ -12,6 +12,7 @@ import { SetupStreamDialog } from './ui/SetupStreamDialog.js';
 import { ViewersPanel } from './ui/ViewersPanel.js';
 import { StatsPanel } from './ui/StatsPanel.js';
 import { Toasts } from './ui/Toasts.js';
+import { SoundEffects, SOUND_THEMES, previewSound } from './ui/sounds.js';
 import { isTailnetServer, isTailnetAddress, privateEntryUrl } from './core/tailnet.js';
 import { detectTailnetAddress } from './core/detectTailnet.js';
 
@@ -130,6 +131,7 @@ async function startSession(url, nickname) {
   await handler.connect(url, { nickname, uid: settings.get('uid') });
   if (deployment.tailscaleOnly) handler.iceServers = [];
   const manager = new ScreenshareManager(handler, { contacts, settings });
+  new SoundEffects(handler, settings);
   window.addEventListener('pagehide', () => handler.disconnect(), { once: true });
   new App(handler, manager).mount();
 }
@@ -351,6 +353,18 @@ class App {
         h('select.input', { on: { change: ev => settings.set('preferredCodec', ev.target.value) } },
           codecs.map(c => h('option', { value: c, selected: settings.get('preferredCodec') === c },
             c === 'auto' ? t('app.codec.auto') : c.replace('video/', ''))))),
+      h('h4', t('app.sounds')),
+      h('label.toggle',
+        h('input', { type: 'checkbox', checked: settings.get('soundEffects'), on: { change: ev => settings.set('soundEffects', ev.target.checked) } }),
+        h('span.toggle-ui'), h('span', t('app.sounds.enabled'))),
+      h('label.field', h('span.field-label', t('app.sounds.theme')),
+        h('select.input', { on: { change: ev => { settings.set('soundTheme', ev.target.value); previewSound(settings, ev.target.value, 'entrar_sala'); } } },
+          SOUND_THEMES.map(theme => h('option', { value: theme, selected: settings.get('soundTheme') === theme }, t(`app.sounds.${theme}`))))),
+      h('label.field', h('span.field-label', t('app.sounds.volume')),
+        h('input.range', { type: 'range', min: 0, max: 100, step: 5, value: settings.get('soundVolume'), on: {
+          input: ev => settings.set('soundVolume', Number(ev.target.value)),
+          change: () => previewSound(settings, settings.get('soundTheme'), 'alguem_entrou'),
+        } })),
     ]);
   }
 }

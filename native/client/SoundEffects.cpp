@@ -1,0 +1,123 @@
+#include "SoundEffects.h"
+
+#include "ConnectionHandler.h"
+#include "Settings.h"
+
+#include <QAudio>
+#include <QSoundEffect>
+#include <QTimer>
+#include <QUrl>
+
+namespace openspeak {
+
+SoundEffects::SoundEffects(ConnectionHandler *handler, Settings *settings, QObject *parent)
+    : QObject(parent), m_handler(handler), m_settings(settings)
+{
+    connect(handler, &ConnectionHandler::connectionChanged, this, &SoundEffects::scheduleRefresh);
+    connect(handler, &ConnectionHandler::changed, this, &SoundEffects::scheduleRefresh);
+    connect(handler, &ConnectionHandler::streamAdded, this, &SoundEffects::scheduleRefresh);
+    connect(handler, &ConnectionHandler::streamUpdated, this, &SoundEffects::scheduleRefresh);
+    connect(handler, &ConnectionHandler::streamRemoved, this, &SoundEffects::scheduleRefresh);
+    // Carrega antes: o primeiro play() não espera a leitura do arquivo.
+    for (const char *theme : {"suave", "bolha"})
+        for (const char *event : {"entrar_sala", "sair_sala", "alguem_entrou", "alguem_saiu",
+                                  "iniciar_transmissao", "pausar_transmissao"})
+            effect(QLatin1String(theme), QLatin1String(event));
+}
+
+void SoundEffects::preview(const QString &theme, const QString &event)
+{
+    if (auto *fx = effect(theme, event)) {
+        fx->setVolume(QAudio::convertVolume(m_settings->soundVolume() / 100.0, QAudio::LogarithmicVolumeScale,
+                                            QAudio::LinearVolumeScale));
+        fx->play();
+    }
+}
+
+// Vários sinais chegam juntos para a mesma notificação; compara uma vez só.
+void SoundEffects::scheduleRefresh()
+{
+    if (m_pending)
+        return;
+    m_pending = true;
+    QTimer::singleShot(0, this, [this] { m_pending = false; refresh(); });
+}
+
+void SoundEffects::refresh()
+{
+    const bool connected = m_handler->isConnected();
+    const int channel = connected ? m_handler->ownChannel() : 0;
+    QSet<int> others;
+    QHash<QString, bool> streams;
+    if (channel != 0) {
+        for (const ClientInfo &c : m_handler->clients())
+            if (c.cid == channel && c.clid != m_handler->ownClid())
+                others.insert(c.clid);
+        for (const StreamInfo &s : m_handler->streams())
+            if (s.cid == channel)
+                streams.insert(s.id, s.paused);
+    }
+
+    QString event;
+    if (channel != m_channel) {
+        // Ao trocar de canal, o que já estava lá não toca nada.
+        if (channel != 0)
+            event = QStringLiteral("entrar_sala");
+        else if (m_channel != 0)
+            event = QStringLiteral("sair_sala");
+    } else if (channel != 0) {
+        bool started = false, paused = false;
+        for (auto it = streams.cbegin(); it != streams.cend(); ++it) {
+            const auto old = m_streams.constFind(it.key());
+            if (!it.value() && (old == m_streams.cend() || old.value()))
+                started = true;
+            else if (it.value() && old != m_streams.cend() && !old.value())
+                paused = true;
+        }
+        for (auto it = m_streams.cbegin(); it != m_streams.cend(); ++it)
+            if (!it.value() && !streams.contains(it.key()))
+                paused = true; // encerrado
+
+        // Pessoas antes de streams: quem entra já transmitindo toca só "entrou".
+        if (!(others - m_others).isEmpty())
+            event = QStringLiteral("alguem_entrou");
+        else if (!(m_others - others).isEmpty())
+            event = QStringLiteral("alguem_saiu");
+        else if (started)
+            event = QStringLiteral("iniciar_transmissao");
+        else if (paused)
+            event = QStringLiteral("pausar_transmissao");
+    }
+
+    m_channel = channel;
+    m_others = others;
+    m_streams = streams;
+    if (!event.isEmpty())
+        play(event);
+}
+
+void SoundEffects::play(const QString &event)
+{
+    if (m_settings->soundEffects())
+        preview(m_settings->soundTheme(), event);
+}
+
+QSoundEffect *SoundEffects::effect(const QString &theme, const QString &event)
+{
+    static const QStringList themes{QStringLiteral("suave"), QStringLiteral("bolha")};
+    static const QStringList events{QStringLiteral("entrar_sala"), QStringLiteral("sair_sala"),
+                                    QStringLiteral("alguem_entrou"), QStringLiteral("alguem_saiu"),
+                                    QStringLiteral("iniciar_transmissao"), QStringLiteral("pausar_transmissao")};
+    const QString t = themes.contains(theme) ? theme : themes.first();
+    if (!events.contains(event))
+        return nullptr;
+    const QString key = t + QLatin1Char('/') + event;
+    QSoundEffect *&fx = m_effects[key];
+    if (!fx) {
+        fx = new QSoundEffect(this);
+        fx->setSource(QUrl(QStringLiteral("qrc:/sounds/%1.wav").arg(key)));
+    }
+    return fx;
+}
+
+} // namespace openspeak

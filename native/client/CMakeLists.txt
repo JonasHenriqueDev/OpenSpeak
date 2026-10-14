@@ -38,8 +38,11 @@ target_compile_definitions(openspeak_engine PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
 # ---------------------------------------------------------------- app
 find_package(Qt6 REQUIRED COMPONENTS MultimediaPrivate)
 find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
-qt_add_executable(OpenSpeak WIN32 main.cpp WindowThumbnail.cpp WindowThumbnail.h TrayIcon.cpp TrayIcon.h assets/OpenSpeak.rc)
+qt_add_executable(OpenSpeak WIN32 main.cpp WindowThumbnail.cpp WindowThumbnail.h TrayIcon.cpp TrayIcon.h SoundEffects.cpp SoundEffects.h assets/OpenSpeak.rc)
 qt_add_resources(OpenSpeak app_icon PREFIX "/" FILES assets/openspeak.ico)
+# Efeitos sonoros (gerados por scripts/gen_sounds.py), servidos em qrc:/sounds/<tema>/<evento>.wav.
+file(GLOB OPENSPEAK_SOUNDS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/sounds/*/*.wav")
+qt_add_resources(OpenSpeak app_sounds PREFIX "/" BASE assets FILES ${OPENSPEAK_SOUNDS})
 set_target_properties(OpenSpeak PROPERTIES OUTPUT_NAME "OpenSpeak")
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)

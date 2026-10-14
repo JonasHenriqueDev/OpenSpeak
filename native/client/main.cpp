@@ -14,6 +14,7 @@
 #include "WindowThumbnail.h"
 #include "AutoUpdater.h"
 #include "TrayIcon.h"
+#include "SoundEffects.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -133,6 +134,7 @@ int main(int argc, char *argv[])
         handler.setDirectory(new TailscaleDirectory(meshPort, &handler));
     }
     ScreenshareManager screenshare(&handler, &settings);
+    SoundEffects sounds(&handler, &settings);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &handler, &ConnectionHandler::disconnectFromServer);
     if (parser.isSet(quitOpt) && settings.debug())
         QTimer::singleShot(qBound(1, parser.value(quitOpt).toInt(), 3600) * 1000, &app, &QCoreApplication::quit);

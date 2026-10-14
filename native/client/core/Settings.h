@@ -31,6 +31,9 @@ class Settings : public QObject {
     Q_PROPERTY(bool startMinimized READ startMinimized WRITE setStartMinimized NOTIFY changed)
     Q_PROPERTY(bool launchAtStartup READ launchAtStartup WRITE setLaunchAtStartup NOTIFY changed)
     Q_PROPERTY(bool trayNoticeShown READ trayNoticeShown WRITE setTrayNoticeShown NOTIFY changed)
+    Q_PROPERTY(bool soundEffects READ soundEffects WRITE setSoundEffects NOTIFY changed)
+    Q_PROPERTY(QString soundTheme READ soundTheme WRITE setSoundTheme NOTIFY changed)
+    Q_PROPERTY(int soundVolume READ soundVolume WRITE setSoundVolume NOTIFY changed)
 public:
     explicit Settings(const QString &profile, bool debug, QObject *parent = nullptr);
 
@@ -80,6 +83,15 @@ public:
     /// Balão "continua rodando na bandeja" já exibido uma vez.
     bool trayNoticeShown() const { return value("trayNoticeShown", false).toBool(); }
     void setTrayNoticeShown(bool v) { set("trayNoticeShown", v); }
+    /// Efeitos sonoros de canal e transmissão (desligar = mudo).
+    bool soundEffects() const { return value("soundEffects", true).toBool(); }
+    void setSoundEffects(bool v) { set("soundEffects", v); }
+    /// "suave" (padrão) ou "bolha".
+    QString soundTheme() const { return value("soundTheme", QStringLiteral("suave")).toString(); }
+    void setSoundTheme(const QString &v) { set("soundTheme", v); }
+    /// Volume dos efeitos, 0 a 100.
+    int soundVolume() const { return qBound(0, value("soundVolume", 60).toInt(), 100); }
+    void setSoundVolume(int v) { set("soundVolume", qBound(0, v, 100)); }
 
     Q_INVOKABLE bool isContact(const QString &uid) const { return contacts().contains(uid); }
     Q_INVOKABLE void toggleContact(const QString &uid);

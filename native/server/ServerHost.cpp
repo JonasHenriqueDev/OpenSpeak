@@ -36,6 +36,14 @@ ServerHost::ServerHost(Options options, QObject *parent)
         relay.transport.udpMuxPort = m_options.rtcPort;
         relay.transport.publicIp = m_options.publicIp;
         m_relay = std::make_unique<SfuRelay>(relay);
+        m_relay->setBinarySender([this](int clid, const QByteArray &data) -> qint64 {
+            QWebSocket *ws = m_sockets.value(clid);
+            if (!ws)
+                return -1;
+            ws->sendBinaryMessage(data);
+            m_mediaTx += quint64(data.size());
+            return ws->bytesToWrite();
+        });
         m_server.setRelay(m_relay.get());
     }
 #else
@@ -99,6 +107,7 @@ void ServerHost::writeMonitoringSnapshot()
     data["sfuEnabled"] = sfuEnabled();
     data["signalingRxBytes"] = double(m_signalingRx);
     data["signalingTxBytes"] = double(m_signalingTx);
+    data["websocketMediaTxBytes"] = double(m_mediaTx);
     QJsonArray clients;
     for (const auto &value : data.value("clients").toArray()) {
         auto client = value.toObject();

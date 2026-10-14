@@ -8,6 +8,7 @@
 
 #include "Protocol.h"
 
+#include <QByteArray>
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QString>
@@ -22,6 +23,9 @@ public:
     using SignalFn = std::function<void(const QString &streamId, int clid, const QJsonObject &payload)>;
     /// A sessão com `clid` falhou de vez. Se `clid` for o dono, o stream acabou.
     using FailFn = std::function<void(const QString &streamId, int clid)>;
+    /// Mídia binária para um cliente pela conexão de sinalização (espectador por
+    /// WebSocket); devolve os bytes ainda na fila do socket, -1 sem conexão.
+    using BinaryFn = std::function<qint64(int clid, const QByteArray &data)>;
 
     virtual ~StreamRelay() = default;
 
@@ -33,6 +37,10 @@ public:
     virtual void updateStream(const QString &streamId, int bitrate) = 0;
     virtual void closeStream(const QString &streamId) = 0;
     virtual void addViewer(const QString &streamId, int clid) = 0;
+    /// Espectador sem WebRTC: a mídia vai pelo próprio WebSocket do cliente.
+    /// false = o relay não tem esse transporte. removeViewer serve para os dois.
+    virtual bool addWebSocketViewer(const QString &, int) { return false; }
+    virtual void setBinarySender(BinaryFn) {}
     virtual void removeViewer(const QString &streamId, int clid) = 0;
     /// `streamsignaling` com clid 0 vindo de `fromClid` (já validado).
     virtual void signaling(const QString &streamId, int fromClid, const QJsonObject &payload) = 0;

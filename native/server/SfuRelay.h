@@ -20,6 +20,7 @@ namespace openspeak {
 
 class SfuEgress;
 class SfuIngest;
+class SfuWsViewer;
 namespace sfu { class Forwarder; }
 
 class SfuRelay : public QObject, public StreamRelay {
@@ -38,6 +39,8 @@ public:
     void updateStream(const QString &streamId, int bitrate) override;
     void closeStream(const QString &streamId) override;
     void addViewer(const QString &streamId, int clid) override;
+    bool addWebSocketViewer(const QString &streamId, int clid) override;
+    void setBinarySender(BinaryFn send) override;
     void removeViewer(const QString &streamId, int clid) override;
     void signaling(const QString &streamId, int fromClid, const QJsonObject &payload) override;
     QJsonArray monitoringSessions() override;
@@ -54,6 +57,7 @@ private:
         std::shared_ptr<sfu::Forwarder> forwarder;
         SfuIngest *ingest = nullptr;
         std::map<int, SfuEgress *> viewers;
+        std::map<int, SfuWsViewer *> wsViewers; // fora do controle de banda (sem RR/REMB)
     };
 
     template <typename Session> void wire(Session *session, const QString &streamId, int clid);
@@ -63,6 +67,7 @@ private:
     Options m_options;
     SignalFn m_signal;
     FailFn m_failed;
+    BinaryFn m_binary;
     std::map<QString, Stream> m_streams;
     QTimer m_statsTimer;
 };

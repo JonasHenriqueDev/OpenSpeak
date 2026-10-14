@@ -2,6 +2,7 @@
 #include "SfuEgress.h"
 #include "SfuForwarder.h"
 #include "SfuIngest.h"
+#include "SfuWsViewer.h"
 
 #include <QLoggingCategory>
 #include <QPointer>
@@ -59,6 +60,8 @@ void SfuRelay::dispose(QObject *session)
 {
     if (auto *egress = qobject_cast<SfuEgress *>(session))
         egress->stop();
+    else if (auto *ws = qobject_cast<SfuWsViewer *>(session))
+        ws->stop();
     else if (auto *rtc = qobject_cast<RtcSession *>(session))
         rtc->close();
     session->disconnect(this);
@@ -102,6 +105,8 @@ void SfuRelay::closeStream(const QString &streamId)
     Stream &s = node.mapped();
     for (auto &[clid, egress] : s.viewers)
         dispose(egress);
+    for (auto &[clid, ws] : s.wsViewers)
+        dispose(ws);
     dispose(s.ingest);
     qCInfo(lcSfu) << "stream" << streamId << "encerrado";
 }
@@ -126,11 +131,31 @@ void SfuRelay::addViewer(const QString &streamId, int clid)
     qCInfo(lcSfu) << "stream" << streamId << "+ espectador" << clid << "(" << s.viewers.size() << "no total)";
 }
 
+bool SfuRelay::addWebSocketViewer(const QString &streamId, int clid)
+{
+    auto it = m_streams.find(streamId);
+    if (it == m_streams.end() || !m_binary)
+        return false;
+    removeViewer(streamId, clid);
+    Stream &s = it->second;
+    auto send = [this, clid](const QByteArray &data) { return m_binary ? m_binary(clid, data) : qint64(-1); };
+    s.wsViewers[clid] = new SfuWsViewer(s.forwarder, send, this);
+    qCInfo(lcSfu) << "stream" << streamId << "+ espectador WebSocket" << clid;
+    return true;
+}
+
+void SfuRelay::setBinarySender(BinaryFn send) { m_binary = std::move(send); }
+
 void SfuRelay::removeViewer(const QString &streamId, int clid)
 {
     auto it = m_streams.find(streamId);
     if (it == m_streams.end())
         return;
+    if (auto ws = it->second.wsViewers.find(clid); ws != it->second.wsViewers.end()) {
+        SfuWsViewer *viewer = ws->second;
+        it->second.wsViewers.erase(ws);
+        dispose(viewer);
+    }
     auto viewer = it->second.viewers.find(clid);
     if (viewer == it->second.viewers.end())
         return;
@@ -152,6 +177,9 @@ void SfuRelay::signaling(const QString &streamId, int fromClid, const QJsonObjec
     auto viewer = s.viewers.find(fromClid);
     if (viewer != s.viewers.end())
         viewer->second->onSignalingMessage(payload);
+    auto ws = s.wsViewers.find(fromClid);
+    if (ws != s.wsViewers.end() && payload.value("type").toString() == QLatin1String("keyframe"))
+        ws->second->requestKeyFrame();
 }
 
 QJsonArray SfuRelay::monitoringSessions()
@@ -165,6 +193,13 @@ QJsonArray SfuRelay::monitoringSessions()
         sessions.append(ingest);
         for (auto &[clid, egress] : s.viewers) {
             auto viewer = egress->mediaSnapshot();
+            viewer["streamId"] = id;
+            viewer["clid"] = clid;
+            viewer["role"] = "viewer";
+            sessions.append(viewer);
+        }
+        for (auto &[clid, ws] : s.wsViewers) {
+            auto viewer = ws->mediaSnapshot();
             viewer["streamId"] = id;
             viewer["clid"] = clid;
             viewer["role"] = "viewer";

@@ -33,12 +33,14 @@ constexpr uint32_t AudioClockRate = 48000;
 inline constexpr const char *H264Profile = "profile-level-id=42e034;packetization-mode=1;level-asymmetry-allowed=1";
 
 /// Tracks de saída de um espectador (trocam a cada reconexão da sessão).
+/// `send` é virtual para o espectador por WebSocket (SfuWsViewer).
 class EgressSink {
 public:
+    virtual ~EgressSink() = default;
     void attach(std::shared_ptr<rtc::Track> video, std::shared_ptr<rtc::Track> audio, uint32_t videoSsrc, uint32_t audioSsrc);
     void detach();
     /// Copia o pacote já reescrito, aplica o SSRC deste espectador e envia.
-    void send(Kind kind, const rtc::binary &packet);
+    virtual void send(Kind kind, const rtc::binary &packet);
     uint64_t sentBytes() const { return m_sentBytes.load(); }
 
 private:

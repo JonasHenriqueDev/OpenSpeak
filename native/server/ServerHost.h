@@ -62,6 +62,7 @@ private:
     QTimer m_monitoring;
     QString m_monitoringFile;
     quint64 m_signalingRx = 0, m_signalingTx = 0;
+    quint64 m_mediaTx = 0; // espectadores por WebSocket (SfuWsViewer)
 };
 
 } // namespace openspeak

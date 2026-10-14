@@ -346,12 +346,16 @@ QJsonObject VirtualServer::cmdJoinStreamRequest(Client &client, const QJsonObjec
         fail(rc::AlreadyJoined);
     if (s.viewerLimit > 0 && s.viewers.size() >= s.viewerLimit)
         fail(rc::ViewerLimit);
+    // Transporte "websocket": espectador sem WebRTC (atividade do Discord).
+    const bool websocket = args.value("transport").toString() == QLatin1String("websocket");
+    if (websocket && !isSfu(s))
+        fail(rc::ModeNotSupported, QStringLiteral("assistir por WebSocket exige um stream no modo servidor (SFU)"));
     QJsonArray codecs;
     for (const QJsonValue &c : args.value("codecs").toArray()) {
         if (c.isString() && codecs.size() < 16)
             codecs.append(c);
     }
-    s.pending[client.clid] = PendingRequest{codecs, nowMs()};
+    s.pending[client.clid] = PendingRequest{codecs, nowMs(), websocket};
     notify(s.ownerClid, QStringLiteral("notifyjoinstreamrequest"),
            {{"streamIdentifier", s.id}, {"clid", client.clid}, {"nickname", client.nickname},
             {"uid", client.uid}, {"codecs", codecs}});
@@ -374,19 +378,26 @@ QJsonObject VirtualServer::cmdRespondJoinStreamRequest(Client &client, const QJs
         if (s.viewerLimit > 0 && s.viewers.size() >= s.viewerLimit)
             fail(rc::ViewerLimit);
         const QJsonArray codecs = req->second.codecs;
+        const bool websocket = req->second.websocket;
         s.pending.erase(req);
         s.viewers.append(clid);
         // peerClid = com quem o espectador negocia: o dono (P2P) ou o relay (SFU).
         const bool sfu = isSfu(s);
-        notify(clid, QStringLiteral("notifyrespondjoinstreamrequest"),
-               {{"streamIdentifier", s.id}, {"accepted", true}, {"ownerClid", s.ownerClid},
-                {"peerClid", sfu ? RelayClid : s.ownerClid}});
+        QJsonObject response{{"streamIdentifier", s.id}, {"accepted", true}, {"ownerClid", s.ownerClid},
+                             {"peerClid", sfu ? RelayClid : s.ownerClid}};
+        if (websocket)
+            response["transport"] = QStringLiteral("websocket");
+        notify(clid, QStringLiteral("notifyrespondjoinstreamrequest"), response);
         // O dono é avisado também no SFU (lista de espectadores), mas não abre sessão.
         notify(s.ownerClid, QStringLiteral("notifystreamclientjoined"),
                {{"streamIdentifier", s.id}, {"clid", clid}, {"codecs", codecs}});
         notifyAttendees(s);
-        if (sfu)
+        if (sfu && websocket) {
+            if (!m_relay->addWebSocketViewer(s.id, clid))
+                removeViewer(s, clid, LeaveReason::Failed);
+        } else if (sfu) {
             m_relay->addViewer(s.id, clid);
+        }
     } else {
         s.pending.erase(req);
         const bool doBan = args.value("ban").toBool();

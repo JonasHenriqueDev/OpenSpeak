@@ -69,7 +69,8 @@ if(OPENSPEAK_BUILD_SFU)
         server/SfuForwarder.cpp server/SfuForwarder.h
         server/SfuIngest.cpp server/SfuIngest.h
         server/SfuEgress.cpp server/SfuEgress.h
-        server/SfuRelay.cpp server/SfuRelay.h)
+        server/SfuRelay.cpp server/SfuRelay.h
+        server/SfuWsViewer.cpp server/SfuWsViewer.h)
     target_link_libraries(openspeak_server_host PUBLIC openspeak_rtc)
     target_compile_definitions(openspeak_server_host PUBLIC OPENSPEAK_HAS_SFU)
 endif()

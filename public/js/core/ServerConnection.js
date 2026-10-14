@@ -25,6 +25,7 @@ export class ServerConnection extends EventEmitter {
   connect(url) {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(url);
+      ws.binaryType = 'arraybuffer';
       this.#ws = ws;
       let opened = false;
       const connectTimer = setTimeout(() => {
@@ -69,6 +70,8 @@ export class ServerConnection extends EventEmitter {
   }
 
   #onMessage(raw) {
+    // Binário = mídia do relay para espectadores por WebSocket (atividade do Discord).
+    if (typeof raw !== 'string') return this.emit('binary', raw);
     let msg;
     try {
       msg = JSON.parse(raw);

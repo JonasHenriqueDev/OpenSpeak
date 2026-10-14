@@ -73,6 +73,7 @@ private:
     struct PendingRequest {
         QJsonArray codecs;
         qint64 since = 0;
+        bool websocket = false; // mídia pelo WebSocket de sinalização (só SFU)
     };
     struct Stream {
         QString id;

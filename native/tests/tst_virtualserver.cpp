@@ -23,6 +23,12 @@ public:
     void closeStream(const QString &id) override { calls << QStringLiteral("close %1").arg(id); }
     void addViewer(const QString &id, int clid) override { calls << QStringLiteral("add %1 %2").arg(id).arg(clid); }
     void removeViewer(const QString &id, int clid) override { calls << QStringLiteral("remove %1 %2").arg(id).arg(clid); }
+    bool webSocketViewers = true;
+    bool addWebSocketViewer(const QString &id, int clid) override
+    {
+        calls << QStringLiteral("addws %1 %2").arg(id).arg(clid);
+        return webSocketViewers;
+    }
     void signaling(const QString &id, int from, const QJsonObject &payload) override
     {
         calls << QStringLiteral("signal %1 %2 %3").arg(id).arg(from).arg(payload.value("type").toString());
@@ -275,6 +281,34 @@ private slots:
         server->handle(viewer, "joinstreamrequest", {{"streamIdentifier", p2p}});
         server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", p2p}, {"clid", viewer}, {"accept", true}});
         QCOMPARE(notes(viewer, "notifyrespondjoinstreamrequest")[1].value("peerClid").toInt(), host);
+    }
+
+    void sfuWebSocketViewer()
+    {
+        FakeRelay relay;
+        server->setRelay(&relay);
+        const int host = login("host"), viewer = login("viewer"), other = login("other");
+        const QString sid = setup(host, {{"mode", int(StreamMode::SFU)}});
+        const QString p2p = setup(host);
+        relay.calls.clear();
+
+        // Sem WebRTC só dá para assistir pelo relay.
+        QCOMPARE(expectError(viewer, "joinstreamrequest", {{"streamIdentifier", p2p}, {"transport", "websocket"}}), rc::ModeNotSupported);
+
+        server->handle(viewer, "joinstreamrequest", {{"streamIdentifier", sid}, {"transport", "websocket"}});
+        server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", sid}, {"clid", viewer}, {"accept", true}});
+        QCOMPARE(notes(viewer, "notifyrespondjoinstreamrequest")[0].value("transport").toString(), QStringLiteral("websocket"));
+        QCOMPARE(relay.calls, QStringList{QStringLiteral("addws %1 %2").arg(sid).arg(viewer)});
+        server->handle(viewer, "streamsignaling", {{"streamIdentifier", sid}, {"clid", RelayClid}, {"payload", QJsonObject{{"type", "keyframe"}}}});
+        QCOMPARE(relay.calls.last(), QStringLiteral("signal %1 %2 keyframe").arg(sid).arg(viewer));
+        server->handle(viewer, "removeclientfromstream", {{"streamIdentifier", sid}});
+        QCOMPARE(relay.calls.last(), QStringLiteral("remove %1 %2").arg(sid).arg(viewer));
+
+        // Relay sem o transporte: o espectador sai como falha.
+        relay.webSocketViewers = false;
+        server->handle(other, "joinstreamrequest", {{"streamIdentifier", sid}, {"transport", "websocket"}});
+        server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", sid}, {"clid", other}, {"accept", true}});
+        QCOMPARE(notes(other, "notifystreamclientleft").last().value("reason").toInt(), int(LeaveReason::Failed));
     }
 
     void sfuSignalingRoutesThroughRelay()

@@ -1,3 +1,8 @@
+# OpenSpeak 1.0.5 — prévia de janelas minimizadas
+
+- No seletor de fonte, janelas minimizadas mostram o último quadro, como no
+  Alt+Tab, em vez de uma miniatura vazia ou só com a barra de título.
+
 # OpenSpeak 1.0.4 — atualização visível
 
 - A instalação automática mostra a barra de progresso em vez de rodar invisível.

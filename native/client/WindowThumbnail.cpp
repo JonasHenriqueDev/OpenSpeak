@@ -91,9 +91,19 @@ void WindowThumbnail::sync()
     for (auto *ancestor = parentItem(); ancestor; ancestor = ancestor->parentItem())
         if (ancestor->clip()) clip = clip.intersected(ancestor->mapRectToScene(QRectF(0, 0, ancestor->width(), ancestor->height())));
 
-    RECT client{};
-    GetClientRect(sourceHwnd, &client);
-    const QSizeF sourceSize(client.right - client.left, client.bottom - client.top);
+    // Minimized windows report an empty client rect, but DWM keeps their last
+    // frame (what Alt+Tab shows). Use the whole DWM surface in that case.
+    const bool minimized = IsIconic(sourceHwnd);
+    QSizeF sourceSize;
+    if (minimized) {
+        SIZE size{};
+        if (SUCCEEDED(DwmQueryThumbnailSourceSize(m_thumbnail, &size)))
+            sourceSize = QSizeF(size.cx, size.cy);
+    } else {
+        RECT client{};
+        GetClientRect(sourceHwnd, &client);
+        sourceSize = QSizeF(client.right - client.left, client.bottom - client.top);
+    }
     QRectF fit = cell;
     if (!sourceSize.isEmpty()) {
         const auto size = sourceSize.scaled(cell.size(), Qt::KeepAspectRatio);
@@ -105,7 +115,7 @@ void WindowThumbnail::sync()
     props.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE | DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY;
     props.opacity = 255;
     props.fVisible = !destination.isEmpty() && !sourceSize.isEmpty();
-    props.fSourceClientAreaOnly = TRUE;
+    props.fSourceClientAreaOnly = minimized ? FALSE : TRUE;
     props.rcDestination = {qRound(destination.left() * dpr), qRound(destination.top() * dpr),
                            qRound(destination.right() * dpr), qRound(destination.bottom() * dpr)};
     if (props.fVisible && !fit.isEmpty()) {

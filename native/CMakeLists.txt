@@ -62,7 +62,8 @@ target_link_libraries(openspeak_server_core PUBLIC openspeak_common Qt6::Core)
 target_include_directories(openspeak_server_core PUBLIC server)
 
 # Transporte (HTTP/WebSocket) + relay de mídia opcional.
-add_library(openspeak_server_host STATIC server/ServerHost.cpp server/ServerHost.h)
+add_library(openspeak_server_host STATIC server/ServerHost.cpp server/ServerHost.h
+    server/DiscordAuth.cpp server/DiscordAuth.h)
 target_link_libraries(openspeak_server_host PUBLIC openspeak_server_core Qt6::Network Qt6::WebSockets Qt6::HttpServer)
 if(OPENSPEAK_BUILD_SFU)
     target_sources(openspeak_server_host PRIVATE

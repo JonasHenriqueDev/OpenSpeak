@@ -18,6 +18,10 @@ usa o player normal:
 4. O navegador remonta os quadros (`js/activity/rtpH264.js`) e decodifica com
    WebCodecs num `<canvas>` (`js/activity/WsVideoPlayer.js`).
 
+O player mostra a imagem inteira, com faixas onde a proporção da transmissão não
+bate com a área que o Discord dá à atividade. O botão **Preencher** corta as
+bordas para ocupar a área toda.
+
 Limitações do protótipo:
 
 - Só transmissões no modo **Servidor (SFU)**; P2P aparece desabilitado.
@@ -37,6 +41,33 @@ Limitações do protótipo:
 5. Num canal de voz, abra o lançador de atividades e escolha o aplicativo.
 
 O servidor precisa estar com a versão que tem o `SfuWsViewer`.
+
+Ícone 1024×1024 para o portal: `docs/discord-app-icon-1024.png`.
+
+## Nome do Discord como apelido
+
+Dentro do Discord, a atividade entra com o nome de exibição da conta, no formato
+`Nome (discord)`. O SDK só libera o usuário depois de um login OAuth2 (escopo
+`identify`), e trocar o código pelo token exige o **client secret**, que fica só
+no servidor (`POST /api/discord/token`).
+
+1. No portal, em **OAuth2**, copie o **Client ID** e gere o **Client Secret**. Em
+   **Redirects**, adicione `https://127.0.0.1` (a atividade não usa, mas o Discord
+   exige ao menos um).
+2. Na VM, coloque as credenciais em `/etc/openspeak-server.env` (só root lê):
+
+   ```sh
+   DISCORD_CLIENT_ID=<client id>
+   DISCORD_CLIENT_SECRET=<client secret>
+   ```
+
+3. `sudo systemctl restart openspeak`. O log mostra `login do Discord: app <id>`.
+
+Na primeira vez o Discord pede ao usuário para autorizar o app. Sem as
+credenciais, ou se o usuário recusar, a atividade volta a pedir o nome.
+
+O HTTPS do servidor para a API do Discord usa o plugin de TLS do Qt
+(`tls/libqopensslbackend.so`, ao lado do binário) com o OpenSSL do sistema.
 
 ## Testar sem o Discord
 

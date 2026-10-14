@@ -80,6 +80,9 @@ int main(int argc, char *argv[])
         if (ip.isNull() || ip.protocol() != QAbstractSocket::IPv4Protocol) { qCritical("--public-ip deve ser um IPv4"); return 1; }
         options.publicIp = ip.toString();
     }
+    // Login da atividade do Discord (opcional): credenciais do app no Developer Portal.
+    options.discordClientId = qEnvironmentVariable("DISCORD_CLIENT_ID");
+    options.discordClientSecret = qEnvironmentVariable("DISCORD_CLIENT_SECRET");
     if (!ServerHost::sfuAvailable() && (parser.isSet(rtcPortOpt) || parser.isSet(publicIpOpt)))
         qWarning("compilado sem o relay SFU: --rtc-port/--public-ip ignorados");
 
@@ -89,6 +92,8 @@ int main(int argc, char *argv[])
     qInfo().noquote() << QStringLiteral("[openspeak] servidor \"%1\" em ws://localhost:%2/ws").arg(options.name).arg(host.port());
     if (!options.webRoot.isEmpty())
         qInfo().noquote() << QStringLiteral("[openspeak] cliente web: http://localhost:%1 (%2)").arg(host.port()).arg(options.webRoot);
+    if (!options.discordClientId.isEmpty() && !options.discordClientSecret.isEmpty())
+        qInfo().noquote() << QStringLiteral("[openspeak] login do Discord: app %1").arg(options.discordClientId);
     if (host.sfuEnabled())
         qInfo().noquote() << QStringLiteral("[openspeak] relay SFU: UDP %1%2")
                                  .arg(options.rtcPort ? QString::number(options.rtcPort) : QStringLiteral("(portas efêmeras)"),

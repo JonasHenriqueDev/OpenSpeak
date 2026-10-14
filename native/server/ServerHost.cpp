@@ -5,6 +5,7 @@
 #include <QDateTime>
 #include <QSaveFile>
 #include <QHttpServerRequest>
+#include <QHttpServerResponder>
 #include <QHttpServerResponse>
 #include <QHttpServerWebSocketUpgradeResponse>
 #include <QJsonDocument>
@@ -27,7 +28,8 @@ constexpr qint64 MaxMessageBytes = 512 * 1024;
 ServerHost::ServerHost(Options options, QObject *parent)
     : QObject(parent),
       m_options(std::move(options)),
-      m_server([this](int clid, const QJsonObject &msg) { sendTo(clid, msg); }, m_options.name, m_options.iceServers)
+      m_server([this](int clid, const QJsonObject &msg) { sendTo(clid, msg); }, m_options.name, m_options.iceServers),
+      m_discord(m_options.discordClientId, m_options.discordClientSecret)
 {
 #ifdef OPENSPEAK_HAS_SFU
     if (m_options.sfu) {
@@ -55,6 +57,17 @@ ServerHost::ServerHost(Options options, QObject *parent)
                                                             : QHttpServerWebSocketUpgradeResponse::deny();
     });
     connect(&m_http, &QHttpServer::newWebSocketConnection, this, &ServerHost::onNewWebSocket);
+
+    // Atividade do Discord: código OAuth2 -> access token (o secret não sai do servidor).
+    // Registrada antes das rotas do cliente web, que aceitam qualquer caminho.
+    m_http.route(QStringLiteral("/api/discord/token"), QHttpServerRequest::Method::Post,
+                 [this](const QHttpServerRequest &request, QHttpServerResponder &responder) {
+        auto shared = std::make_shared<QHttpServerResponder>(std::move(responder));
+        const QJsonObject body = request.body().size() <= 4096 ? QJsonDocument::fromJson(request.body()).object() : QJsonObject{};
+        m_discord.exchange(body.value("code").toString(), [shared](int status, const QJsonObject &reply) {
+            shared->write(QJsonDocument(reply), QHttpServerResponder::StatusCode(status));
+        });
+    });
 
     if (!m_options.webRoot.isEmpty()) {
         const QDir root(m_options.webRoot);

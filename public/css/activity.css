@@ -16,7 +16,7 @@
 .act-error { color: var(--danger); margin: 0; }
 .act-card p { margin: 0; }
 
-.act-lobby { max-width: 900px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.act-lobby { max-width: 1400px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
 .act-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .act-notice {
   display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radius);
@@ -25,28 +25,46 @@
 .act-notice.warn { background: rgba(245, 166, 35, .14); }
 .act-group h2 { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-dim); margin: 0 0 8px; }
 .act-group { display: flex; flex-direction: column; gap: 8px; }
+.act-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
 .act-stream {
-  display: flex; align-items: center; gap: 12px; padding: 10px;
+  display: flex; flex-direction: column; overflow: hidden; cursor: pointer;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+  transition: border-color .15s, transform .15s;
 }
-.act-thumb { width: 128px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-sm); background: var(--panel-3); flex: none; }
-.act-thumb.empty { display: grid; place-items: center; color: var(--text-faint); }
-.act-stream-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.act-stream-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.act-stream .btn { display: inline-flex; align-items: center; gap: 6px; }
+.act-stream:hover:not(.disabled) { border-color: var(--accent); transform: translateY(-1px); }
+.act-stream.disabled { cursor: default; opacity: .75; }
+.act-preview { position: relative; aspect-ratio: 16 / 9; background: #000; }
+.act-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.act-thumb.empty { display: grid; place-items: center; color: var(--text-faint); background: var(--panel-3); }
+.act-thumb.empty .icon { width: 36px; height: 36px; }
+.act-live, .act-viewers, .act-paused {
+  position: absolute; display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 700;
+}
+.act-live { left: 8px; top: 8px; background: var(--live); color: #fff; letter-spacing: .04em; }
+.act-viewers { right: 8px; top: 8px; background: rgba(0, 0, 0, .65); color: var(--text); }
+.act-viewers .icon, .act-paused .icon { width: 13px; height: 13px; }
+.act-paused { left: 8px; bottom: 8px; background: rgba(0, 0, 0, .65); color: var(--text); }
+.act-play {
+  position: absolute; inset: 0; display: grid; place-items: center; opacity: 0;
+  background: rgba(0, 0, 0, .35); transition: opacity .15s;
+}
+.act-play .icon { width: 44px; height: 44px; color: #fff; }
+.act-stream:hover .act-play { opacity: 1; }
+.act-stream-info { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.act-stream-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.act-stream-text strong, .act-stream-text span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-stream .btn { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.act-stream-note { padding: 0 12px 10px; }
 .act-empty { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 48px 16px; color: var(--text-dim); text-align: center; }
 .act-empty .icon { width: 40px; height: 40px; color: var(--text-faint); }
 .act-empty p { margin: 0; }
 
-@media (max-width: 520px) {
-  .act-thumb { width: 88px; }
-  .act-stream { flex-wrap: wrap; }
-  .act-stream .btn { width: 100%; justify-content: center; }
-}
+@media (max-width: 520px) { .act-grid { grid-template-columns: 1fr; } }
 
 /* Player: ocupa a atividade inteira; a barra some sem movimento do mouse. */
 .act-player { position: fixed; inset: 0; background: #000; display: grid; place-items: center; overflow: hidden; }
-.act-canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+.act-canvas { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block; max-width: none; } /* tamanho calculado em main.js */
 .act-status {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   padding: 10px 16px; border-radius: var(--radius); background: rgba(15, 19, 28, .85); color: var(--text-dim);

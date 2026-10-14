@@ -2,6 +2,7 @@
 // Transporte do servidor: HTTP (cliente web opcional) + WebSocket em /ws na mesma porta.
 // Com OPENSPEAK_HAS_SFU, também o relay de mídia (STREAM_SFU) numa porta UDP própria.
 
+#include "DiscordAuth.h"
 #include "VirtualServer.h"
 
 #include <QDir>
@@ -28,6 +29,7 @@ public:
         bool sfu = false;        // relay de mídia (exige build com OPENSPEAK_HAS_SFU)
         quint16 rtcPort = 10000; // UDP mux do relay (0 = portas efêmeras)
         QString publicIp;        // IP anunciado nos candidatos do relay (NAT 1:1)
+        QString discordClientId, discordClientSecret; // login da atividade do Discord (opcional)
     };
 
     explicit ServerHost(Options options, QObject *parent = nullptr);
@@ -49,6 +51,7 @@ private:
     QTcpServer *m_tcp = nullptr;
     std::unique_ptr<StreamRelay> m_relay; // declarado antes: vive mais que o VirtualServer
     VirtualServer m_server;
+    DiscordAuth m_discord;
     QHash<int, QWebSocket *> m_sockets;
     QHash<QWebSocket *, bool> m_alive;
     struct ConnectionInfo {

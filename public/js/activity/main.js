@@ -7,12 +7,12 @@ import { LeaveReason, RELAY_CLID, StreamMode } from '../core/protocol.js';
 import { h, replaceChildren } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 import { settings } from '../ui/settings.js';
-import { discordContext, discordHandshake } from './discord.js';
+import { DiscordRpc, discordContext, discordNickname } from './discord.js';
 import { WsAudioPlayer } from './WsAudioPlayer.js';
 import { WsVideoPlayer } from './WsVideoPlayer.js';
 
 const discord = discordContext();
-discordHandshake(discord);
+const rpc = discord?.clientId ? new DiscordRpc(discord) : null;
 
 const app = document.getElementById('app');
 const handler = new ConnectionHandler();
@@ -81,7 +81,7 @@ function renderLobby() {
     if (!streams.length) return null;
     return h('section.act-group',
       h('h2', icon('channel'), ch.name),
-      streams.map(s => streamCard(s)));
+      h('div.act-grid', streams.map(s => streamCard(s))));
   }).filter(Boolean);
 
   replaceChildren(app, h('div.act-lobby',
@@ -98,15 +98,28 @@ function renderLobby() {
 function streamCard(s) {
   const watchable = s.mode === StreamMode.SFU && handler.hasStreamingSFU;
   const owner = handler.clientName(s.ownerClid);
+  // Prévia: a miniatura que o transmissor atualiza periodicamente (streamthumbnail).
   const thumb = s.thumbnail ? h('img.act-thumb', { src: s.thumbnail, alt: '' }) : h('div.act-thumb.empty', icon('screen'));
-  return h('article.act-stream',
-    thumb,
-    h('div.act-stream-info',
-      h('strong', s.name || 'Transmissão'),
-      h('span.act-dim', owner),
-      !watchable ? h('span.act-faint', 'Transmissão P2P: só dá para assistir no app ou na página web.') : null,
+  const button = h('button.btn.primary', { disabled: !watchable }, icon('play'), 'Assistir');
+  return h('article.act-stream', {
+    class: { disabled: !watchable },
+    on: { click: () => watchable && !button.disabled && watch(s, button) },
+  },
+    h('div.act-preview',
+      thumb,
+      h('span.act-live', 'AO VIVO'),
+      h('span.act-viewers', icon('users'), String(s.viewerCount ?? 0)),
+      s.paused ? h('span.act-paused', icon('pause'), 'Pausada') : null,
+      watchable ? h('div.act-play', icon('play')) : null,
     ),
-    h('button.btn.primary', { disabled: !watchable, on: { click: ev => watch(s, ev.currentTarget) } }, icon('play'), 'Assistir'),
+    h('div.act-stream-info',
+      h('div.act-stream-text',
+        h('strong', s.name || 'Transmissão'),
+        h('span.act-dim', owner),
+      ),
+      button,
+    ),
+    !watchable ? h('p.act-faint.act-stream-note', 'Transmissão P2P: só dá para assistir no app ou na página web.') : null,
   );
 }
 
@@ -150,24 +163,45 @@ function openPlayer(stream, audio) {
   };
   syncVolume();
   const fsBtn = h('button.act-icon', { title: 'Tela cheia', on: { click: () => toggleFullscreen() } }, icon('fullscreen'));
+  let fill = readFill();
+  const fillBtn = h('button.act-icon', { on: { click: () => { fill = !fill; saveFill(fill); syncFill(); fit(); } } });
+  const syncFill = () => {
+    replaceChildren(fillBtn, icon(fill ? 'grid' : 'focus'));
+    fillBtn.title = fill ? 'Mostrar a imagem inteira' : 'Preencher a área (corta as bordas)';
+  };
+  syncFill();
+  // Encaixe calculado aqui (e não por object-fit): imagem inteira com faixas
+  // onde a proporção não bate, ou, preenchendo, cortando as bordas.
+  const fit = () => {
+    const { width: w, height: hgt } = canvas;
+    const W = el.clientWidth, H = el.clientHeight;
+    if (!w || !hgt || !W || !H) return;
+    const scale = fill ? Math.max(W / w, H / hgt) : Math.min(W / w, H / hgt);
+    canvas.style.width = `${Math.round(w * scale)}px`;
+    canvas.style.height = `${Math.round(hgt * scale)}px`;
+  };
   const bar = h('div.act-bar',
     h('button.act-icon', { title: 'Voltar', on: { click: () => leave() } }, icon('chevronLeft')),
     h('div.act-title', h('strong', stream.name || 'Transmissão'), h('span.act-dim', handler.clientName(stream.ownerClid))),
     stats,
     WsAudioPlayer.supported ? h('div.act-volume-wrap', volumeBtn, volume) : null,
+    fillBtn,
     fsBtn,
   );
   const el = h('div.act-player', canvas, status, bar);
   el.addEventListener('dblclick', () => toggleFullscreen());
+  const resizeObserver = new ResizeObserver(fit);
+  resizeObserver.observe(el);
   const player = new WsVideoPlayer({
     canvas,
     onAudio: packet => audio.push(packet),
+    onResize: fit,
     requestKeyFrame: () => handler.connection.sendCommand('streamsignaling', {
       streamIdentifier: stream.streamIdentifier, clid: RELAY_CLID, payload: { type: 'keyframe' },
     }).catch(() => {}),
   });
   Object.assign(globalThis, { openspeakPlayer: player, openspeakAudio: audio }); // inspeção pelo console
-  watching = { streamIdentifier: stream.streamIdentifier, player, audio, el, status, stats, fsBtn, accepted: false, idleTimer: 0, statsTimer: 0 };
+  watching = { streamIdentifier: stream.streamIdentifier, player, audio, resizeObserver, el, status, stats, fsBtn, accepted: false, idleTimer: 0, statsTimer: 0 };
   const wake = () => {
     el.classList.remove('idle');
     clearTimeout(watching?.idleTimer);
@@ -184,6 +218,14 @@ function openPlayer(stream, audio) {
     player.delayMs = audio.active ? audio.latencyMs : 0;
   }, 1000);
   replaceChildren(app, el);
+}
+
+function readFill() {
+  try { return localStorage.getItem('openspeak.activity.fill') === '1'; } catch { return false; }
+}
+
+function saveFill(on) {
+  try { localStorage.setItem('openspeak.activity.fill', on ? '1' : '0'); } catch {}
 }
 
 function setStatus(text) {
@@ -209,6 +251,7 @@ function closePlayer(notice = '') {
     clearInterval(watching.statsTimer);
     watching.player.dispose();
     watching.audio.dispose();
+    watching.resizeObserver.disconnect();
     watching = null;
   }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -243,6 +286,7 @@ handler.on('streamremoved', stream => {
   if (watching?.streamIdentifier === stream.streamIdentifier) closePlayer(LEAVE_MESSAGES[LeaveReason.STREAM_STOPPED]);
 });
 handler.on('changed', () => { if (!watching && handler.connection.connected) renderLobby(); });
+handler.on('streamupdated', () => { if (!watching && handler.connection.connected) renderLobby(); }); // miniaturas
 handler.on('disconnected', () => {
   closePlayer();
   renderLogin('A conexão com o servidor caiu.');
@@ -254,11 +298,26 @@ document.addEventListener('fullscreenchange', () => {
   watching.fsBtn.title = on ? 'Sair da tela cheia' : 'Tela cheia';
 });
 
-// Nome salvo: entra direto (a atividade reabre muitas vezes).
-if (settings.get('nickname')) {
-  handler.connect(serverUrl(), { nickname: settings.get('nickname'), uid: settings.get('uid') })
-    .then(renderLobby)
-    .catch(err => renderLogin(err?.message || 'Não foi possível conectar ao servidor.'));
-} else {
-  renderLogin();
+async function start() {
+  let nickname = settings.get('nickname');
+  if (rpc) {
+    replaceChildren(app, h('div.act-center', h('div.act-card',
+      h('div.act-brand', icon('logo'), h('span', 'OpenSpeak')),
+      h('p.act-dim', 'Entrando com sua conta do Discord…'))));
+    try {
+      nickname = discordNickname(await rpc.user());
+    } catch (err) {
+      // Sem login do Discord (recusado ou servidor sem DISCORD_CLIENT_SECRET): nome manual.
+      console.warn('[discord] login:', err);
+    }
+  }
+  if (!nickname) return renderLogin();
+  try {
+    await handler.connect(serverUrl(), { nickname, uid: settings.get('uid') });
+    renderLobby();
+  } catch (err) {
+    renderLogin(err?.message || 'Não foi possível conectar ao servidor.');
+  }
 }
+
+start();

@@ -15,9 +15,11 @@ export class WsVideoPlayer {
    * @param {HTMLCanvasElement} o.canvas
    * @param {() => void} o.requestKeyFrame  pede um IDR ao relay
    * @param {(packet: Uint8Array) => void} [o.onAudio]  pacotes RTP de áudio (Opus)
+   * @param {() => void} [o.onResize]  a resolução do vídeo mudou
    */
-  constructor({ canvas, requestKeyFrame, onAudio = () => {} }) {
+  constructor({ canvas, requestKeyFrame, onAudio = () => {}, onResize = () => {} }) {
     this.onAudio = onAudio;
+    this.onResize = onResize;
     this.delayMs = 0;
     this.arrivals = new Map(); // timestamp do chunk -> chegada (performance.now)
     this.present = [];         // [{ frame, due }] em ordem
@@ -133,6 +135,7 @@ export class WsVideoPlayer {
     if (this.canvas.width !== w || this.canvas.height !== h) {
       this.canvas.width = w;
       this.canvas.height = h;
+      this.onResize();
     }
     this.ctx.drawImage(frame, 0, 0, w, h);
     frame.close();

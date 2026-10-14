@@ -60,12 +60,19 @@ Rectangle {
     }
     onStatusChanged: {
         refreshAttachment()
-        if (!playing)
+        if (!playing) {
             pipWindow.close()
-        else if (DebugOpen === "pip" && status === "playing") // depuração: --open pip
+            fullscreenWindow.close()
+        } else if (DebugOpen === "pip" && status === "playing") // depuração: --open pip
             Qt.callLater(openPip)
+        else if (DebugOpen === "fullscreen" && (own || status === "playing")) // depuração: --open fullscreen
+            Qt.callLater(openFullscreen)
     }
-    Component.onCompleted: refreshAttachment()
+    Component.onCompleted: {
+        refreshAttachment()
+        if (DebugOpen === "fullscreen" && own)
+            Qt.callLater(openFullscreen)
+    }
     Component.onDestruction: {
         detach(video.videoSink)
         detach(fullscreenVideo.videoSink)
@@ -98,14 +105,150 @@ Rectangle {
         id: fullscreenWindow
         color: "black"
         title: tile.data_.name
-        onVisibleChanged: if (!visible) tile.detach(fullscreenVideo.videoSink)
+        onVisibleChanged: {
+            if (visible)
+                fullscreenIdle.restart()
+            else
+                tile.detach(fullscreenVideo.videoSink)
+        }
+        // Controles aparecem ao mexer o mouse e somem (com o cursor) após 2,5 s parado.
+        property bool controlsShown: true
         VideoOutput {
             id: fullscreenVideo
             anchors.fill: parent
             fillMode: VideoOutput.PreserveAspectFit
+            opacity: tile.data_.paused ? 0.35 : 1
+        }
+        Timer {
+            id: fullscreenIdle
+            interval: 2500
+            onTriggered: fullscreenWindow.controlsShown = fullscreenTopHover.hovered || fullscreenBottomHover.hovered
+        }
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.NoButton
+            cursorShape: fullscreenWindow.controlsShown ? Qt.ArrowCursor : Qt.BlankCursor
+            onPositionChanged: { fullscreenWindow.controlsShown = true; fullscreenIdle.restart() }
         }
         Shortcut { sequence: "Esc"; onActivated: fullscreenWindow.close() }
         TapHandler { onDoubleTapped: fullscreenWindow.close() }
+
+        Rectangle {
+            anchors.centerIn: parent
+            visible: tile.data_.paused
+            radius: 18
+            color: Qt.rgba(0, 0, 0, 0.6)
+            implicitWidth: fullscreenPaused.implicitWidth + 28
+            implicitHeight: 40
+            RowLayout {
+                id: fullscreenPaused
+                anchors.centerIn: parent
+                Icon { name: "pause"; size: 18 }
+                Label { text: I18n.t("video.stream.paused"); color: Theme.text; font.pixelSize: 15 }
+            }
+        }
+
+        Rectangle {
+            anchors.top: parent.top
+            width: parent.width
+            height: 56
+            opacity: fullscreenWindow.controlsShown ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+            gradient: Gradient {
+                GradientStop { position: 0; color: Qt.rgba(0, 0, 0, 0.75) }
+                GradientStop { position: 1; color: "transparent" }
+            }
+            HoverHandler { id: fullscreenTopHover }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18
+                anchors.rightMargin: 10
+                spacing: 4
+                Label {
+                    Layout.fillWidth: true
+                    text: tile.data_.name + (tile.own ? "" : "  ·  " + tile.data_.ownerName)
+                    elide: Text.ElideRight
+                    color: Theme.text
+                    font.pixelSize: 15
+                    font.weight: Font.DemiBold
+                }
+                FullscreenButton { iconName: "close"; tip: I18n.t("video.action.fullscreen.close"); onClicked: fullscreenWindow.close() }
+            }
+        }
+
+        Rectangle {
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: 64
+            opacity: fullscreenWindow.controlsShown ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: 200 } }
+            gradient: Gradient {
+                GradientStop { position: 0; color: "transparent" }
+                GradientStop { position: 1; color: Qt.rgba(0, 0, 0, 0.8) }
+            }
+            HoverHandler { id: fullscreenBottomHover }
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 14
+                anchors.rightMargin: 14
+                spacing: 4
+                FullscreenButton {
+                    visible: tile.own
+                    iconName: tile.data_.paused ? "play" : "pause"
+                    tip: tile.data_.paused ? I18n.t("video.action.resume") : I18n.t("video.action.pause")
+                    onClicked: Screenshare.setPaused(tile.streamId, !tile.data_.paused)
+                }
+                FullscreenButton {
+                    visible: !tile.own
+                    iconName: tile.data_.audioBlocked || volumeSlider.value === 0 ? "mute" : "volume"
+                    tip: I18n.t("video.action.volume")
+                    onClicked: volumeSlider.value = volumeSlider.value === 0 ? 1 : 0
+                }
+                Slider {
+                    visible: !tile.own
+                    Layout.preferredWidth: 120
+                    from: 0; to: 1
+                    value: volumeSlider.value
+                    onMoved: volumeSlider.value = value
+                }
+                Item { Layout.fillWidth: true }
+                FullscreenButton {
+                    iconName: "pip"
+                    tip: I18n.t("video.action.pip.open")
+                    onClicked: { fullscreenWindow.close(); tile.openPip() }
+                }
+                FullscreenButton { iconName: "fullscreen"; tip: I18n.t("video.action.fullscreen.close"); onClicked: fullscreenWindow.close() }
+                FullscreenButton {
+                    visible: tile.own
+                    iconName: "stop"
+                    iconColor: Theme.danger
+                    tip: I18n.t("video.action.stop_stream")
+                    onClicked: { fullscreenWindow.close(); Screenshare.stopStream(tile.streamId) }
+                }
+                FullscreenButton {
+                    visible: !tile.own
+                    iconName: "leave"
+                    iconColor: Theme.danger
+                    tip: I18n.t("video.action.leave")
+                    onClicked: { fullscreenWindow.close(); Screenshare.leaveStream(tile.streamId) }
+                }
+            }
+        }
+    }
+    component FullscreenButton: ToolButton {
+        property string iconName
+        property string tip
+        property color iconColor: "white"
+        padding: 6
+        implicitWidth: 42
+        implicitHeight: 42
+        contentItem: Item {}
+        Icon { anchors.centerIn: parent; name: parent.iconName; color: parent.iconColor; size: 22 }
+        ToolTip.visible: hovered
+        ToolTip.text: tip
     }
 
     // ---------------------------------------------------- picture-in-picture

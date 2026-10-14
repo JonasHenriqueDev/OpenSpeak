@@ -169,6 +169,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("UiSmoke"), parser.isSet(uiSmokeOpt));
     engine.rootContext()->setContextProperty(QStringLiteral("LiteEdition"), lite);
     engine.rootContext()->setContextProperty(QStringLiteral("Tray"), &tray);
+    engine.rootContext()->setContextProperty(QStringLiteral("Sounds"), &sounds);
     // Aberto pelo Windows com "Iniciar minimizado": só o ícone na bandeja.
     engine.rootContext()->setContextProperty(QStringLiteral("StartHidden"),
         parser.isSet(autostartOpt) && settings.startMinimized() && tray.available() && !parser.isSet(uiSmokeOpt));
@@ -260,8 +261,14 @@ int main(int argc, char *argv[])
         auto *timer = new QTimer(&app);
         int shot = 0;
         QObject::connect(timer, &QTimer::timeout, &app, [&engine, prefix, shot]() mutable {
+            ++shot;
             if (auto *w = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0)))
-                w->grabWindow().save(QStringLiteral("%1-%2.png").arg(prefix).arg(++shot));
+                w->grabWindow().save(QStringLiteral("%1-%2.png").arg(prefix).arg(shot));
+            // Janelas extras visíveis (tela cheia, picture-in-picture).
+            int extra = 0;
+            for (QWindow *top : QGuiApplication::topLevelWindows())
+                if (auto *q = qobject_cast<QQuickWindow *>(top); q && q->isVisible() && q != engine.rootObjects().value(0))
+                    q->grabWindow().save(QStringLiteral("%1-%2-w%3.png").arg(prefix).arg(shot).arg(++extra));
         });
         timer->start(4000);
     }

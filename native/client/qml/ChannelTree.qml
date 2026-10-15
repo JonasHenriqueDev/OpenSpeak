@@ -30,13 +30,19 @@ Rectangle {
                 Item { width: 2 }
                 Icon { name: "server"; color: Theme.gold }
                 Label { text: Server.serverName; font.weight: Font.DemiBold; color: Theme.text; Layout.fillWidth: true; elide: Text.ElideRight }
+                // Modos de transmissão que o servidor oferece; com relay (SFU) as
+                // transmissões novas vão pelo servidor, senão direto (P2P).
                 Rectangle {
-                    visible: Server.hasStreamingP2P
+                    visible: Server.hasStreamingP2P || Server.hasStreamingSFU
                     radius: 4
                     color: Theme.accentSoft
-                    implicitWidth: p2pLabel.implicitWidth + 12
+                    implicitWidth: modeLabel.implicitWidth + 12
                     implicitHeight: 18
-                    Label { id: p2pLabel; anchors.centerIn: parent; text: "P2P"; color: Theme.accent; font.pixelSize: 11; font.weight: Font.Bold }
+                    Label { id: modeLabel; anchors.centerIn: parent; text: Server.hasStreamingSFU ? "SFU" : "P2P"; color: Theme.accent; font.pixelSize: 11; font.weight: Font.Bold }
+                    HoverHandler { id: modeHover }
+                    ToolTip.visible: modeHover.hovered
+                    ToolTip.delay: 250
+                    ToolTip.text: Server.hasStreamingSFU ? I18n.t("app.server.mode.sfu") : I18n.t("app.server.mode.p2p")
                 }
             }
 

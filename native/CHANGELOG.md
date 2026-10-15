@@ -9,6 +9,9 @@
   árvore de canais ou no quadro do stream) para ver **quem está assistindo**.
 - Novo efeito sonoro quando alguém começa ou para de assistir à sua
   transmissão, nos estilos Suave e Bolha (mais discreto que os sons do canal).
+- O selo ao lado do nome do servidor mostra **SFU** quando o servidor repassa as
+  transmissões (antes mostrava sempre "P2P", mesmo com SFU disponível).
+- Ícone de configurações agora é uma engrenagem.
 
 # OpenSpeak 1.0.7 — efeitos sonoros e controles em tela cheia
 

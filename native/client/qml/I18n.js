@@ -217,6 +217,8 @@ const STRINGS = {
   'app.encoder': 'Codificador de vídeo',
   'app.encoder.auto': 'Automático',
 
+  'app.server.mode.sfu': 'Servidor com relay (SFU): as transmissões vão pelo servidor, e o seu upload não cresce com cada espectador. P2P também está disponível no diálogo de transmissão.',
+  'app.server.mode.p2p': 'Este servidor só oferece P2P: o vídeo vai direto do seu PC para cada espectador.',
   'app.tray.open': 'Abrir OpenSpeak',
   'app.tray.stop': 'Parar transmissão',
   'app.tray.mute': 'Silenciar streams assistidos',

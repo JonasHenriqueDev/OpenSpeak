@@ -18,6 +18,8 @@ const STRINGS = {
   'app.settings': 'Configurações',
   'app.codec': 'Codec de vídeo preferido',
   'app.codec.auto': 'Automático',
+  'app.server.mode.sfu': 'Servidor com relay (SFU): as transmissões vão pelo servidor, e o seu upload não cresce com cada espectador. P2P também está disponível no diálogo de transmissão.',
+  'app.server.mode.p2p': 'Este servidor só oferece P2P: o vídeo vai direto do seu PC para cada espectador.',
   'app.sounds': 'Efeitos sonoros',
   'app.sounds.enabled': 'Tocar efeitos sonoros',
   'app.sounds.theme': 'Estilo',

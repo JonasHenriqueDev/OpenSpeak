@@ -127,6 +127,22 @@ private slots:
         QCOMPARE(streams.first().toObject().value("app").toString(), QStringLiteral("Chrome"));
     }
 
+    void liveChangedFiresOnStreamLifecycle()
+    {
+        int calls = 0;
+        server->setLiveChangedCallback([&] { ++calls; });
+        const int host = login("host");
+        QCOMPARE(calls, 0); // login não muda a lista de transmissões
+        const QString sid = setup(host);
+        QCOMPARE(calls, 1);
+        server->handle(host, "updatestream", {{"streamIdentifier", sid}, {"app", "Chrome"}});
+        QCOMPARE(calls, 2);
+        server->handle(host, "clientupdate", {{"nickname", "novo"}});
+        QCOMPARE(calls, 3);
+        server->disconnect(host);
+        QCOMPARE(calls, 4);
+    }
+
     void serverMeasuredLatencyIsPublicWithoutPrivateMetadata()
     {
         const int a = login("a"), b = login("b");

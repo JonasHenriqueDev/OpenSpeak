@@ -17,6 +17,7 @@ import {
   NOTICES, appLabel, applySettings, checkConfig, diff, formatDuration, parseLive, planVoiceUpdates, presenceText,
   streamKey, voiceStatusText,
 } from './live.js';
+import { startWebhook } from './webhook.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_FILE = path.resolve(process.env.OPENSPEAK_BOT_CONFIG ?? path.join(ROOT, 'config.json'));
@@ -117,7 +118,7 @@ class LiveBot {
     this.voiceQueue = Promise.resolve();
     this.lastPresence = null;
     this.streams = [];
-    this.busy = false;
+    this.queue = Promise.resolve(); // consultas e webhooks, um de cada vez
     this.liveUrl = new URL('/api/live', config.openspeakUrl).toString();
   }
 
@@ -127,15 +128,18 @@ class LiveBot {
     return parseLive(await res.json());
   }
 
-  async tick() {
-    if (this.busy) return;
-    this.busy = true;
-    try {
+  enqueue(job) {
+    this.queue = this.queue.then(job).catch(err => log('erro:', err));
+    return this.queue;
+  }
+
+  /** Consulta periódica ao /api/live (com o webhook, só uma rede de segurança). */
+  tick() {
+    return this.enqueue(async () => {
       let streams;
       try {
         streams = await this.fetchStreams();
-        if (this.failures >= OFFLINE_AFTER_FAILURES) log('servidor OpenSpeak respondeu de novo');
-        this.failures = 0;
+        this.online();
       } catch (err) {
         this.failures++;
         if (this.failures === 1) log('falha ao consultar o OpenSpeak:', err.message);
@@ -144,9 +148,20 @@ class LiveBot {
         streams = [];
       }
       await this.apply(streams);
-    } finally {
-      this.busy = false;
-    }
+    });
+  }
+
+  /** O servidor avisou pelo webhook: atualiza na hora. */
+  push(streams) {
+    return this.enqueue(async () => {
+      this.online();
+      await this.apply(streams);
+    });
+  }
+
+  online() {
+    if (this.failures >= OFFLINE_AFTER_FAILURES) log('servidor OpenSpeak respondeu de novo');
+    this.failures = 0;
   }
 
   async apply(streams) {
@@ -359,7 +374,7 @@ class LiveBot {
         this.lastPresence = null;
         this.client.user.setPresence({ status: 'online', activities: [] });
       }
-      if (enabled) this.apply(this.streams).catch(err => log('erro:', err));
+      if (enabled) this.enqueue(() => this.apply(this.streams));
       const hint = section === 'chat' && enabled && !this.config.chat.channelId ? '\nFalta escolher o canal: `/openspeak canal`.' : '';
       await reply(`${NOTICE_NAME[section]} ${enabled ? 'ligado' : 'desligado'}.${hint}`);
       return;
@@ -390,8 +405,17 @@ client.once('clientReady', async () => {
   if (!c.chat.enabled && !c.voiceStatus.enabled && !c.presence.enabled)
     log('todos os avisos estão desligados: ligue com /openspeak avisos no Discord');
   for (const guild of client.guilds.cache.values()) await bot.registerCommands(guild);
+  if (c.webhook.port) {
+    try {
+      await startWebhook({ ...c.webhook, onLive: streams => bot.push(streams) });
+      log(`webhook: escutando em http://${c.webhook.host}:${c.webhook.port}/live` +
+        (c.webhook.secret ? ' (com segredo)' : ' (sem segredo)'));
+    } catch (err) {
+      log(`webhook: não foi possível escutar na porta ${c.webhook.port}: ${err.message} (seguindo só com a consulta)`);
+    }
+  }
   await bot.tick();
-  setInterval(() => bot.tick().catch(err => log('erro:', err)), c.pollSeconds * 1000);
+  setInterval(() => bot.tick(), c.pollSeconds * 1000);
 });
 
 client.on('guildCreate', guild => bot?.registerCommands(guild));

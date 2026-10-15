@@ -3,6 +3,11 @@
   "pollSeconds": 15,
   "guildId": "",
 
+  "webhook": {
+    "port": 0,
+    "secret": ""
+  },
+
   "voiceStatus": {
     "enabled": false,
     "channelId": "",

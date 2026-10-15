@@ -121,6 +121,11 @@ export function checkConfig(config) {
     problems.push('openspeakUrl inválido');
   }
   config.pollSeconds = Math.min(300, Math.max(5, Number(config.pollSeconds) || 15));
+  // Webhook do servidor (OPENSPEAK_LIVE_WEBHOOK): porta 0 = desligado, só a consulta.
+  config.webhook = { port: 0, host: '127.0.0.1', secret: '', ...config.webhook };
+  config.webhook.port = Number(config.webhook.port) || 0;
+  if (process.env.OPENSPEAK_BOT_WEBHOOK_SECRET) config.webhook.secret = process.env.OPENSPEAK_BOT_WEBHOOK_SECRET;
+  if (config.webhook.port < 0 || config.webhook.port > 65535) problems.push('webhook.port deve ser de 1 a 65535 (ou 0 para desligar)');
   config.voiceStatus = { enabled: false, live: '🔴 Ao vivo no OpenSpeak: {lista}', item: '{quem} ({app})', idle: '', ...config.voiceStatus };
   config.chat = { enabled: false, mention: '', onEnd: 'edit', ...config.chat };
   config.presence = { enabled: false, live: '{quem} transmitindo {app}', liveMany: '', idle: '', ...config.presence };

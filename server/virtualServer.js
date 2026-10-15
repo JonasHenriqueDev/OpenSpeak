@@ -32,6 +32,8 @@ function clampInt(value, min, max, fallback) {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+const LIVE_COMMANDS = new Set(['notifystreamstarted', 'notifystreamupdated', 'notifystreamstopped', 'notifyclientupdated']);
+
 function cleanString(value, maxLength, fallback = '') {
   if (typeof value !== 'string') return fallback;
   return value.replace(/[\u0000-\u001f]/g, '').trim().slice(0, maxLength);
@@ -43,9 +45,11 @@ export class VirtualServer {
    * @param {(clid:number, message:object) => void} options.send
    * @param {string} [options.name]
    * @param {object[]} [options.iceServers]
+   * @param {() => void} [options.onLiveChanged] algo do liveSnapshot() pode ter mudado (webhook do bot)
    */
-  constructor({ send, name = 'OpenSpeak', iceServers = [], idPrefix = '' }) {
+  constructor({ send, name = 'OpenSpeak', iceServers = [], idPrefix = '', onLiveChanged = null }) {
     this.send = send;
+    this.onLiveChanged = onLiveChanged;
     this.name = name;
     this.iceServers = iceServers;
     this.clients = new Map(); // clid -> client
@@ -464,6 +468,8 @@ export class VirtualServer {
     for (const c of this.clients.values()) {
       if (c.loggedIn && c.clid !== exceptClid) this.send(c.clid, { type: 'notify', cmd, args });
     }
+    // Todo começo/mudança/fim de stream e troca de apelido passa por aqui.
+    if (this.onLiveChanged && LIVE_COMMANDS.has(cmd)) this.onLiveChanged();
   }
 
   #broadcastToChannel(cid, { cmd, args }, exceptClid = 0) {

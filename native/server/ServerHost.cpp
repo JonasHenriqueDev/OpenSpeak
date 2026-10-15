@@ -12,6 +12,7 @@
 #include <QRegularExpression>
 #include <QLoggingCategory>
 #include <QUrl>
+#include <QNetworkReply>
 #include <QNetworkRequest>
 
 #ifdef OPENSPEAK_HAS_SFU
@@ -102,6 +103,17 @@ ServerHost::ServerHost(Options options, QObject *parent)
         m_http.route(QStringLiteral("/<arg>"), [serve](const QUrl &path) { return serve(path.path()); });
     }
 
+    // Bot do Discord: avisa na hora em vez de esperar a próxima consulta ao /api/live.
+    m_liveWebhook = QUrl(QString::fromLocal8Bit(qgetenv("OPENSPEAK_LIVE_WEBHOOK")));
+    m_liveSecret = qgetenv("OPENSPEAK_LIVE_WEBHOOK_SECRET");
+    if (m_liveWebhook.isValid() && m_liveWebhook.scheme().startsWith(QLatin1String("http"))) {
+        m_liveDebounce.setSingleShot(true);
+        m_liveDebounce.setInterval(300); // junta mudanças seguidas num POST só
+        connect(&m_liveDebounce, &QTimer::timeout, this, &ServerHost::sendLiveWebhook);
+        m_server.setLiveChangedCallback([this] { if (!m_liveDebounce.isActive()) m_liveDebounce.start(); });
+        qCInfo(lcServer).noquote() << "webhook do bot:" << m_liveWebhook.toString(QUrl::RemoveUserInfo);
+    }
+
     m_heartbeat.setInterval(15'000);
     connect(&m_heartbeat, &QTimer::timeout, this, &ServerHost::heartbeat);
     m_monitoringFile = QString::fromLocal8Bit(qgetenv("OPENSPEAK_METRICS_FILE"));
@@ -156,6 +168,28 @@ void ServerHost::writeMonitoringSnapshot()
     const auto bytes = QJsonDocument(data).toJson(QJsonDocument::Compact);
     if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit())
         qCWarning(lcServer) << "não foi possível gravar o monitoramento:" << file.errorString();
+}
+
+void ServerHost::sendLiveWebhook()
+{
+    const QByteArray body = QJsonDocument(m_server.liveSnapshot()).toJson(QJsonDocument::Compact);
+    if (body == m_lastLive)
+        return; // só a contagem de algo que o bot não mostra, ou nada mudou
+    m_lastLive = body;
+    QNetworkRequest request(m_liveWebhook);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, QByteArrayLiteral("application/json"));
+    request.setTransferTimeout(5'000);
+    if (!m_liveSecret.isEmpty())
+        request.setRawHeader("X-OpenSpeak-Secret", m_liveSecret);
+    QNetworkReply *reply = m_liveNetwork.post(request, body);
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        reply->deleteLater();
+        const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (reply->error() != QNetworkReply::NoError || status >= 300) {
+            m_lastLive.clear(); // a próxima mudança reenvia tudo (o bot também consulta o /api/live)
+            qCWarning(lcServer).noquote() << "webhook do bot falhou:" << (status ? QString::number(status) : reply->errorString());
+        }
+    });
 }
 
 quint16 ServerHost::port() const { return m_tcp ? m_tcp->serverPort() : 0; }

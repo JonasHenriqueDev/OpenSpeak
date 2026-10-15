@@ -7,6 +7,8 @@
 //   OPENSPEAK_CERT/KEY   caminhos de certificado PEM para HTTPS (necessário para
 //                        captura de tela fora de localhost)
 //   OPENSPEAK_ICE        JSON com a lista de iceServers (padrão: STUN público)
+//   OPENSPEAK_LIVE_WEBHOOK         URL que recebe POST do /api/live quando muda (bot do Discord)
+//   OPENSPEAK_LIVE_WEBHOOK_SECRET  enviado no header X-OpenSpeak-Secret
 
 import http from 'node:http';
 import https from 'node:https';
@@ -89,9 +91,33 @@ const httpServer = secure
 
 const sockets = new Map(); // clid -> ws
 
+// Bot do Discord: avisa na hora em vez de esperar a próxima consulta ao /api/live.
+const LIVE_WEBHOOK = process.env.OPENSPEAK_LIVE_WEBHOOK ?? '';
+let liveTimer = null;
+let lastLive = '';
+function liveChanged() {
+  if (!/^https?:\/\//.test(LIVE_WEBHOOK) || liveTimer) return;
+  liveTimer = setTimeout(async () => { // junta mudanças seguidas num POST só
+    liveTimer = null;
+    const body = JSON.stringify(server.liveSnapshot());
+    if (body === lastLive) return;
+    lastLive = body;
+    const headers = { 'content-type': 'application/json' };
+    if (process.env.OPENSPEAK_LIVE_WEBHOOK_SECRET) headers['x-openspeak-secret'] = process.env.OPENSPEAK_LIVE_WEBHOOK_SECRET;
+    try {
+      const res = await fetch(LIVE_WEBHOOK, { method: 'POST', headers, body, signal: AbortSignal.timeout(5000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      lastLive = ''; // a próxima mudança reenvia tudo
+      console.warn('[openspeak] webhook do bot falhou:', err.message);
+    }
+  }, 300);
+}
+
 const server = new VirtualServer({
   name: process.env.OPENSPEAK_NAME ?? 'OpenSpeak',
   iceServers: parseIceServers(),
+  onLiveChanged: liveChanged,
   send(clid, message) {
     const ws = sockets.get(clid);
     if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify(message));

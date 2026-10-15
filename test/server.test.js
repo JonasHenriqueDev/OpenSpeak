@@ -197,3 +197,19 @@ test('bot do Discord: liveSnapshot só lista streams com announce, com quem e qu
   live = server.liveSnapshot();
   assert.equal(live.streams[0].app, 'Chrome');
 });
+
+test('webhook do bot: onLiveChanged dispara no ciclo de vida do stream e na troca de apelido', () => {
+  let calls = 0;
+  const server = new VirtualServer({ send: () => {}, onLiveChanged: () => { calls++; } });
+  const host = server.connect();
+  server.handle(host, 'login', { nickname: 'host', uid: 'uid-host' });
+  assert.equal(calls, 0);
+  const { streamIdentifier } = server.handle(host, 'setupstream', {});
+  assert.equal(calls, 1);
+  server.handle(host, 'updatestream', { streamIdentifier, app: 'Chrome' });
+  assert.equal(calls, 2);
+  server.handle(host, 'clientupdate', { nickname: 'novo' });
+  assert.equal(calls, 3);
+  server.disconnect(host);
+  assert.equal(calls, 4);
+});

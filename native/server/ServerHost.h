@@ -8,6 +8,8 @@
 #include <QDir>
 #include <QHash>
 #include <QHttpServer>
+#include <QNetworkAccessManager>
+#include <QUrl>
 #include <QObject>
 #include <QTcpServer>
 #include <QTimer>
@@ -45,6 +47,7 @@ private:
     void sendTo(int clid, const QJsonObject &message);
     void heartbeat();
     void writeMonitoringSnapshot();
+    void sendLiveWebhook();
 
     Options m_options;
     QHttpServer m_http;
@@ -66,6 +69,11 @@ private:
     QString m_monitoringFile;
     quint64 m_signalingRx = 0, m_signalingTx = 0;
     quint64 m_mediaTx = 0; // espectadores por WebSocket (SfuWsViewer)
+    // Webhook do bot do Discord (OPENSPEAK_LIVE_WEBHOOK): POST do liveSnapshot() quando muda.
+    QUrl m_liveWebhook;
+    QByteArray m_liveSecret, m_lastLive;
+    QTimer m_liveDebounce;
+    QNetworkAccessManager m_liveNetwork;
 };
 
 } // namespace openspeak

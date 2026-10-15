@@ -36,6 +36,31 @@ públicos (título, apelido, canal, app, espectadores) — nada de uid, IP ou
 miniatura. O bot não entra no servidor OpenSpeak, então não aparece na lista
 de usuários de lá.
 
+### Webhook (instantâneo)
+
+Com o webhook ligado, o servidor avisa o bot no mesmo instante (~0,3 s) em
+vez de esperar a próxima consulta. A consulta continua como rede de segurança
+(dá para subir o `pollSeconds` para 60).
+
+No bot (`config.json`):
+
+```json
+"webhook": { "port": 9991, "secret": "um-segredo-longo" }
+```
+
+No servidor OpenSpeak (nativo ou Node), na mesma máquina:
+
+```bash
+OPENSPEAK_LIVE_WEBHOOK=http://127.0.0.1:9991/live
+OPENSPEAK_LIVE_WEBHOOK_SECRET=um-segredo-longo
+```
+
+O servidor manda um `POST` com o mesmo JSON do `/api/live` (header
+`X-OpenSpeak-Secret`) quando uma transmissão anunciada começa, muda ou
+termina. O bot escuta só em `127.0.0.1` (troque com `"host"` se o servidor
+estiver em outra máquina, e aí use o segredo). O segredo também pode vir de
+`OPENSPEAK_BOT_WEBHOOK_SECRET`.
+
 Se o servidor OpenSpeak ficar fora do ar por ~4 consultas seguidas, o bot
 considera que ninguém está ao vivo e encerra os avisos.
 

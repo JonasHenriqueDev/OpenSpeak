@@ -644,6 +644,11 @@ void VirtualServer::broadcast(const QString &cmd, const QJsonObject &args, int e
     for (const auto &[id, c] : m_clients)
         if (c.loggedIn && id != exceptClid)
             notify(id, cmd, args);
+    // Todo começo/mudança/fim de stream e troca de apelido passa por aqui.
+    static const QStringList liveCommands{QStringLiteral("notifystreamstarted"), QStringLiteral("notifystreamupdated"),
+                                          QStringLiteral("notifystreamstopped"), QStringLiteral("notifyclientupdated")};
+    if (m_liveChanged && liveCommands.contains(cmd))
+        m_liveChanged();
 }
 
 void VirtualServer::broadcastToChannel(int cid, const QString &cmd, const QJsonObject &args, int exceptClid)

@@ -46,6 +46,9 @@ public:
     /// Transmissões ao vivo que o dono deixou anunciar (`announce`), para o bot do
     /// Discord via GET /api/live. Só nomes públicos: nada de uid, IP ou miniatura.
     QJsonObject liveSnapshot() const;
+    /// Chamado quando algo que aparece no liveSnapshot() pode ter mudado (stream
+    /// começou/mudou/parou, apelido). O ServerHost usa para o webhook do bot.
+    void setLiveChangedCallback(std::function<void()> callback) { m_liveChanged = std::move(callback); }
     void setClientLatency(int clid, qint64 milliseconds);
 
     /// Habilita STREAM_SFU. O relay deve viver mais que o VirtualServer.
@@ -136,6 +139,7 @@ private:
     void broadcastToChannel(int cid, const QString &cmd, const QJsonObject &args, int exceptClid = 0);
 
     SendFn m_send;
+    std::function<void()> m_liveChanged;
     StreamRelay *m_relay = nullptr;
     QString m_name;
     QJsonArray m_iceServers;

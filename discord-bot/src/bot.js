@@ -340,7 +340,10 @@ class LiveBot {
     const main = presenceText(this.config.presence, streams, stats);
     if (main !== this.presenceMain) this.presenceIndex = 0; // mudou quem está ao vivo: mostra na hora
     this.presenceMain = main;
-    this.presenceTexts = [main, serverText(this.config.presence, stats)].filter(Boolean);
+    const server = serverText(this.config.presence, stats);
+    // Só alterna com alguém ao vivo. Sem transmissão, um texto fixo: a carga do
+    // servidor se tem gente conectada, senão o "idle".
+    this.presenceTexts = (streams.length ? [main, server] : [stats?.clients > 0 && server ? server : main]).filter(Boolean);
     this.presenceLive = streams.length > 0;
     this.showPresence();
   }

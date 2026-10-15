@@ -163,7 +163,8 @@ Os números vêm do campo `stats` do `/api/live`, só contagens agregadas.
 
 **Status do bot**: o texto de quem está ao vivo e o da carga do servidor
 (`server`) se alternam a cada `rotateSeconds`; quando alguém começa a
-transmitir, aparece na hora. Com `type: "custom"` o Discord mostra só o texto;
+transmitir, aparece na hora. Sem ninguém ao vivo o status fica parado: mostra
+a carga do servidor se há gente conectada, senão o texto `idle`. Com `type: "custom"` o Discord mostra só o texto;
 com `playing`/`watching`/`listening`/`competing` aparece como
 "Jogando …", "Assistindo …", "Ouvindo …" ou "Competindo em …".
 

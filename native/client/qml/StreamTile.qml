@@ -606,7 +606,6 @@ Rectangle {
             ViewerCount {
                 streamId: tile.streamId
                 count: tile.data_.viewerCount
-                own: tile.own
                 color: Theme.text
                 iconSize: 15
                 fontSize: 13

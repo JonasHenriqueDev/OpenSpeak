@@ -1,6 +1,7 @@
 #include "SoundEffects.h"
 
 #include "ConnectionHandler.h"
+#include "ScreenshareManager.h"
 #include "Settings.h"
 
 #include <QAudio>
@@ -10,14 +11,17 @@
 
 namespace openspeak {
 
-SoundEffects::SoundEffects(ConnectionHandler *handler, Settings *settings, QObject *parent)
-    : QObject(parent), m_handler(handler), m_settings(settings)
+SoundEffects::SoundEffects(ConnectionHandler *handler, ScreenshareManager *screenshare, Settings *settings,
+                           QObject *parent)
+    : QObject(parent), m_handler(handler), m_screenshare(screenshare), m_settings(settings)
 {
     connect(handler, &ConnectionHandler::connectionChanged, this, &SoundEffects::scheduleRefresh);
     connect(handler, &ConnectionHandler::changed, this, &SoundEffects::scheduleRefresh);
     connect(handler, &ConnectionHandler::streamAdded, this, &SoundEffects::scheduleRefresh);
     connect(handler, &ConnectionHandler::streamUpdated, this, &SoundEffects::scheduleRefresh);
     connect(handler, &ConnectionHandler::streamRemoved, this, &SoundEffects::scheduleRefresh);
+    if (screenshare)
+        connect(screenshare, &ScreenshareManager::itemsChanged, this, &SoundEffects::scheduleRefresh);
     // Carrega antes: o primeiro play() não espera a leitura do arquivo.
     for (const char *theme : {"suave", "bolha"})
         for (const char *event : {"entrar_sala", "sair_sala", "alguem_entrou", "alguem_saiu",
@@ -69,6 +73,25 @@ void SoundEffects::refresh()
         viewerJoined |= it.value() > before;
         viewerLeft |= it.value() < before;
     }
+    // Streams que estou assistindo: a contagem pública já me inclui, então entrar
+    // toca "espectador_entrou" quando o servidor me conta; sair toca na hora.
+    QHash<QString, int> watched;
+    if (connected && m_screenshare)
+        for (const QString &id : m_screenshare->watchedStreams()) {
+            const auto s = m_handler->streams().constFind(id);
+            if (s != m_handler->streams().cend())
+                watched.insert(id, s->viewerCount);
+        }
+    for (auto it = watched.cbegin(); it != watched.cend(); ++it) {
+        const auto before = m_watched.constFind(it.key());
+        if (before == m_watched.cend())
+            continue; // acabei de pedir para assistir: essa é a base
+        viewerJoined |= it.value() > before.value();
+        viewerLeft |= it.value() < before.value();
+    }
+    for (auto it = m_watched.cbegin(); it != m_watched.cend(); ++it)
+        if (!watched.contains(it.key()) && m_handler->streams().contains(it.key()))
+            viewerLeft = true; // saí do stream (que continua no ar)
 
     QString event;
     if (channel != m_channel) {
@@ -109,6 +132,7 @@ void SoundEffects::refresh()
     m_others = others;
     m_streams = streams;
     m_viewers = viewers;
+    m_watched = watched;
     if (!event.isEmpty())
         play(event);
 }

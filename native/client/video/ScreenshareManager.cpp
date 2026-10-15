@@ -571,6 +571,33 @@ QVariantMap ScreenshareManager::viewers(const QString &id) const
             {"limit", own.config.viewerLimit}, {"limitReached", viewerLimitReached(own)}};
 }
 
+QVariant ScreenshareManager::viewerNames(const QString &id) const
+{
+    QList<int> clids;
+    if (auto it = m_own.find(id); it != m_own.end()) {
+        clids = it->second->viewers.values();
+        std::sort(clids.begin(), clids.end());
+    } else if (auto in = m_inbound.constFind(id); in != m_inbound.cend() && in->attendeesKnown) {
+        clids = in->attendees;
+    } else {
+        return {};
+    }
+    QStringList names;
+    for (int clid : clids)
+        names.append(clid == m_handler->ownClid() ? m_handler->clientName(clid) + QStringLiteral(" (você)")
+                                                  : m_handler->clientName(clid));
+    return names;
+}
+
+QStringList ScreenshareManager::watchedStreams() const
+{
+    QStringList ids;
+    for (auto it = m_inbound.cbegin(); it != m_inbound.cend(); ++it)
+        if (it->status != InStatus::Error)
+            ids.append(it.key());
+    return ids;
+}
+
 // ===================================================== streams assistidos
 
 void ScreenshareManager::joinStream(const QString &id)
@@ -692,6 +719,15 @@ void ScreenshareManager::onNotification(const QString &cmd, const QJsonObject &a
             it->second->viewers.clear();
             for (const QJsonValue &v : a.value("viewers").toArray())
                 it->second->viewers.insert(v.toInt());
+            notifyChanged();
+        }
+        // Espectadores também recebem a lista de quem assiste junto.
+        auto in = m_inbound.find(a.value("streamIdentifier").toString());
+        if (in != m_inbound.end()) {
+            in->attendees.clear();
+            for (const QJsonValue &v : a.value("viewers").toArray())
+                in->attendees.append(v.toInt());
+            in->attendeesKnown = true;
             notifyChanged();
         }
     } else if (cmd == QLatin1String("notifystreambanadded") || cmd == QLatin1String("notifystreambanremoved")) {

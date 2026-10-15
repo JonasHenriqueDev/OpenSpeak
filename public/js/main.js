@@ -131,7 +131,7 @@ async function startSession(url, nickname) {
   await handler.connect(url, { nickname, uid: settings.get('uid') });
   if (deployment.tailscaleOnly) handler.iceServers = [];
   const manager = new ScreenshareManager(handler, { contacts, settings });
-  new SoundEffects(handler, settings);
+  new SoundEffects(handler, settings, manager);
   window.addEventListener('pagehide', () => handler.disconnect(), { once: true });
   new App(handler, manager).mount();
 }

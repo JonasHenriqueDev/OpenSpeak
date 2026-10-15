@@ -67,6 +67,16 @@ QVariantMap Settings::lastStreamingConfig() const
     return cfg;
 }
 
+bool Settings::markVersionSeen(const QString &version)
+{
+    const QString last = value("lastVersion").toString();
+    if (last == version)
+        return false;
+    set("lastVersion", version);
+    // Quem já usava antes desta chave existir (tem apelido salvo) também foi atualizado.
+    return !last.isEmpty() || !nickname().isEmpty();
+}
+
 QString Settings::startupEntryName() const
 {
     return m_group == QLatin1String("default") ? QStringLiteral("OpenSpeak") : QStringLiteral("OpenSpeak (%1)").arg(m_group);

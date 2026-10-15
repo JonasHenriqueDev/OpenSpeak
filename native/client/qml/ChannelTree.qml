@@ -176,7 +176,6 @@ Rectangle {
                                             id: streamViewers
                                             streamId: streamRow.modelData.streamIdentifier
                                             count: streamRow.modelData.viewerCount
-                                            own: streamRow.modelData.ownerClid === Server.ownClid
                                         }
                                     }
                                 }

@@ -81,3 +81,35 @@ test('espectadores entrando e saindo da minha transmissão', () => {
   handler.streams.get('o').viewerCount = 3; // stream de outra pessoa: silêncio
   assert.equal(tick(), null);
 });
+
+test('espectador ouve quem entra e sai do stream que está assistindo (e a própria entrada/saída)', () => {
+  played.length = 0;
+  const data = { soundEffects: true, soundTheme: 'suave', soundVolume: 60 };
+  const settings = { get: k => data[k], set: (k, v) => { data[k] = v; } };
+  const handler = new EventEmitter();
+  Object.assign(handler, { ownClid: 1, clients: new Map(), streams: new Map() });
+  Object.defineProperty(handler, 'ownClient', { get() { return this.clients.get(this.ownClid) ?? null; } });
+  const manager = new EventEmitter();
+  let watching = [];
+  manager.watchedStreams = () => watching;
+  const sounds = new SoundEffects(handler, settings, manager);
+  const tick = () => { sounds.refresh(); return played.splice(0).at(-1) ?? null; };
+
+  handler.clients.set(1, { clid: 1, cid: 10 });
+  handler.streams.set('x', { streamIdentifier: 'x', cid: 20, ownerClid: 2, paused: false, viewerCount: 1 });
+  tick();
+  handler.streams.get('x').viewerCount = 2; // alguém entrou, mas não estou assistindo
+  assert.equal(tick(), null);
+  watching = ['x']; // pedi para assistir: base
+  assert.equal(tick(), null);
+  handler.streams.get('x').viewerCount = 3; // o servidor me contou
+  assert.equal(tick(), 'suave/espectador_entrou');
+  handler.streams.get('x').viewerCount = 4;
+  assert.equal(tick(), 'suave/espectador_entrou');
+  handler.streams.get('x').viewerCount = 3;
+  assert.equal(tick(), 'suave/espectador_saiu');
+  watching = []; // saí
+  assert.equal(tick(), 'suave/espectador_saiu');
+  handler.streams.get('x').viewerCount = 2;
+  assert.equal(tick(), null);
+});

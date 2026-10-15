@@ -71,6 +71,11 @@ public:
     Q_INVOKABLE void removeViewer(const QString &id, int clid, bool ban = false);
     Q_INVOKABLE void unban(const QString &id, const QString &uid);
     Q_INVOKABLE QVariantMap viewers(const QString &id) const;
+    /// Apelidos de quem assiste: nas minhas transmissões e nas que estou assistindo
+    /// (o servidor manda a lista aos espectadores). Lista vazia válida; null se não sei.
+    Q_INVOKABLE QVariant viewerNames(const QString &id) const;
+    /// Streams que estou assistindo ou pedindo para assistir (sem os com erro).
+    QStringList watchedStreams() const;
 
     // --- streams assistidos
     Q_INVOKABLE void joinStream(const QString &id);
@@ -144,6 +149,8 @@ private:
         SessionInbound *session = nullptr;
         double volume = 1.0;
         History history;
+        QList<int> attendees;   // espectadores, pelo notifystreamattendees
+        bool attendeesKnown = false;
     };
 
     static StreamConfig configFromMap(const QVariantMap &m, const StreamConfig &base);

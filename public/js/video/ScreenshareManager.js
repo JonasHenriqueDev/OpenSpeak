@@ -282,10 +282,20 @@ export class ScreenshareManager extends EventEmitter {
     return true;
   }
 
-  /** Apelidos de quem assiste a uma transmissão minha; null se o stream não é meu. */
+  /**
+   * Apelidos de quem assiste: nas minhas transmissões e nas que estou assistindo
+   * (o servidor manda a lista aos espectadores); null se não sei.
+   */
   viewerNames(streamIdentifier) {
     const own = this.ownStreams.get(streamIdentifier);
-    return own ? [...own.viewers].map(clid => this.handler.clientName(clid)) : null;
+    const clids = own ? [...own.viewers].sort((a, b) => a - b) : this.inbound.get(streamIdentifier)?.attendees;
+    if (!clids) return null;
+    return clids.map(clid => this.handler.clientName(clid) + (clid === this.handler.ownClid ? ' (você)' : ''));
+  }
+
+  /** Streams que estou assistindo ou pedindo para assistir (sem os com erro). */
+  watchedStreams() {
+    return [...this.inbound.values()].filter(v => v.status !== InboundStatus.ERROR).map(v => v.streamIdentifier);
   }
 
   #viewerLimitReached(own) {
@@ -377,6 +387,12 @@ export class ScreenshareManager extends EventEmitter {
     const own = this.ownStreams.get(streamIdentifier);
     if (own) {
       own.viewers = new Set(viewers);
+      this.emit('changed');
+    }
+    // Espectadores também recebem a lista de quem assiste junto.
+    const view = this.inbound.get(streamIdentifier);
+    if (view) {
+      view.attendees = [...viewers];
       this.emit('changed');
     }
   }

@@ -18,6 +18,7 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QFile>
 #include <QIcon>
 #include <QLocalServer>
 #include <QLocalSocket>
@@ -123,6 +124,8 @@ int main(int argc, char *argv[])
         settings.setServerUrl(parser.value(serverOpt));
         settings.setConnectionMode(QStringLiteral("server"));
     }
+    // Primeira abertura depois de uma atualização: avisa e oferece as novidades.
+    const bool updated = settings.markVersionSeen(QStringLiteral(OPENSPEAK_VERSION));
     if (parser.isSet(nickOpt))
         settings.setNickname(parser.value(nickOpt));
     ConnectionHandler handler;
@@ -134,7 +137,7 @@ int main(int argc, char *argv[])
         handler.setDirectory(new TailscaleDirectory(meshPort, &handler));
     }
     ScreenshareManager screenshare(&handler, &settings);
-    SoundEffects sounds(&handler, &settings);
+    SoundEffects sounds(&handler, &screenshare, &settings);
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &handler, &ConnectionHandler::disconnectFromServer);
     if (parser.isSet(quitOpt) && settings.debug())
         QTimer::singleShot(qBound(1, parser.value(quitOpt).toInt(), 3600) * 1000, &app, &QCoreApplication::quit);
@@ -170,6 +173,11 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("LiteEdition"), lite);
     engine.rootContext()->setContextProperty(QStringLiteral("Tray"), &tray);
     engine.rootContext()->setContextProperty(QStringLiteral("Sounds"), &sounds);
+    QString changelog;
+    if (QFile f(QStringLiteral(":/changelog.md")); f.open(QIODevice::ReadOnly))
+        changelog = QString::fromUtf8(f.readAll());
+    engine.rootContext()->setContextProperty(QStringLiteral("Changelog"), changelog);
+    engine.rootContext()->setContextProperty(QStringLiteral("JustUpdated"), updated && !parser.isSet(uiSmokeOpt));
     // Aberto pelo Windows com "Iniciar minimizado": só o ícone na bandeja.
     engine.rootContext()->setContextProperty(QStringLiteral("StartHidden"),
         parser.isSet(autostartOpt) && settings.startMinimized() && tray.available() && !parser.isSet(uiSmokeOpt));
@@ -181,7 +189,7 @@ int main(int argc, char *argv[])
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
         if (!window) return 1;
         window->resize(900, 560);
-        QTimer::singleShot(4500, &app, [&app, window, panel = parser.value(openOpt)] {
+        QTimer::singleShot(4500, &app, [&app, &engine, window, panel = parser.value(openOpt)] {
             bool valid = !window->grabWindow().isNull();
             if (panel.startsWith("login")) {
                 auto *connectButton = findVisualItem(window->contentItem(), QStringLiteral("serverConnectButton"));
@@ -192,11 +200,14 @@ int main(int argc, char *argv[])
             } else if (panel == "startup") {
                 auto *startup = findVisualItem(window->contentItem(), QStringLiteral("startupScreen"));
                 valid = valid && startup && startup->isVisible() && startup->width() >= 800;
-            } else if (panel == "updates" || panel == "preferences") {
-                auto *dialog = window->findChild<QObject *>(panel == "updates" ? QStringLiteral("updatesDialog") : QStringLiteral("preferencesDialog"));
+            } else if (panel == "updates" || panel == "preferences" || panel == "changelog") {
+                auto *dialog = window->findChild<QObject *>(panel + QStringLiteral("Dialog"));
                 valid = valid && dialog && dialog->property("visible").toBool()
                     && dialog->property("width").toDouble() >= 400
                     && dialog->property("height").toDouble() < window->height();
+                if (panel == "changelog")
+                    valid = valid && engine.rootContext()->contextProperty(QStringLiteral("Changelog")).toString()
+                                         .startsWith(QStringLiteral("# OpenSpeak "));
             } else if (panel != "view-menu") {
                 auto *grid = findVisualItem(window->contentItem(), QStringLiteral("sourceGrid"));
                 valid = valid && grid && grid->isVisible() && grid->height() >= 120 && grid->width() >= 200;

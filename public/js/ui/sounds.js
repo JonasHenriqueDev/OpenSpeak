@@ -1,6 +1,6 @@
 // Efeitos sonoros de canal e transmissão (mesma lógica do SoundEffects do app nativo):
 // entrar/sair do canal, alguém entrar/sair, streams iniciados/pausados no canal atual
-// e espectadores entrando/saindo das minhas transmissões.
+// e espectadores entrando/saindo das minhas transmissões e das que estou assistindo.
 // Temas: "suave" (padrão) e "bolha"; arquivos em /sounds/<tema>/<evento>.wav.
 
 export const SOUND_THEMES = ['suave', 'bolha'];
@@ -30,13 +30,16 @@ export function previewSound(settings, theme, event) {
 }
 
 export class SoundEffects {
-  constructor(handler, settings) {
+  /** @param manager ScreenshareManager (opcional): streams que estou assistindo */
+  constructor(handler, settings, manager = null) {
     this.handler = handler;
     this.settings = settings;
+    this.manager = manager;
     this.channel = 0;
     this.others = new Set();
     this.streams = new Map(); // streamIdentifier -> pausado
     this.viewers = new Map(); // minhas transmissões -> espectadores
+    this.watched = new Map(); // streams que assisto -> espectadores (eu incluso)
     this.pending = false;
     for (const event of EVENTS) audio(settings.get('soundTheme'), event);
     const schedule = () => {
@@ -45,12 +48,14 @@ export class SoundEffects {
       queueMicrotask(() => { this.pending = false; this.refresh(); });
     };
     for (const ev of ['changed', 'streamadded', 'streamupdated', 'streamremoved']) handler.on(ev, schedule);
+    manager?.on('changed', schedule);
     handler.on('disconnected', () => {
       if (this.channel) this.play('sair_sala');
       this.channel = 0;
       this.others.clear();
       this.streams.clear();
       this.viewers.clear();
+      this.watched.clear();
     });
     this.refresh();
   }
@@ -73,6 +78,19 @@ export class SoundEffects {
       if (count > before) viewerJoined = true;
       if (count < before) viewerLeft = true;
     }
+    // streams que estou assistindo: a contagem pública já me inclui, então entrar
+    // toca "espectador_entrou" quando o servidor me conta; sair toca na hora
+    const watched = new Map();
+    for (const id of this.manager?.watchedStreams() ?? []) {
+      const s = hd.streams.get(id);
+      if (s) watched.set(id, s.viewerCount ?? 0);
+    }
+    for (const [id, count] of watched) {
+      if (!this.watched.has(id)) continue; // acabei de pedir para assistir: essa é a base
+      if (count > this.watched.get(id)) viewerJoined = true;
+      if (count < this.watched.get(id)) viewerLeft = true;
+    }
+    for (const id of this.watched.keys()) if (!watched.has(id) && hd.streams.has(id)) viewerLeft = true; // saí
 
     let event = null;
     if (channel !== this.channel) {
@@ -100,6 +118,7 @@ export class SoundEffects {
     this.others = others;
     this.streams = streams;
     this.viewers = viewers;
+    this.watched = watched;
     if (event) this.play(event);
   }
 

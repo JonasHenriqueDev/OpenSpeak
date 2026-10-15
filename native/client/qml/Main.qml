@@ -50,7 +50,8 @@ ApplicationWindow {
                 Accessible.name: "Atualizações do OpenSpeak"
                 ToolTip.visible: hovered
                 ToolTip.text: "Atualizações · " + Updater.version
-                contentItem: Icon { name: "download"; size: 16 }
+                // Centralizado: como contentItem direto, o ícone estica e fica achatado.
+                contentItem: Item { Icon { anchors.centerIn: parent; name: "download"; size: 16 } }
                 onClicked: updatesDialog.open()
             }
             ToolButton {
@@ -60,7 +61,8 @@ ApplicationWindow {
                 Accessible.name: I18n.t("app.prefs.tooltip")
                 ToolTip.visible: hovered
                 ToolTip.text: I18n.t("app.prefs.tooltip")
-                contentItem: Icon { name: "settings"; size: 16 }
+                // Centralizado: como contentItem direto, o ícone estica e fica achatado.
+                contentItem: Item { Icon { anchors.centerIn: parent; name: "settings"; size: 16 } }
                 onClicked: preferencesDialog.open()
             }
             Repeater {
@@ -232,12 +234,45 @@ ApplicationWindow {
             }
             Label { Layout.fillWidth: true; Layout.leftMargin: 24; wrapMode: Text.WordWrap; color: Theme.textDim
                 text: I18n.t("app.prefs.start_minimized.hint") }
+            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.changelog"); font.weight: Font.DemiBold }
+            RowLayout {
+                Layout.fillWidth: true
+                Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
+                    text: I18n.t("app.prefs.changelog.version", { version: Updater.version }) }
+                Button {
+                    objectName: "openChangelog"
+                    text: I18n.t("app.prefs.changelog.open")
+                    onClicked: changelogDialog.open()
+                }
+            }
             Button {
                 Layout.topMargin: 6
                 text: I18n.t("app.prefs.quit")
                 flat: true
                 onClicked: window.quitApp()
             }
+            }
+        }
+    }
+    Dialog {
+        id: changelogDialog
+        objectName: "changelogDialog"
+        title: I18n.t("app.changelog.title")
+        anchors.centerIn: parent
+        width: Math.min(620, window.width - 40)
+        height: Math.min(560, parent.height - 40)
+        modal: true
+        standardButtons: Dialog.Close
+        contentItem: ScrollView {
+            id: changelogScroll
+            contentWidth: availableWidth
+            clip: true
+            Label {
+                width: changelogScroll.availableWidth
+                wrapMode: Text.WordWrap
+                textFormat: Text.MarkdownText
+                text: Changelog
+                onLinkActivated: link => Qt.openUrlExternally(link)
             }
         }
     }
@@ -307,6 +342,16 @@ ApplicationWindow {
     Component.onCompleted: {
         if (DebugOpen === "updates") Qt.callLater(() => updatesDialog.open())
         if (DebugOpen === "preferences") Qt.callLater(() => preferencesDialog.open())
+        if (DebugOpen === "changelog") Qt.callLater(() => changelogDialog.open())
+        if (JustUpdated) {
+            const text = I18n.t("app.updated", { version: Updater.version })
+            if (StartHidden)
+                Tray.showMessage("OpenSpeak", text)
+            Qt.callLater(() => toasts.show({
+                key: "updated", kind: "info", icon: "download", timeout: 15000, text: text,
+                actions: [{ label: I18n.t("app.updated.open"), primary: true, run: function() { changelogDialog.open() } }]
+            }))
+        }
         Tray.texts = {
             open: I18n.t("app.tray.open"),
             stop: I18n.t("app.tray.stop"),

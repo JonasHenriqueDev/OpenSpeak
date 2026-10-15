@@ -1,3 +1,14 @@
+# OpenSpeak 1.0.9 — quem assiste junto e novidades
+
+- Quem está **assistindo** a uma transmissão também ouve o som quando alguém
+  começa ou para de assistir, inclusive ao entrar e ao sair você mesmo.
+- Passe o mouse sobre a contagem de espectadores de uma transmissão que você
+  está assistindo para ver **quem está assistindo junto**.
+- **Novidades** nas Preferências: veja o que mudou em cada versão.
+- Depois de atualizar, o app avisa "OpenSpeak atualizado para a versão …" com
+  um atalho para as novidades.
+- Ícone de engrenagem das Preferências redesenhado (não fica mais achatado).
+
 # OpenSpeak 1.0.8 — transmissão pelo servidor por padrão e quem está assistindo
 
 - Novas transmissões começam no modo **Servidor** (SFU): o servidor repassa o

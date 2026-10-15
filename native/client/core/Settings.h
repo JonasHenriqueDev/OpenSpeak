@@ -97,6 +97,8 @@ public:
     Q_INVOKABLE void toggleContact(const QString &uid);
     Q_INVOKABLE void hideStream(const QString &id);
     Q_INVOKABLE void showStream(const QString &id);
+    /// Grava a versão em uso; true na primeira abertura depois de uma atualização.
+    bool markVersionSeen(const QString &version);
 
 signals:
     void changed();

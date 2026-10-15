@@ -1,3 +1,17 @@
+# OpenSpeak 1.0.11 — bot do Discord e janela mais fácil de usar
+
+- **Bot do Discord**: o servidor pode avisar no Discord quem está ao vivo e
+  qual app está transmitindo (status da call, mensagem num canal e status do
+  bot), na hora em que a transmissão começa.
+- Nova opção **"Mostrar ao vivo no bot do Discord"** nas configurações
+  avançadas da transmissão (ligada por padrão). Desligue para a transmissão
+  não aparecer no bot.
+- Ao transmitir uma **janela**, o app informa o nome do programa (por exemplo
+  "Counter-Strike 2" ou "Google Chrome"), que aparece no aviso do bot.
+- Clicar no ícone do OpenSpeak na **barra de tarefas** agora minimiza o app.
+- A janela de **picture-in-picture** pode ser redimensionada por qualquer
+  borda ou canto, não só pelo canto inferior direito.
+
 # OpenSpeak 1.0.10 — verificação de atualizações mais confiável
 
 - Quando o GitHub limita as consultas da sua rede (60 por hora por IP), o app

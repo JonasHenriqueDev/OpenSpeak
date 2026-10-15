@@ -13,7 +13,9 @@ ApplicationWindow {
     visible: !StartHidden
     title: Server.connected ? "OpenSpeak — " + Server.serverName : "OpenSpeak"
     color: Theme.background
-    flags: Qt.Window | Qt.FramelessWindowHint
+    // Sem moldura, mas com WS_SYSMENU/WS_MINIMIZEBOX: sem eles o Windows ignora o
+    // clique no ícone da barra de tarefas e não minimiza o app.
+    flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint
 
     header: Rectangle {
         height: 34

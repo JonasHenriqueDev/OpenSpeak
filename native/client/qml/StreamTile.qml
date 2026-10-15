@@ -402,14 +402,29 @@ Rectangle {
             }
         }
 
-        // Alça de redimensionamento (canto inferior direito).
-        MouseArea {
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            width: 18
-            height: 18
-            cursorShape: Qt.SizeFDiagCursor
-            onPressed: pipWindow.startSystemResize(Qt.RightEdge | Qt.BottomEdge)
+        // Redimensiona por qualquer borda ou canto (o Windows faz o resize nativo).
+        Repeater {
+            model: [Qt.LeftEdge, Qt.RightEdge, Qt.TopEdge, Qt.BottomEdge,
+                    Qt.TopEdge | Qt.LeftEdge, Qt.TopEdge | Qt.RightEdge,
+                    Qt.BottomEdge | Qt.LeftEdge, Qt.BottomEdge | Qt.RightEdge]
+            delegate: MouseArea {
+                required property int modelData
+                readonly property bool edgeLeft: !!(modelData & Qt.LeftEdge)
+                readonly property bool edgeRight: !!(modelData & Qt.RightEdge)
+                readonly property bool edgeTop: !!(modelData & Qt.TopEdge)
+                readonly property bool edgeBottom: !!(modelData & Qt.BottomEdge)
+                readonly property bool corner: (edgeLeft || edgeRight) && (edgeTop || edgeBottom)
+                readonly property int grip: corner ? 14 : 6
+                // Cantos acima das bordas para ganharem o clique na interseção.
+                z: corner ? 1001 : 1000
+                x: edgeRight ? parent.width - width : 0
+                y: edgeBottom ? parent.height - height : 0
+                width: edgeLeft || edgeRight ? grip : parent.width
+                height: edgeTop || edgeBottom ? grip : parent.height
+                cursorShape: corner ? (edgeLeft === edgeTop ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor)
+                                    : edgeLeft || edgeRight ? Qt.SizeHorCursor : Qt.SizeVerCursor
+                onPressed: pipWindow.startSystemResize(modelData)
+            }
         }
     }
 

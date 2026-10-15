@@ -1,6 +1,7 @@
 #pragma once
-// Efeitos sonoros de canal e transmissão: entrar/sair do canal, alguém entrar/sair
-// e streams iniciados/pausados no canal atual. Dois temas: "suave" (padrão) e "bolha".
+// Efeitos sonoros de canal e transmissão: entrar/sair do canal, alguém entrar/sair,
+// streams iniciados/pausados no canal atual e espectadores entrando/saindo das
+// minhas transmissões. Dois temas: "suave" (padrão) e "bolha".
 // O estado é comparado a cada mudança do ConnectionHandler, então funciona igual
 // no servidor, na tailnet e na sala web.
 
@@ -36,6 +37,7 @@ private:
     int m_channel = 0;
     QSet<int> m_others;              // clientes no meu canal, exceto eu
     QHash<QString, bool> m_streams;  // streams do meu canal -> pausado
+    QHash<QString, int> m_viewers;   // minhas transmissões -> espectadores
 };
 
 } // namespace openspeak

@@ -282,6 +282,12 @@ export class ScreenshareManager extends EventEmitter {
     return true;
   }
 
+  /** Apelidos de quem assiste a uma transmissão minha; null se o stream não é meu. */
+  viewerNames(streamIdentifier) {
+    const own = this.ownStreams.get(streamIdentifier);
+    return own ? [...own.viewers].map(clid => this.handler.clientName(clid)) : null;
+  }
+
   #viewerLimitReached(own) {
     return own.config.viewerLimit > 0 && own.viewers.size >= own.config.viewerLimit;
   }

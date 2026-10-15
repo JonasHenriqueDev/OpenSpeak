@@ -65,3 +65,19 @@ test('quem entra já transmitindo toca só "entrou"; mudo não toca nada', () =>
   handler.clients.delete(2);
   assert.equal(tick(), null);
 });
+
+test('espectadores entrando e saindo da minha transmissão', () => {
+  played.length = 0;
+  const { handler, tick } = setup();
+  handler.clients.set(1, { clid: 1, cid: 10 });
+  handler.streams.set('m', { streamIdentifier: 'm', cid: 10, ownerClid: 1, paused: false, viewerCount: 0 });
+  assert.equal(tick(), 'suave/entrar_sala');
+  handler.streams.get('m').viewerCount = 1;
+  assert.equal(tick(), 'suave/espectador_entrou');
+  handler.streams.get('m').viewerCount = 0;
+  assert.equal(tick(), 'suave/espectador_saiu');
+  handler.streams.set('o', { streamIdentifier: 'o', cid: 10, ownerClid: 2, paused: false, viewerCount: 0 });
+  tick();
+  handler.streams.get('o').viewerCount = 3; // stream de outra pessoa: silêncio
+  assert.equal(tick(), null);
+});

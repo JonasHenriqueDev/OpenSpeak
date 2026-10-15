@@ -128,3 +128,14 @@ finish(place([(0.00, mallet(C5, 0.4, decay=10), 0.6),
 finish(place([(0.00, mallet(C6, 0.4, decay=11), 0.6),
               (0.09, mallet(A5, 0.4, decay=11), 0.6),
               (0.18, mallet(E5, 0.6, decay=8, bright=0.25), 0.65)], 0.8), "B_pausar_transmissao")
+
+# ---------- Espectadores da sua transmissão (mais curtos e discretos) ----------
+# "bip-bip" curto, para não confundir com alguém entrando no canal.
+finish(place([(0.00, glide_tone(G5, G5, 0.18, decay=18), 0.7),
+              (0.075, glide_tone(C6 * 0.97, C6, 0.3, decay=12), 0.75)], 0.45), "A_espectador_entrou", peak_db=-7)
+finish(place([(0.00, glide_tone(C6, C6, 0.18, decay=18), 0.7),
+              (0.075, glide_tone(G5 * 1.03, G5, 0.3, decay=12), 0.7)], 0.45), "A_espectador_saiu", peak_db=-7)
+finish(place([(0.00, mallet(E6, 0.25, decay=16, bright=0.3), 0.6),
+              (0.06, mallet(G6, 0.35, decay=13, bright=0.3), 0.55)], 0.45), "B_espectador_entrou", peak_db=-7)
+finish(place([(0.00, mallet(G6, 0.25, decay=16, bright=0.3), 0.55),
+              (0.06, mallet(E6, 0.35, decay=13, bright=0.3), 0.6)], 0.45), "B_espectador_saiu", peak_db=-7)

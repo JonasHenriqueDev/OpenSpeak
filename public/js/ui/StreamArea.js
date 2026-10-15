@@ -184,6 +184,7 @@ export class StreamArea {
       joinStream: id => guard(m.joinStream(id)),
       leaveStream: id => guard(m.leaveStream(id)),
       dismiss: id => m.dismissInbound(id),
+      viewerNames: id => m.viewerNames(id),
       stopStream: id => guard(m.stopStream(id)),
       togglePause: id => guard(m.setPaused(id, !m.ownStreams.get(id)?.paused)),
       changeSource: id => a.changeSource(id),

@@ -21,7 +21,7 @@ SoundEffects::SoundEffects(ConnectionHandler *handler, Settings *settings, QObje
     // Carrega antes: o primeiro play() não espera a leitura do arquivo.
     for (const char *theme : {"suave", "bolha"})
         for (const char *event : {"entrar_sala", "sair_sala", "alguem_entrou", "alguem_saiu",
-                                  "iniciar_transmissao", "pausar_transmissao"})
+                                  "iniciar_transmissao", "pausar_transmissao", "espectador_entrou", "espectador_saiu"})
             effect(QLatin1String(theme), QLatin1String(event));
 }
 
@@ -57,6 +57,18 @@ void SoundEffects::refresh()
             if (s.cid == channel)
                 streams.insert(s.id, s.paused);
     }
+    // Espectadores das minhas transmissões (a contagem vem do servidor).
+    QHash<QString, int> viewers;
+    if (connected)
+        for (const StreamInfo &s : m_handler->streams())
+            if (s.ownerClid == m_handler->ownClid())
+                viewers.insert(s.id, s.viewerCount);
+    bool viewerJoined = false, viewerLeft = false;
+    for (auto it = viewers.cbegin(); it != viewers.cend(); ++it) {
+        const int before = m_viewers.value(it.key(), 0);
+        viewerJoined |= it.value() > before;
+        viewerLeft |= it.value() < before;
+    }
 
     QString event;
     if (channel != m_channel) {
@@ -83,6 +95,10 @@ void SoundEffects::refresh()
             event = QStringLiteral("alguem_entrou");
         else if (!(m_others - others).isEmpty())
             event = QStringLiteral("alguem_saiu");
+        else if (viewerJoined)
+            event = QStringLiteral("espectador_entrou");
+        else if (viewerLeft)
+            event = QStringLiteral("espectador_saiu");
         else if (started)
             event = QStringLiteral("iniciar_transmissao");
         else if (paused)
@@ -92,6 +108,7 @@ void SoundEffects::refresh()
     m_channel = channel;
     m_others = others;
     m_streams = streams;
+    m_viewers = viewers;
     if (!event.isEmpty())
         play(event);
 }
@@ -107,7 +124,8 @@ QSoundEffect *SoundEffects::effect(const QString &theme, const QString &event)
     static const QStringList themes{QStringLiteral("suave"), QStringLiteral("bolha")};
     static const QStringList events{QStringLiteral("entrar_sala"), QStringLiteral("sair_sala"),
                                     QStringLiteral("alguem_entrou"), QStringLiteral("alguem_saiu"),
-                                    QStringLiteral("iniciar_transmissao"), QStringLiteral("pausar_transmissao")};
+                                    QStringLiteral("iniciar_transmissao"), QStringLiteral("pausar_transmissao"),
+                                    QStringLiteral("espectador_entrou"), QStringLiteral("espectador_saiu")};
     const QString t = themes.contains(theme) ? theme : themes.first();
     if (!events.contains(event))
         return nullptr;

@@ -7,6 +7,7 @@ import { t } from './i18n.js';
 import { StreamAccess, StreamType, Severity } from '../core/protocol.js';
 import { InboundStatus } from '../video/ScreenshareManager.js';
 import { installFullscreenIdle } from './fullscreenIdle.js';
+import { viewerCount } from './viewerCount.js';
 
 const ACCESS_ICON = { [StreamAccess.PUBLIC]: 'globe', [StreamAccess.CONTACTS_ONLY]: 'contacts', [StreamAccess.PRIVATE]: 'lock' };
 const TYPE_ICON = { [StreamType.CAMERA]: 'camera', [StreamType.SCREEN]: 'screen', [StreamType.WINDOW]: 'window' };
@@ -279,7 +280,7 @@ export class StreamTile {
         title: t('video.action.stats'),
         on: { click: ev => { ev.stopPropagation(); this.actions.showStats(info.streamIdentifier); } },
       }, icon(sev >= Severity.MAJOR ? 'warning' : 'info')) : null,
-      h('span.viewer-count', { title: t('video.viewers') }, icon('users'), String(info?.viewerCount ?? 0)),
+      viewerCount(info?.viewerCount, () => this.actions.viewerNames(this.streamIdentifier)),
     );
   }
 

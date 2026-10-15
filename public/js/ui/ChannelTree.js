@@ -3,6 +3,7 @@
 import { h, replaceChildren } from './dom.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
+import { viewerCount } from './viewerCount.js';
 import { StreamType } from '../core/protocol.js';
 
 const TYPE_ICON = { [StreamType.CAMERA]: 'camera', [StreamType.SCREEN]: 'screen', [StreamType.WINDOW]: 'window' };
@@ -61,7 +62,7 @@ export class ChannelTree {
           on: { click: () => inMyChannel && this.onStreamClick(s.streamIdentifier) },
         }, icon(TYPE_ICON[s.type] ?? 'stream'), h('span.ellipsis', s.name),
           h('span.live-badge', t('video.stream.live')),
-          h('span.viewer-count', icon('users'), String(s.viewerCount)));
+          viewerCount(s.viewerCount, () => this.manager.viewerNames(s.streamIdentifier)));
       }));
   }
 

@@ -1,9 +1,11 @@
 // Efeitos sonoros de canal e transmissão (mesma lógica do SoundEffects do app nativo):
-// entrar/sair do canal, alguém entrar/sair e streams iniciados/pausados no canal atual.
+// entrar/sair do canal, alguém entrar/sair, streams iniciados/pausados no canal atual
+// e espectadores entrando/saindo das minhas transmissões.
 // Temas: "suave" (padrão) e "bolha"; arquivos em /sounds/<tema>/<evento>.wav.
 
 export const SOUND_THEMES = ['suave', 'bolha'];
-const EVENTS = ['entrar_sala', 'sair_sala', 'alguem_entrou', 'alguem_saiu', 'iniciar_transmissao', 'pausar_transmissao'];
+const EVENTS = ['entrar_sala', 'sair_sala', 'alguem_entrou', 'alguem_saiu', 'iniciar_transmissao', 'pausar_transmissao',
+  'espectador_entrou', 'espectador_saiu'];
 
 const cache = new Map();
 
@@ -34,6 +36,7 @@ export class SoundEffects {
     this.channel = 0;
     this.others = new Set();
     this.streams = new Map(); // streamIdentifier -> pausado
+    this.viewers = new Map(); // minhas transmissões -> espectadores
     this.pending = false;
     for (const event of EVENTS) audio(settings.get('soundTheme'), event);
     const schedule = () => {
@@ -47,6 +50,7 @@ export class SoundEffects {
       this.channel = 0;
       this.others.clear();
       this.streams.clear();
+      this.viewers.clear();
     });
     this.refresh();
   }
@@ -59,6 +63,15 @@ export class SoundEffects {
     if (channel) {
       for (const c of hd.clients.values()) if (c.cid === channel && c.clid !== hd.ownClid) others.add(c.clid);
       for (const s of hd.streams.values()) if (s.cid === channel) streams.set(s.streamIdentifier, !!s.paused);
+    }
+    // espectadores das minhas transmissões (a contagem vem do servidor)
+    const viewers = new Map();
+    for (const s of hd.streams.values()) if (s.ownerClid === hd.ownClid) viewers.set(s.streamIdentifier, s.viewerCount ?? 0);
+    let viewerJoined = false, viewerLeft = false;
+    for (const [id, count] of viewers) {
+      const before = this.viewers.get(id) ?? 0;
+      if (count > before) viewerJoined = true;
+      if (count < before) viewerLeft = true;
     }
 
     let event = null;
@@ -77,6 +90,8 @@ export class SoundEffects {
       // pessoas antes de streams: quem entra já transmitindo toca só "entrou"
       if ([...others].some(c => !this.others.has(c))) event = 'alguem_entrou';
       else if ([...this.others].some(c => !others.has(c))) event = 'alguem_saiu';
+      else if (viewerJoined) event = 'espectador_entrou';
+      else if (viewerLeft) event = 'espectador_saiu';
       else if (started) event = 'iniciar_transmissao';
       else if (paused) event = 'pausar_transmissao';
     }
@@ -84,6 +99,7 @@ export class SoundEffects {
     this.channel = channel;
     this.others = others;
     this.streams = streams;
+    this.viewers = viewers;
     if (event) this.play(event);
   }
 

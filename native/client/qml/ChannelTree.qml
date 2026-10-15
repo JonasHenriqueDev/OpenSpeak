@@ -140,7 +140,7 @@ Rectangle {
                                     leftPadding: 44
                                     hoverEnabled: clickable
                                     onClicked: if (clickable) root.streamClicked(modelData.streamIdentifier)
-                                    ToolTip.visible: hovered
+                                    ToolTip.visible: hovered && !streamViewers.hovered
                                     ToolTip.text: modelData.name
                                     contentItem: RowLayout {
                                         spacing: 6
@@ -166,8 +166,12 @@ Rectangle {
                                                 font.weight: Font.Bold
                                             }
                                         }
-                                        Icon { name: "users"; size: 13; color: Theme.textDim }
-                                        Label { text: streamRow.modelData.viewerCount; color: Theme.textDim; font.pixelSize: 12 }
+                                        ViewerCount {
+                                            id: streamViewers
+                                            streamId: streamRow.modelData.streamIdentifier
+                                            count: streamRow.modelData.viewerCount
+                                            own: streamRow.modelData.ownerClid === Server.ownClid
+                                        }
                                     }
                                 }
                             }

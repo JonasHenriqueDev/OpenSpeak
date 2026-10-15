@@ -63,6 +63,7 @@ qt_add_qml_module(OpenSpeak
         qml/Toasts.qml
         qml/Theme.qml
         qml/Icon.qml
+        qml/ViewerCount.qml
         qml/I18n.js
 )
 

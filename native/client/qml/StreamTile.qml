@@ -603,8 +603,14 @@ Rectangle {
         Icon { anchors.centerIn: parent; name: tile.data_.severity >= 2 ? "warning" : "info"; color: Theme.severityColor(tile.data_.severity) }
                 onClicked: tile.statsRequested()
             }
-            Icon { name: "users"; size: 15; color: Theme.text }
-            Label { text: tile.data_.viewerCount; color: Theme.text }
+            ViewerCount {
+                streamId: tile.streamId
+                count: tile.data_.viewerCount
+                own: tile.own
+                color: Theme.text
+                iconSize: 15
+                fontSize: 13
+            }
         }
     }
 

@@ -1,3 +1,11 @@
+# OpenSpeak 1.0.8 — transmissão pelo servidor por padrão
+
+- Novas transmissões começam no modo **Servidor** (SFU): o servidor repassa o
+  vídeo para os espectadores, e o seu upload não cresce com cada pessoa assistindo.
+- Em servidores sem relay de mídia (servidor web, tailnet e sala web) a
+  transmissão cai sozinha para **P2P**, sem erro.
+- Ainda dá para escolher **P2P** no diálogo de transmissão, e a escolha é lembrada.
+
 # OpenSpeak 1.0.7 — efeitos sonoros e controles em tela cheia
 
 - Efeitos sonoros ao entrar e sair do canal, quando alguém entra ou sai do seu

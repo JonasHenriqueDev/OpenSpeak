@@ -23,6 +23,16 @@ Settings::Settings(const QString &profile, bool debug, QObject *parent)
         m_uid = QString::fromLatin1(bytes.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
         set("uid", m_uid);
     }
+    // 1.0.8: o modo padrão passou a ser Servidor (SFU). Antes o diálogo gravava P2P
+    // sempre que o servidor não tinha relay, então a escolha salva não era do usuário.
+    if (!value("sfuDefaultMigrated").toBool()) {
+        QVariantMap cfg = value("lastStreamingConfig").toMap();
+        if (!cfg.isEmpty()) {
+            cfg.insert(QStringLiteral("mode"), int(StreamMode::SFU));
+            set("lastStreamingConfig", cfg);
+        }
+        set("sfuDefaultMigrated", true);
+    }
 }
 
 QVariant Settings::value(const QString &key, const QVariant &def) const
@@ -46,7 +56,7 @@ QVariantMap Settings::lastStreamingConfig() const
     };
     def("type", int(StreamType::Screen));
     def("access", int(StreamAccess::Public));
-    def("mode", int(StreamMode::P2P));
+    def("mode", int(StreamMode::SFU)); // cai para P2P se o servidor não tiver relay
     def("bitrate", p->bitrate);
     def("viewerLimit", 0);
     def("audio", true);

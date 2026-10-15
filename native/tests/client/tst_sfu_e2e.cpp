@@ -158,7 +158,7 @@ private slots:
 
     void sfuUnavailableFallsBack()
     {
-        // Servidor sem relay: STREAM_SFU não é anunciado e o pedido falha limpo.
+        // Servidor sem relay: STREAM_SFU não é anunciado e o stream cai para P2P.
         ServerHost::Options opts;
         opts.port = 0;
         opts.address = QHostAddress::LocalHost;
@@ -174,9 +174,12 @@ private slots:
         QSignalSpy errors(&ma, &ScreenshareManager::errorOccurred);
         QVERIFY(ma.openPreview({{"type", 2}, {"id", "test"}, {"test", true}}, 30));
         ma.startStream({{"mode", 2}, {"audio", false}});
-        QCOMPARE(errors.count(), 1);
-        QCOMPARE(errors.first().first().toString(), QStringLiteral("error.mode_not_supported"));
-        ma.closePreview();
+        QCOMPARE(errors.count(), 0);
+        QTRY_COMPARE_WITH_TIMEOUT(a.streams().size(), 1, 5000);
+        const QString id = a.streams().firstKey();
+        QCOMPARE(ma.ownConfig(id).value("mode").toInt(), int(StreamMode::P2P));
+        ma.stopStream(id);
+        QTRY_VERIFY_WITH_TIMEOUT(a.streams().isEmpty(), 3000);
     }
 };
 

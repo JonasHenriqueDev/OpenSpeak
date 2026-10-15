@@ -205,6 +205,10 @@ void ScreenshareManager::detachPreview(QVideoSink *sink)
 void ScreenshareManager::startStream(const QVariantMap &config)
 {
     StreamConfig cfg = configFromMap(config, StreamConfig{});
+    // Servidor (SFU) é o padrão; sem relay neste servidor (Node/Vercel, tailnet,
+    // sala web), transmite em P2P em vez de falhar.
+    if (cfg.mode == StreamMode::SFU && !m_handler->hasStreamingSFU())
+        cfg.mode = StreamMode::P2P;
     if (cfg.mode == StreamMode::SFU ? !m_handler->hasStreamingSFU() : !m_handler->hasStreamingP2P()) {
         emit errorOccurred(cfg.mode == StreamMode::SFU ? QStringLiteral("error.mode_not_supported")
                                                        : QStringLiteral("error.streaming_not_supported_by_server"));

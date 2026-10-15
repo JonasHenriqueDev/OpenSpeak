@@ -49,6 +49,8 @@ Dialog {
     ]
 
     property var cfg: ({})
+    // Modo efetivo: a preferência é Servidor, mas sem relay neste servidor vira P2P.
+    readonly property bool sfuSelected: cfg.mode === 2 && Server.hasStreamingSFU
     property int sourceTab: 0 // 0 telas, 1 janelas, 2 câmeras, 3 teste
     property var sourceList: []
     property string selectedSource: ""
@@ -101,7 +103,7 @@ Dialog {
         } else {
             const c = Object.assign({}, Settings.lastStreamingConfig)
             c.name = "Stream de " + Server.clientName(Server.ownClid)
-            if (c.mode !== 2 || !Server.hasStreamingSFU) c.mode = 1 // SFU só se este servidor oferecer
+            if (c.mode !== 1 && c.mode !== 2) c.mode = 2 // Servidor por padrão
             cfg = c
         }
         if (editing) {
@@ -425,7 +427,7 @@ Dialog {
                             Layout.fillWidth: true
                             implicitWidth: 0
                             checkable: true
-                            checked: dialog.cfg.mode !== 2
+                            checked: !dialog.sfuSelected
                             highlighted: checked
                             enabled: !dialog.editing
                             onClicked: dialog.patch({ mode: 1 })
@@ -436,7 +438,7 @@ Dialog {
                             Layout.fillWidth: true
                             implicitWidth: 0
                             checkable: true
-                            checked: dialog.cfg.mode === 2
+                            checked: dialog.sfuSelected
                             highlighted: checked
                             // O modo é fixo enquanto o stream está no ar.
                             enabled: Server.hasStreamingSFU && !dialog.editing
@@ -445,7 +447,7 @@ Dialog {
                             ToolTip.text: I18n.t(Server.hasStreamingSFU ? "video.mode.server.info" : "video.mode.server.unsupported")
                         }
                     }
-                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim; font.pixelSize: 12; text: I18n.t(dialog.cfg.mode === 2 ? "video.mode.server.info" : "video.mode.p2p.info") }
+                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim; font.pixelSize: 12; text: I18n.t(dialog.sfuSelected ? "video.mode.server.info" : "video.mode.p2p.info") }
                 }
 
                 // avançado

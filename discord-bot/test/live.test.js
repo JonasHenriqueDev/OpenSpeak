@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  appLabel, applySettings, checkConfig, diff, fill, formatDuration, parseLive, planVoiceUpdates, presenceText, streamKey, voiceStatusText, VOICE_STATUS_MAX,
+  appLabel, applySettings, checkConfig, diff, fill, formatDuration, parseLive, parseStats, planVoiceUpdates, presenceText, serverText,
+  statsVars, streamKey, voiceStatusText, VOICE_STATUS_MAX,
 } from '../src/live.js';
 
 const cs = { id: 's1', name: 'Ranked', owner: 'Jonas', channel: 'Jogos', app: 'Counter-Strike 2', type: 3, viewers: 2, started: 1000 };
@@ -51,6 +52,31 @@ test('status do bot: um, vários e ninguém', () => {
   assert.equal(presenceText(cfg, []), 'Ninguém ao vivo');
 });
 
+test('carga do servidor: stats do /api/live viram marcadores', () => {
+  const stats = parseStats({ streams: [], stats: { clients: 7, streams: 3, viewers: 5, mbps: 12.34 } });
+  assert.deepEqual(stats, { clients: 7, streams: 3, viewers: 5, mbps: 12.34 });
+  const v = statsVars(stats);
+  assert.equal(v.usuarios, '7');
+  assert.equal(v.mbps, '12');
+  assert.equal(v.trafego, ' · 12 Mbps');
+  assert.equal(statsVars({ mbps: 2.46 }).mbps, '2,5');
+  // Servidor antigo (sem stats) ou P2P (mbps null): sem número inventado.
+  assert.deepEqual(parseStats({ streams: [] }), { clients: null, streams: null, viewers: null, mbps: null });
+  assert.equal(statsVars(parseStats({ stats: { clients: 2, mbps: null } })).trafego, '');
+  assert.equal(statsVars(parseStats(null)).usuarios, '—');
+});
+
+test('status do bot: texto da carga do servidor e marcadores nos outros textos', () => {
+  const cfg = { idle: 'Ninguém · {usuarios} online', live: '{quem} · {assistindo} assistindo', server: '👥 {usuarios} online{trafego}' };
+  const stats = { clients: 4, streams: 1, viewers: 2, mbps: 8 };
+  assert.equal(presenceText(cfg, [], stats), 'Ninguém · 4 online');
+  assert.equal(presenceText(cfg, [cs], stats), 'Jonas · 2 assistindo');
+  assert.equal(serverText(cfg, stats), '👥 4 online · 8 Mbps');
+  assert.equal(serverText(cfg, parseStats(null)), ''); // servidor não informou: não mostra
+  assert.equal(serverText({ ...cfg, server: '' }, stats), '');
+  assert.equal(voiceStatusText({ live: '{lista} ({usuarios} online)', item: '{quem}', idle: '' }, [cs], stats), 'Jonas (4 online)');
+});
+
 test('formatDuration', () => {
   assert.equal(formatDuration(5 * 60_000), '5 min');
   assert.equal(formatDuration(65 * 60_000), '1 h 05 min');
@@ -60,6 +86,12 @@ test('checkConfig exige IDs só dos avisos ligados', () => {
   const ok = { openspeakUrl: 'https://openspeak.duckdns.org', voiceStatus: { enabled: false }, chat: { enabled: false }, presence: { enabled: true } };
   assert.deepEqual(checkConfig(ok), []);
   assert.equal(ok.pollSeconds, 15);
+  assert.equal(ok.presence.type, 'custom');
+  assert.equal(ok.presence.rotateSeconds, 20);
+  assert.equal(checkConfig({ ...ok, presence: { type: 'dançando' } }).length, 1);
+  const fast = { ...ok, presence: { type: 'playing', rotateSeconds: 1 } };
+  assert.deepEqual(checkConfig(fast), []);
+  assert.equal(fast.presence.rotateSeconds, 15);
   const bad = { openspeakUrl: 'ftp://x', chat: { enabled: true, channelId: 'abc', onEnd: 'sumir' } };
   assert.equal(checkConfig(bad).length, 3);
 });

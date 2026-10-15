@@ -14,8 +14,8 @@ import {
   SlashCommandBuilder,
 } from 'discord.js';
 import {
-  NOTICES, appLabel, applySettings, checkConfig, diff, formatDuration, parseLive, planVoiceUpdates, presenceText,
-  streamKey, voiceStatusText,
+  NOTICES, appLabel, applySettings, checkConfig, diff, formatDuration, parseLive, parseStats, planVoiceUpdates,
+  presenceText, serverText, statsVars, streamKey, voiceStatusText,
 } from './live.js';
 import { startWebhook } from './webhook.js';
 
@@ -76,7 +76,7 @@ function explain(err) {
 }
 
 /** /openspeak: escolhe o canal do chat e liga/desliga os avisos pelo Discord. */
-const COMMAND = new SlashCommandBuilder()
+const ADMIN_COMMAND = new SlashCommandBuilder()
   .setName('openspeak')
   .setDescription('Avisos de transmissões do OpenSpeak')
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
@@ -100,6 +100,23 @@ const COMMAND = new SlashCommandBuilder()
     .addBooleanOption(opt => opt.setName('ligado').setDescription('Ligar ou desligar').setRequired(true)))
   .addSubcommand(sub => sub.setName('ver').setDescription('Mostra a configuração atual dos avisos'));
 
+/** Comandos para qualquer pessoa (também na DM com o bot). */
+const PUBLIC_CONTEXTS = [InteractionContextType.Guild, InteractionContextType.BotDM];
+const COMMANDS = [
+  ADMIN_COMMAND,
+  new SlashCommandBuilder().setName('aovivo').setDescription('Quem está transmitindo no OpenSpeak agora')
+    .setContexts(...PUBLIC_CONTEXTS),
+  new SlashCommandBuilder().setName('servidor').setDescription('Usuários online, transmissões e tráfego do servidor OpenSpeak')
+    .setContexts(...PUBLIC_CONTEXTS),
+];
+const COMMAND_NAMES = new Set(COMMANDS.map(c => c.name));
+
+/** Tipo da atividade no status do bot (config presence.type). */
+const ACTIVITY_TYPE = {
+  playing: ActivityType.Playing, watching: ActivityType.Watching,
+  listening: ActivityType.Listening, competing: ActivityType.Competing,
+};
+
 const NOTICE_NAME = { chat: 'Chat', voiceStatus: 'Status do canal de voz', presence: 'Status do bot' };
 
 class LiveBot {
@@ -117,7 +134,13 @@ class LiveBot {
       : Object.entries(this.state.voice)); // limpa o que ficou de antes de um reinício
     this.voiceQueue = Promise.resolve();
     this.lastPresence = null;
+    // Status do bot: alterna entre quem está ao vivo e a carga do servidor.
+    this.presenceTexts = [];
+    this.presenceIndex = 0;
+    this.presenceMain = null;
+    this.presenceLive = false;
     this.streams = [];
+    this.stats = parseStats(null); // carga do servidor (desconhecida até a primeira resposta)
     this.queue = Promise.resolve(); // consultas e webhooks, um de cada vez
     this.liveUrl = new URL('/api/live', config.openspeakUrl).toString();
   }
@@ -125,7 +148,8 @@ class LiveBot {
   async fetchStreams() {
     const res = await fetch(this.liveUrl, { signal: AbortSignal.timeout(8000), headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(`HTTP ${res.status} em ${this.liveUrl}`);
-    return parseLive(await res.json());
+    const body = await res.json();
+    return { streams: parseLive(body), stats: parseStats(body) };
   }
 
   enqueue(job) {
@@ -136,9 +160,9 @@ class LiveBot {
   /** Consulta periódica ao /api/live (com o webhook, só uma rede de segurança). */
   tick() {
     return this.enqueue(async () => {
-      let streams;
+      let streams, stats;
       try {
-        streams = await this.fetchStreams();
+        ({ streams, stats } = await this.fetchStreams());
         this.online();
       } catch (err) {
         this.failures++;
@@ -146,16 +170,17 @@ class LiveBot {
         if (this.failures < OFFLINE_AFTER_FAILURES) return; // mantém o último estado
         if (this.failures === OFFLINE_AFTER_FAILURES) log('servidor fora do ar: considerando que ninguém está ao vivo');
         streams = [];
+        stats = parseStats(null);
       }
-      await this.apply(streams);
+      await this.apply(streams, stats);
     });
   }
 
   /** O servidor avisou pelo webhook: atualiza na hora. */
-  push(streams) {
+  push(streams, stats) {
     return this.enqueue(async () => {
       this.online();
-      await this.apply(streams);
+      await this.apply(streams, stats);
     });
   }
 
@@ -164,7 +189,7 @@ class LiveBot {
     this.failures = 0;
   }
 
-  async apply(streams) {
+  async apply(streams, stats = this.stats) {
     // Mensagens de streams que já existiam antes de um reinício do bot também contam.
     const previous = new Set([...this.known.keys(), ...Object.keys(this.state.messages)]);
     const { started, stopped } = diff(previous, streams);
@@ -182,12 +207,13 @@ class LiveBot {
     }
     this.known = current;
     this.streams = streams;
+    this.stats = stats;
 
     if (this.config.voiceStatus.enabled) {
-      this.voiceText = voiceStatusText(this.config.voiceStatus, streams);
+      this.voiceText = voiceStatusText(this.config.voiceStatus, streams, stats);
       await this.syncVoice();
     }
-    if (this.config.presence.enabled) this.setPresence(presenceText(this.config.presence, streams), streams.length > 0);
+    if (this.config.presence.enabled) this.updatePresence(streams, stats);
   }
 
   // ----------------------------------------------------------------- chat
@@ -304,25 +330,61 @@ class LiveBot {
 
   // ------------------------------------------------------ status do bot
 
+  updatePresence(streams, stats) {
+    const main = presenceText(this.config.presence, streams, stats);
+    if (main !== this.presenceMain) this.presenceIndex = 0; // mudou quem está ao vivo: mostra na hora
+    this.presenceMain = main;
+    this.presenceTexts = [main, serverText(this.config.presence, stats)].filter(Boolean);
+    this.presenceLive = streams.length > 0;
+    this.showPresence();
+  }
+
+  /** Chamado a cada presence.rotateSeconds. */
+  rotatePresence() {
+    if (!this.config.presence.enabled || this.presenceTexts.length < 2) return;
+    this.presenceIndex = (this.presenceIndex + 1) % this.presenceTexts.length;
+    this.showPresence();
+  }
+
+  showPresence() {
+    const texts = this.presenceTexts;
+    this.setPresence(texts.length ? texts[this.presenceIndex % texts.length] : '', this.presenceLive);
+  }
+
   setPresence(text, live) {
     if (text === this.lastPresence) return;
     this.lastPresence = text;
-    this.client.user.setPresence({
-      status: live ? 'online' : 'idle',
-      activities: text ? [{ type: ActivityType.Custom, name: 'OpenSpeak', state: text }] : [],
-    });
+    const type = ACTIVITY_TYPE[this.config.presence.type];
+    // "custom" mostra só o texto; os outros tipos aparecem como "Jogando <texto>" etc.
+    const activity = type === undefined ? { type: ActivityType.Custom, name: 'OpenSpeak', state: text } : { type, name: text };
+    this.client.user.setPresence({ status: live ? 'online' : 'idle', activities: text ? [activity] : [] });
   }
 
   // ------------------------------------------------------- /openspeak
 
-  async registerCommands(guild) {
-    if (this.config.guildId && guild.id !== this.config.guildId) return;
+  /**
+   * Comandos globais: é o que faz o Discord mostrar "Supports Slash Commands" no
+   * perfil do bot. Um create por comando (sobrescreve pelo nome) em vez de set(),
+   * para não apagar os outros comandos da aplicação, como o de abrir a atividade.
+   */
+  async registerCommands() {
+    const existing = await this.client.application.commands.fetch();
+    for (const command of COMMANDS) {
+      const json = command.toJSON();
+      const current = existing.find(c => c.name === json.name);
+      if (current?.equals(json)) continue;
+      await this.client.application.commands.create(json);
+      log(`comando /${json.name} registrado`);
+    }
+  }
+
+  /** Versões antigas registravam o /openspeak por servidor: com o global, ficaria duplicado. */
+  async removeGuildCommands(guild) {
     try {
-      // Comando do servidor (aparece na hora). Não mexe nos comandos globais da
-      // aplicação, como o de abrir a atividade do OpenSpeak.
-      await guild.commands.set([COMMAND.toJSON()]);
+      for (const command of (await guild.commands.fetch()).values())
+        if (COMMAND_NAMES.has(command.name)) await command.delete();
     } catch (err) {
-      log(`/openspeak em "${guild.name}":`, explain(err), '(convide o bot com o escopo applications.commands)');
+      if (err?.code !== 50001) log(`comandos antigos em "${guild.name}":`, explain(err));
     }
   }
 
@@ -339,12 +401,19 @@ class LiveBot {
     const line = section => `${c[section].enabled ? '🟢' : '⚪'} **${NOTICE_NAME[section]}**`;
     const voice = c.voiceStatus.channelId ? `<#${c.voiceStatus.channelId}>` : 'calls com alguém conectado';
     const chat = c.chat.channelId ? `<#${c.chat.channelId}>` : 'nenhum canal escolhido — use `/openspeak canal`';
+    const v = statsVars(this.stats);
     return [`${line('chat')}: ${chat}`, `${line('voiceStatus')}: ${voice}`, `${line('presence')}`,
-      `Transmissões ao vivo agora: **${this.streams.length}**`].join('\n');
+      `Transmissões ao vivo agora: **${this.streams.length}**`,
+      `Servidor: **${v.usuarios}** online, **${v.transmissoes}** transmissões, **${v.assistindo}** assistindo, **${v.mbps}** Mbps`,
+    ].join('\n');
   }
 
   async onCommand(interaction) {
+    if (interaction.commandName === 'aovivo') return this.onLiveCommand(interaction);
+    if (interaction.commandName === 'servidor') return this.onServerCommand(interaction);
     const reply = content => interaction.reply({ content, flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+    if (this.config.guildId && interaction.guildId !== this.config.guildId)
+      return reply('Os avisos do OpenSpeak estão configurados para outro servidor.');
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild))
       return reply('Só quem pode **Gerenciar servidor** configura os avisos.');
     const sub = interaction.options.getSubcommand();
@@ -371,7 +440,8 @@ class LiveBot {
         this.syncVoice();
       }
       if (section === 'presence' && !enabled) {
-        this.lastPresence = null;
+        this.lastPresence = this.presenceMain = null;
+        this.presenceTexts = [];
         this.client.user.setPresence({ status: 'online', activities: [] });
       }
       if (enabled) this.enqueue(() => this.apply(this.streams));
@@ -381,6 +451,41 @@ class LiveBot {
     }
 
     await reply(this.describe());
+  }
+
+  /** /aovivo: quem está transmitindo (só streams com "Mostrar ao vivo no bot do Discord"). */
+  async onLiveCommand(interaction) {
+    const streams = this.streams;
+    const embed = new EmbedBuilder().setColor(streams.length ? 0xe5484d : 0x5c6370).setURL(this.config.openspeakUrl)
+      .setTitle(streams.length ? `🔴 ${streams.length} ao vivo no OpenSpeak` : 'Ninguém ao vivo no OpenSpeak agora');
+    if (streams.length) {
+      const now = Date.now();
+      const lines = streams.slice(0, 15).map(s => {
+        const parts = [`**${s.owner || 'Alguém'}** — ${appLabel(s)}`];
+        if (s.channel) parts.push(s.channel);
+        parts.push(`👀 ${s.viewers}`);
+        if (s.started) parts.push(formatDuration(now - s.started));
+        return `${s.paused ? '⏸️' : '🔴'} ${parts.join(' · ')}`;
+      });
+      if (streams.length > 15) lines.push(`… e mais ${streams.length - 15}`);
+      embed.setDescription(lines.join('\n'));
+    }
+    await interaction.reply({ embeds: [embed], allowedMentions: { parse: [] } });
+  }
+
+  /** /servidor: carga do servidor (contagens agregadas do /api/live). */
+  async onServerCommand(interaction) {
+    const v = statsVars(this.stats);
+    const offline = this.failures >= OFFLINE_AFTER_FAILURES;
+    const embed = new EmbedBuilder().setColor(offline ? 0x5c6370 : 0x3ba55d).setURL(this.config.openspeakUrl)
+      .setTitle(offline ? '⚫ Servidor OpenSpeak fora do ar' : '🟢 Servidor OpenSpeak')
+      .addFields(
+        { name: 'Online', value: v.usuarios, inline: true },
+        { name: 'Transmissões', value: v.transmissoes, inline: true },
+        { name: 'Assistindo', value: v.assistindo, inline: true },
+        { name: 'Tráfego', value: this.stats.mbps == null ? '— (P2P: a mídia não passa pelo servidor)' : `${v.mbps} Mbps`, inline: true },
+      );
+    await interaction.reply({ embeds: [embed], allowedMentions: { parse: [] } });
   }
 
   async shutdown() {
@@ -404,10 +509,15 @@ client.once('clientReady', async () => {
   log(`avisos: status do canal de voz ${voice}, chat ${chat}, status do bot ${c.presence.enabled ? 'ligado' : 'desligado'}`);
   if (!c.chat.enabled && !c.voiceStatus.enabled && !c.presence.enabled)
     log('todos os avisos estão desligados: ligue com /openspeak avisos no Discord');
-  for (const guild of client.guilds.cache.values()) await bot.registerCommands(guild);
+  try {
+    await bot.registerCommands();
+  } catch (err) {
+    log('comandos:', explain(err), '(convide o bot com o escopo applications.commands)');
+  }
+  for (const guild of client.guilds.cache.values()) await bot.removeGuildCommands(guild);
   if (c.webhook.port) {
     try {
-      await startWebhook({ ...c.webhook, onLive: streams => bot.push(streams) });
+      await startWebhook({ ...c.webhook, onLive: (streams, stats) => bot.push(streams, stats) });
       log(`webhook: escutando em http://${c.webhook.host}:${c.webhook.port}/live` +
         (c.webhook.secret ? ' (com segredo)' : ' (sem segredo)'));
     } catch (err) {
@@ -416,13 +526,12 @@ client.once('clientReady', async () => {
   }
   await bot.tick();
   setInterval(() => bot.tick(), c.pollSeconds * 1000);
+  setInterval(() => bot.rotatePresence(), c.presence.rotateSeconds * 1000);
 });
 
-client.on('guildCreate', guild => bot?.registerCommands(guild));
-
 client.on('interactionCreate', interaction => {
-  if (!bot || !interaction.isChatInputCommand() || interaction.commandName !== 'openspeak') return;
-  bot.onCommand(interaction).catch(err => log('/openspeak:', explain(err)));
+  if (!bot || !interaction.isChatInputCommand() || !COMMAND_NAMES.has(interaction.commandName)) return;
+  bot.onCommand(interaction).catch(err => log(`/${interaction.commandName}:`, explain(err)));
 });
 
 client.on('voiceStateUpdate', (before, after) => {

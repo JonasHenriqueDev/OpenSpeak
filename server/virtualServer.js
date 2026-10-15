@@ -123,7 +123,14 @@ export class VirtualServer {
       viewers: s.viewers.size, started: s.created,
       quality: { width: s.quality.width, height: s.quality.height, fps: s.quality.fps },
     }));
-    return { server: this.name, streams };
+    // Só contagens agregadas. O servidor Node não carrega mídia (só P2P): sem Mbps.
+    const stats = {
+      clients: [...this.clients.values()].filter(c => c.loggedIn).length,
+      streams: this.streams.size,
+      viewers: [...this.streams.values()].reduce((sum, s) => sum + s.viewers.size, 0),
+      mbps: null,
+    };
+    return { server: this.name, streams, stats };
   }
 
   disconnect(clid) {

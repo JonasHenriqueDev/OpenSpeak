@@ -27,6 +27,9 @@
     "enabled": false,
     "live": "{quem} transmitindo {app}",
     "liveMany": "{qtd} transmissões ao vivo no OpenSpeak",
-    "idle": "Ninguém ao vivo no OpenSpeak"
+    "idle": "Ninguém ao vivo no OpenSpeak",
+    "server": "👥 {usuarios} online · 👀 {assistindo} assistindo{trafego}",
+    "rotateSeconds": 20,
+    "type": "custom"
   }
 }

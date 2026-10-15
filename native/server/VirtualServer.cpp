@@ -148,7 +148,16 @@ QJsonObject VirtualServer::liveSnapshot() const
             {"quality", QJsonObject{{"width", s.quality.width}, {"height", s.quality.height}, {"fps", s.quality.fps}}},
         });
     }
-    return {{"server", m_name}, {"streams", streams}};
+    // Só contagens agregadas (para "carga do servidor" no bot). O Mbps quem mede é
+    // o ServerHost, que vê os bytes do relay; aqui fica null (P2P não passa mídia).
+    int clients = 0, viewers = 0;
+    for (const auto &[id, c] : m_clients)
+        clients += c.loggedIn ? 1 : 0;
+    for (const auto &[id, s] : m_streams)
+        viewers += int(s.viewers.size());
+    const QJsonObject stats{{"clients", clients}, {"streams", int(m_streams.size())},
+                            {"viewers", viewers}, {"mbps", QJsonValue(QJsonValue::Null)}};
+    return {{"server", m_name}, {"streams", streams}, {"stats", stats}};
 }
 
 void VirtualServer::setClientLatency(int clid, qint64 milliseconds)

@@ -48,6 +48,8 @@ private:
     void heartbeat();
     void writeMonitoringSnapshot();
     void sendLiveWebhook();
+    QJsonObject liveSnapshot() const;
+    void sampleMediaRate();
 
     Options m_options;
     QHttpServer m_http;
@@ -69,6 +71,10 @@ private:
     QString m_monitoringFile;
     quint64 m_signalingRx = 0, m_signalingTx = 0;
     quint64 m_mediaTx = 0; // espectadores por WebSocket (SfuWsViewer)
+    // Tráfego de mídia do relay (entrada + saída), medido a cada heartbeat.
+    QHash<QString, double> m_mediaBytes; // sessão -> bytes na amostra anterior
+    qint64 m_mediaSampledAt = 0;
+    double m_mediaMbps = 0;
     // Webhook do bot do Discord (OPENSPEAK_LIVE_WEBHOOK): POST do liveSnapshot() quando muda.
     QUrl m_liveWebhook;
     QByteArray m_liveSecret, m_lastLive;

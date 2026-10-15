@@ -119,6 +119,12 @@ private slots:
         QCOMPARE(s.value("channel").toString(), QStringLiteral("Lobby"));
         QVERIFY(!s.contains("uid"));
         QVERIFY(!s.contains("thumbnail"));
+        // Contagens contam também streams sem anúncio, mas sem dizer de quem.
+        const QJsonObject stats = server->liveSnapshot().value("stats").toObject();
+        QCOMPARE(stats.value("clients").toInt(), 2);
+        QCOMPARE(stats.value("streams").toInt(), 2);
+        QCOMPARE(stats.value("viewers").toInt(), 0);
+        QVERIFY(stats.value("mbps").isNull());
 
         server->handle(host, "updatestream", {{"streamIdentifier", shown}, {"announce", false}});
         QCOMPARE(server->liveSnapshot().value("streams").toArray().size(), 0);

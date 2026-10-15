@@ -4,7 +4,7 @@
 
 import http from 'node:http';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { parseLive } from './live.js';
+import { parseLive, parseStats } from './live.js';
 
 const MAX_BODY = 256 * 1024;
 const sha = value => createHash('sha256').update(String(value)).digest();
@@ -14,7 +14,7 @@ const sha = value => createHash('sha256').update(String(value)).digest();
  * @param {number} options.port
  * @param {string} [options.host]   padrão 127.0.0.1
  * @param {string} [options.secret] exigido no header X-OpenSpeak-Secret (vazio = sem segredo)
- * @param {(streams: object[]) => void} options.onLive
+ * @param {(streams: object[], stats: object) => void} options.onLive
  * @returns {Promise<http.Server>}
  */
 export function startWebhook({ port, host = '127.0.0.1', secret = '', onLive }) {
@@ -35,14 +35,16 @@ export function startWebhook({ port, host = '127.0.0.1', secret = '', onLive }) 
     });
     req.on('end', () => {
       if (res.writableEnded) return;
-      let streams;
+      let streams, stats;
       try {
-        streams = parseLive(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        streams = parseLive(body);
+        stats = parseStats(body);
       } catch {
         return reply(400);
       }
       reply(204);
-      onLive(streams);
+      onLive(streams, stats);
     });
   });
   return new Promise((resolve, reject) => {

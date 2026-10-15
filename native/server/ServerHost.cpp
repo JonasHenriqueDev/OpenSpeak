@@ -15,6 +15,9 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 
+#include <algorithm>
+#include <cmath>
+
 #ifdef OPENSPEAK_HAS_SFU
 #include "SfuRelay.h"
 #endif
@@ -73,7 +76,7 @@ ServerHost::ServerHost(Options options, QObject *parent)
 
     // Bot do Discord: transmissões ao vivo marcadas para anunciar (só leitura).
     m_http.route(QStringLiteral("/api/live"), QHttpServerRequest::Method::Get, [this] {
-        QHttpServerResponse response(m_server.liveSnapshot());
+        QHttpServerResponse response(liveSnapshot());
         QHttpHeaders headers = response.headers();
         headers.append(QHttpHeaders::WellKnownHeader::CacheControl, "no-store");
         response.setHeaders(std::move(headers));
@@ -170,12 +173,52 @@ void ServerHost::writeMonitoringSnapshot()
         qCWarning(lcServer) << "não foi possível gravar o monitoramento:" << file.errorString();
 }
 
+QJsonObject ServerHost::liveSnapshot() const
+{
+    auto live = m_server.liveSnapshot();
+    if (m_relay) {
+        auto stats = live.value("stats").toObject();
+        stats["mbps"] = std::round(m_mediaMbps * 10) / 10;
+        live["stats"] = stats;
+    }
+    return live;
+}
+
+void ServerHost::sampleMediaRate()
+{
+    if (!m_relay)
+        return;
+    // Os contadores são por sessão e somem quando ela acaba: soma só o que cada
+    // sessão andou desde a amostra anterior (sessão nova conta desde zero).
+    QHash<QString, double> bytes;
+    double delta = 0;
+    for (const auto &value : m_relay->monitoringSessions()) {
+        const auto session = value.toObject();
+        const QString key = session.value("streamId").toString() + u'/' + QString::number(session.value("clid").toInt())
+            + u'/' + session.value("role").toString();
+        const double total = session.value("mediaRxBytes").toDouble() + session.value("mediaTxBytes").toDouble();
+        bytes.insert(key, total);
+        delta += std::max(0.0, total - m_mediaBytes.value(key, 0));
+    }
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (m_mediaSampledAt)
+        m_mediaMbps = delta * 8 / 1e6 / (std::max<qint64>(now - m_mediaSampledAt, 1) / 1000.0);
+    m_mediaBytes = std::move(bytes);
+    m_mediaSampledAt = now;
+}
+
 void ServerHost::sendLiveWebhook()
 {
-    const QByteArray body = QJsonDocument(m_server.liveSnapshot()).toJson(QJsonDocument::Compact);
-    if (body == m_lastLive)
+    // A comparação ignora as estatísticas: elas mudam o tempo todo e o bot já as
+    // pega na consulta periódica. O POST vai com elas.
+    const QJsonObject live = liveSnapshot();
+    QJsonObject withoutStats = live;
+    withoutStats.remove("stats");
+    const QByteArray key = QJsonDocument(withoutStats).toJson(QJsonDocument::Compact);
+    if (key == m_lastLive)
         return; // só a contagem de algo que o bot não mostra, ou nada mudou
-    m_lastLive = body;
+    m_lastLive = key;
+    const QByteArray body = QJsonDocument(live).toJson(QJsonDocument::Compact);
     QNetworkRequest request(m_liveWebhook);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QByteArrayLiteral("application/json"));
     request.setTransferTimeout(5'000);
@@ -287,6 +330,7 @@ void ServerHost::sendTo(int clid, const QJsonObject &message)
 
 void ServerHost::heartbeat()
 {
+    sampleMediaRate();
     // Derruba sockets mortos para liberar streams presos.
     for (auto it = m_alive.begin(); it != m_alive.end(); ++it) {
         if (!it.value()) {

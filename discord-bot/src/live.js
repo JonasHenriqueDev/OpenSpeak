@@ -51,6 +51,37 @@ export function parseLive(body) {
     .sort((a, b) => a.started - b.started);
 }
 
+/**
+ * Carga do servidor (campo `stats` do /api/live): só contagens agregadas.
+ * `null` = servidor antigo, fora do ar, ou sem medição (Mbps no modo P2P).
+ */
+export function parseStats(body) {
+  const stats = body?.stats;
+  const count = v => (Number.isFinite(Number(v)) && v !== null ? Number(v) : null);
+  return {
+    clients: count(stats?.clients),
+    streams: count(stats?.streams),
+    viewers: count(stats?.viewers),
+    mbps: count(stats?.mbps),
+  };
+}
+
+const UNKNOWN = '—';
+
+/** Marcadores da carga do servidor, valem em todos os textos. */
+export function statsVars(stats = {}) {
+  const n = v => (v == null ? UNKNOWN : String(v));
+  const mbps = stats.mbps == null ? UNKNOWN : stats.mbps.toLocaleString('pt-BR', { maximumFractionDigits: stats.mbps < 10 ? 1 : 0 });
+  return {
+    usuarios: n(stats.clients),
+    transmissoes: n(stats.streams),
+    assistindo: n(stats.viewers),
+    mbps,
+    // " · 12 Mbps" só quando o servidor mede (SFU); no P2P a mídia não passa por ele.
+    trafego: stats.mbps == null ? '' : ` · ${mbps} Mbps`,
+  };
+}
+
 /** @param {Set<string>|string[]} previous chaves já anunciadas */
 export function diff(previous, streams) {
   const before = new Set(previous);
@@ -61,18 +92,29 @@ export function diff(previous, streams) {
   };
 }
 
-export function voiceStatusText(cfg, streams) {
-  if (!streams.length) return clip(fill(cfg.idle, { qtd: 0, lista: '' }), VOICE_STATUS_MAX);
+export function voiceStatusText(cfg, streams, stats) {
+  const server = statsVars(stats);
+  if (!streams.length) return clip(fill(cfg.idle, { ...server, qtd: 0, lista: '' }), VOICE_STATUS_MAX);
   const lista = streams.map(s => fill(cfg.item, streamVars(s, streams.length))).join(', ');
   const first = streamVars(streams[0], streams.length);
-  return clip(fill(cfg.live, { ...first, lista }), VOICE_STATUS_MAX);
+  return clip(fill(cfg.live, { ...server, ...first, lista }), VOICE_STATUS_MAX);
 }
 
-export function presenceText(cfg, streams) {
-  if (!streams.length) return clip(fill(cfg.idle, { qtd: 0 }), PRESENCE_MAX);
+export function presenceText(cfg, streams, stats) {
+  const server = statsVars(stats);
+  if (!streams.length) return clip(fill(cfg.idle, { ...server, qtd: 0 }), PRESENCE_MAX);
   const template = streams.length > 1 && cfg.liveMany ? cfg.liveMany : cfg.live;
-  return clip(fill(template, streamVars(streams[0], streams.length)), PRESENCE_MAX);
+  return clip(fill(template, { ...server, ...streamVars(streams[0], streams.length) }), PRESENCE_MAX);
 }
+
+/** Texto da carga do servidor no status do bot (vazio se o servidor não informa). */
+export function serverText(cfg, stats) {
+  if (!cfg.server || stats?.clients == null) return '';
+  return clip(fill(cfg.server, statsVars(stats)), PRESENCE_MAX);
+}
+
+/** Tipos de atividade do status do bot ("custom" mostra só o texto). */
+export const PRESENCE_TYPES = ['custom', 'playing', 'watching', 'listening', 'competing'];
 
 export function formatDuration(ms) {
   const minutes = Math.max(0, Math.round(ms / 60_000));
@@ -128,7 +170,13 @@ export function checkConfig(config) {
   if (config.webhook.port < 0 || config.webhook.port > 65535) problems.push('webhook.port deve ser de 1 a 65535 (ou 0 para desligar)');
   config.voiceStatus = { enabled: false, live: '🔴 Ao vivo no OpenSpeak: {lista}', item: '{quem} ({app})', idle: '', ...config.voiceStatus };
   config.chat = { enabled: false, mention: '', onEnd: 'edit', ...config.chat };
-  config.presence = { enabled: false, live: '{quem} transmitindo {app}', liveMany: '', idle: '', ...config.presence };
+  config.presence = {
+    enabled: false, type: 'custom', live: '{quem} transmitindo {app}', liveMany: '', idle: '',
+    server: '👥 {usuarios} online · 👀 {assistindo} assistindo{trafego}', rotateSeconds: 20, ...config.presence,
+  };
+  // O Discord limita trocas de status; abaixo de 15 s não vale a pena.
+  config.presence.rotateSeconds = Math.min(600, Math.max(15, Number(config.presence.rotateSeconds) || 20));
+  if (!PRESENCE_TYPES.includes(config.presence.type)) problems.push(`presence.type deve ser ${PRESENCE_TYPES.join(', ')}`);
   // Sem channelId: o status vai para os canais de voz que têm alguém conectado.
   if (config.voiceStatus.enabled && config.voiceStatus.channelId && !id(config.voiceStatus.channelId))
     problems.push('voiceStatus.channelId precisa ser o ID do canal de voz (ou vazio para os canais com gente)');

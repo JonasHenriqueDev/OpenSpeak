@@ -17,7 +17,20 @@ quem tem **Gerenciar servidor**; as respostas só você vê):
 |---|---|
 | `/openspeak canal canal:#avisos` | Escolhe o canal de texto dos avisos (e liga o chat) |
 | `/openspeak avisos aviso:<Chat / Status do canal de voz / Status do bot> ligado:<sim/não>` | Liga ou desliga um aviso |
-| `/openspeak ver` | Mostra o que está ligado e em qual canal |
+| `/openspeak ver` | Mostra o que está ligado e em qual canal (e a carga do servidor) |
+
+E dois comandos para qualquer pessoa (também na DM com o bot):
+
+| Comando | O que faz |
+|---|---|
+| `/aovivo` | Lista quem está transmitindo agora, o app, o canal, espectadores e há quanto tempo |
+| `/servidor` | Usuários online, transmissões, quantos estão assistindo e o tráfego do servidor |
+
+Os comandos são registrados como **globais** (um por vez, sem apagar outros
+comandos da aplicação, como o de abrir a atividade): é isso que faz o Discord
+mostrar o selo **"Supports Slash Commands"** e a lista de comandos no perfil do
+bot. Comandos `/openspeak` antigos, registrados por servidor, são removidos
+para não aparecerem duplicados.
 
 Tudo vem **desligado** por padrão: ligue o que quiser com `/openspeak avisos`
 (ou `"enabled": true` no `config.json`). As escolhas do `/openspeak` ficam no `state.json` e valem por cima do
@@ -33,7 +46,7 @@ O bot consulta `GET <openspeakUrl>/api/live` a cada `pollSeconds` segundos. O
 endpoint existe no servidor nativo (`openspeak-server`) e no servidor Node
 (`npm start`) e só lista transmissões com `announce` ligado, com campos
 públicos (título, apelido, canal, app, espectadores) — nada de uid, IP ou
-miniatura. O bot não entra no servidor OpenSpeak, então não aparece na lista
+miniatura —, mais a carga do servidor em `stats` (só contagens). O bot não entra no servidor OpenSpeak, então não aparece na lista
 de usuários de lá.
 
 ### Webhook (instantâneo)
@@ -118,7 +131,10 @@ editá-las mesmo depois de reiniciar).
     "enabled": false,
     "live": "{quem} transmitindo {app}",
     "liveMany": "{qtd} transmissões ao vivo no OpenSpeak", // mais de uma ao mesmo tempo
-    "idle": "Ninguém ao vivo no OpenSpeak"
+    "idle": "Ninguém ao vivo no OpenSpeak",
+    "server": "👥 {usuarios} online · 👀 {assistindo} assistindo{trafego}", // "" desliga
+    "rotateSeconds": 20,                            // 15 a 600: alterna entre o texto acima e "server"
+    "type": "custom"                                // custom, playing, watching, listening ou competing
   }
 }
 ```
@@ -130,6 +146,20 @@ Quem entra numa call durante uma transmissão vê o status na hora.
 Marcadores nos textos: `{quem}` (apelido), `{app}`, `{titulo}`, `{canal}`
 (canal do OpenSpeak), `{espectadores}`, `{qtd}` (transmissões ao vivo) e
 `{lista}` (só no status do canal de voz).
+
+Carga do servidor (valem em todos os textos): `{usuarios}` (conectados),
+`{transmissoes}` (todas, inclusive as que não aparecem no bot — só a
+contagem), `{assistindo}` (espectadores somados), `{mbps}` (tráfego de mídia
+do servidor, entrada + saída) e `{trafego}` (" · 12 Mbps", ou vazio quando o
+servidor não mede). O tráfego só existe no servidor nativo com SFU: no P2P a
+mídia vai direto entre as pessoas e o servidor não a vê (`{mbps}` mostra "—").
+Os números vêm do campo `stats` do `/api/live`, só contagens agregadas.
+
+**Status do bot**: o texto de quem está ao vivo e o da carga do servidor
+(`server`) se alternam a cada `rotateSeconds`; quando alguém começa a
+transmitir, aparece na hora. Com `type: "custom"` o Discord mostra só o texto;
+com `playing`/`watching`/`listening`/`competing` aparece como
+"Jogando …", "Assistindo …", "Ouvindo …" ou "Competindo em …".
 
 ## Rodando na VM junto do servidor
 

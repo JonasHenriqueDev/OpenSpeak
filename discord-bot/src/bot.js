@@ -380,7 +380,7 @@ const { config, token } = loadConfig();
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
 let bot;
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
   bot = new LiveBot(config, client);
   const c = bot.config;
   log(`conectado como ${client.user.tag}; consultando ${new URL('/api/live', c.openspeakUrl)} a cada ${c.pollSeconds} s`);

@@ -44,7 +44,8 @@ considera que ninguém está ao vivo e encerra os avisos.
 1. Em <https://discord.com/developers/applications> crie uma aplicação →
    **Bot** → copie o token. Nenhuma *privileged intent* é necessária.
 2. Convide o bot (OAuth2 → URL Generator → escopos `bot` e `applications.commands`) com as permissões:
-   - **Ver canais**, **Enviar mensagens**, **Inserir links** (aviso no chat;
+   - **Ver canais**, **Enviar mensagens**, **Inserir links**, **Ler histórico de
+     mensagens** (aviso no chat, que é editado ao terminar;
      **Mencionar @everyone** se usar `mention` com @here/@everyone/cargo);
    - **Definir status do canal de voz** e **Gerenciar canais** nos canais de voz
      (o Discord exige *Gerenciar canais* para quem não está conectado na call).

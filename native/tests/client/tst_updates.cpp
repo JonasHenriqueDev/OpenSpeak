@@ -20,6 +20,22 @@ class TestUpdaterStartup : public QObject {
             {"browser_download_url", "https://github.com/JonasHenriqueDev/OpenSpeak/releases/download/" + tag + "/" + name}}}}};
     }
 private slots:
+    void fallbackWithoutApiUsesTagRedirectAndChecksums() {
+        QCOMPARE(releaseTagFromUrl(QUrl("https://github.com/JonasHenriqueDev/OpenSpeak/releases/tag/v1.0.9")), QStringLiteral("v1.0.9"));
+        QVERIFY(releaseTagFromUrl(QUrl("https://github.com/JonasHenriqueDev/OpenSpeak/releases")).isEmpty());
+        QVERIFY(releaseTagFromUrl(QUrl("https://evil.example/JonasHenriqueDev/OpenSpeak/releases/tag/v1.0.9")).isEmpty());
+        QVERIFY(releaseTagFromUrl(QUrl("https://github.com/Outro/OpenSpeak/releases/tag/v1.0.9")).isEmpty());
+        const QByteArray sums = QByteArray(64, 'b') + " *OpenSpeak-Setup-1.0.9.exe\r\n"
+                              + QByteArray(64, 'C') + " *OpenSpeak-Full-Setup-1.0.9.exe\n";
+        const auto lite = releaseFromChecksums("v1.0.9", sums, "OpenSpeak-Setup-1.0.9.exe", 1234);
+        const auto offer = selectInstallerRelease(QJsonArray{lite}, false, "lite");
+        QCOMPARE(offer.value("version").toString(), QStringLiteral("1.0.9"));
+        QCOMPARE(offer.value("sha256").toString(), QString(64, 'b'));
+        QCOMPARE(offer.value("size").toDouble(), 1234.0);
+        const auto full = releaseFromChecksums("v1.0.9", sums, "OpenSpeak-Full-Setup-1.0.9.exe", 99);
+        QCOMPARE(selectInstallerRelease(QJsonArray{full}, false, "full").value("sha256").toString(), QString(64, 'c'));
+        QVERIFY(releaseFromChecksums("v1.0.9", sums, "OpenSpeak-Setup-2.0.0.exe", 1).isEmpty());
+    }
     void installsVerifiedStartupUpdateWithoutPromptEvenWhenPeriodicChecksAreOff() {
         QStandardPaths::setTestModeEnabled(true);
         Settings settings(QStringLiteral("update-startup-test"), true);

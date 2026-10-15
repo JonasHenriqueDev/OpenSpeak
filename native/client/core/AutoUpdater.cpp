@@ -33,13 +33,18 @@ AutoUpdater::AutoUpdater(Settings *settings, QObject *parent)
       m_previousAuto(settings->automaticUpdates()), m_previousPre(settings->prereleaseUpdates()),
       m_previousEdition(settings->updateEdition()) {
     connect(settings, &Settings::changed, this, &AutoUpdater::settingsChanged);
+    m_automaticChecks = !settings->debug(); // perfis de debug e testes
     m_timer.setInterval(6 * 60 * 60 * 1000);
-    connect(&m_timer, &QTimer::timeout, this, [this] { if (m_settings->automaticUpdates()) check(); });
+    connect(&m_timer, &QTimer::timeout, this, [this] { if (m_automaticChecks && m_settings->automaticUpdates()) check(); });
     m_timer.start();
     // Every launch checks the selected channel; the setting controls only
     // periodic checks while the app stays open.
-    QTimer::singleShot(1000, this, &AutoUpdater::check);
+    QTimer::singleShot(1000, this, [this] {
+        if (m_automaticChecks) check();
+        else if (m_startupBusy) { m_startupBusy = false; setStatus(QStringLiteral("Verificação automática desativada nesta sessão.")); }
+    });
 }
+void AutoUpdater::setAutomaticChecks(bool enabled) { m_automaticChecks = enabled; }
 QString AutoUpdater::version() const { return QStringLiteral(OPENSPEAK_VERSION); }
 QString AutoUpdater::installedEdition() {
     QFile file(QCoreApplication::applicationDirPath() + QStringLiteral("/edition.txt"));
@@ -65,6 +70,7 @@ void AutoUpdater::settingsChanged() {
     ++m_generation;
     if (m_reply) m_reply->abort();
     m_readyFile.clear(); m_offer = {}; m_busy = false; m_installAfterDownload = false;
+    if (!m_automaticChecks) return;
     if (m_previousAuto || m_startupBusy || editionChanged) check();
     else setStatus(QStringLiteral("Verificação periódica desativada. O app verifica ao abrir."));
 }
@@ -85,13 +91,53 @@ void AutoUpdater::check() {
     connect(reply, &QNetworkReply::finished, this, [this, reply, payload, generation] {
         reply->deleteLater();
         if (generation != m_generation) return;
-        if (reply->error() != QNetworkReply::NoError) { fail(QStringLiteral("Não foi possível verificar atualizações. Tente novamente mais tarde.")); return; }
+        if (reply->error() != QNetworkReply::NoError) {
+            // Limite da API esgotado (403/429) ou API fora: o canal estável tem rota sem a API.
+            if (!m_settings->prereleaseUpdates() && reply->error() != QNetworkReply::OperationCanceledError) checkWithoutApi(generation);
+            else fail(QStringLiteral("Não foi possível verificar atualizações. Tente novamente mais tarde."));
+            return;
+        }
         payload->append(reply->readAll());
         const auto doc = QJsonDocument::fromJson(*payload);
         if (doc.isNull() || (!doc.isArray() && !doc.isObject())) {
             fail(QStringLiteral("O GitHub retornou uma resposta inválida. Tente novamente mais tarde.")); return;
         }
         handleReleaseDocument(doc);
+    });
+}
+// Sem a API: github.com/.../releases/latest redireciona para a tag da última
+// release estável, e o SHA256SUMS-<versão>.txt publicado nela traz o hash do instalador.
+void AutoUpdater::checkWithoutApi(int generation) {
+    const auto failed = [this] { fail(QStringLiteral("Não foi possível verificar atualizações. Tente novamente mais tarde.")); };
+    auto plain = [](const QUrl &url) { QNetworkRequest r = requestFor(url); r.setRawHeader("Accept", "*/*"); return r; };
+    auto *latest = m_network.head(plain(QUrl(QStringLiteral("https://github.com/JonasHenriqueDev/OpenSpeak/releases/latest"))));
+    m_reply = latest;
+    connect(latest, &QNetworkReply::finished, this, [this, latest, generation, failed, plain] {
+        latest->deleteLater();
+        if (generation != m_generation) return;
+        const QString tag = releaseTagFromUrl(latest->url());
+        if (latest->error() != QNetworkReply::NoError || tag.isEmpty()) { failed(); return; }
+        const QString ver = tag.mid(1);
+        const QString filename = QStringLiteral("%1-%2.exe").arg(installerPrefix(targetEdition()), ver);
+        const QString base = QStringLiteral("https://github.com/JonasHenriqueDev/OpenSpeak/releases/download/%1/").arg(tag);
+        auto *sums = m_network.get(plain(QUrl(base + QStringLiteral("SHA256SUMS-%1.txt").arg(ver))));
+        m_reply = sums;
+        connect(sums, &QNetworkReply::finished, this, [this, sums, generation, failed, plain, tag, filename, base] {
+            sums->deleteLater();
+            if (generation != m_generation) return;
+            const QByteArray text = sums->read(64 * 1024);
+            if (sums->error() != QNetworkReply::NoError || releaseFromChecksums(tag, text, filename, 1).isEmpty()) { failed(); return; }
+            // O tamanho confere o download; vem do cabeçalho do próprio instalador.
+            auto *size = m_network.head(plain(QUrl(base + filename)));
+            m_reply = size;
+            connect(size, &QNetworkReply::finished, this, [this, size, generation, failed, tag, filename, text] {
+                size->deleteLater();
+                if (generation != m_generation) return;
+                const qint64 bytes = size->header(QNetworkRequest::ContentLengthHeader).toLongLong();
+                if (size->error() != QNetworkReply::NoError || bytes <= 0) { failed(); return; }
+                handleReleaseDocument(QJsonDocument(releaseFromChecksums(tag, text, filename, bytes)));
+            });
+        });
     });
 }
 void AutoUpdater::handleReleaseDocument(const QJsonDocument &doc) {

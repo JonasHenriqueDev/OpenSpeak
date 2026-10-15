@@ -39,12 +39,16 @@ public:
     Q_INVOKABLE void downloadAndInstall();
     Q_INVOKABLE virtual void installNow();
     void installOnExit();
+    /// Testes de UI e perfis de debug: não consulta o GitHub sozinho (o limite da
+    /// API é de 60 consultas/h por IP, dividido com o app instalado). "Verificar agora" continua.
+    void setAutomaticChecks(bool enabled);
     static int runInstallHelper(const QString &file, const QString &sha256, quint32 parentPid, bool restart);
 signals:
     void changed();
 private:
     friend class TestUpdaterStartup;
     void handleReleaseDocument(const QJsonDocument &doc);
+    void checkWithoutApi(int generation);
     void setStatus(const QString &status, bool busy = false);
     void fail(const QString &status);
     void settingsChanged();
@@ -58,6 +62,7 @@ private:
     bool m_startupBusy = true;
     bool m_installAfterDownload = false;
     bool m_busy = false, m_manualInstall = false;
+    bool m_automaticChecks = true;
     bool m_previousAuto, m_previousPre;
     QString m_previousEdition;
     QString m_edition = installedEdition();

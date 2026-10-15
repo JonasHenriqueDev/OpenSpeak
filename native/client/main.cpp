@@ -117,6 +117,8 @@ int main(int argc, char *argv[])
     // A janela pode ficar escondida na bandeja; quem encerra é o "Sair" (Main.qml).
     QApplication::setQuitOnLastWindowClosed(false);
     AutoUpdater updater(&settings);
+    if (parser.isSet(uiSmokeOpt))
+        updater.setAutomaticChecks(false); // cada build roda vários; não gasta o limite da API do GitHub
     if (!parser.isSet(debugOpt) && !parser.isSet(uiSmokeOpt))
         QObject::connect(&app, &QCoreApplication::aboutToQuit, &updater, &AutoUpdater::installOnExit);
     if (parser.isSet(uiSmokeOpt)) settings.setAdvancedMode(true);

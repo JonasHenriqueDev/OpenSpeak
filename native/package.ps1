@@ -1,10 +1,14 @@
 # Monta as edições lite (OpenSpeak-Setup-<versão>.exe, padrão) e completa
 # (OpenSpeak-Full-Setup-<versão>.exe), com instalador, ZIP e exe portáteis.
-#   .\package.ps1                # compila Release antes
+#   .\package.ps1                # só a edição lite (instalador), compila Release antes
+#   .\package.ps1 -Full          # também a edição completa
+#   .\package.ps1 -Portable      # também ZIP e exe portáteis das edições geradas
 #   .\package.ps1 -SkipBuild
 param(
-    [string]$Version = '1.0.9',
+    [string]$Version = '1.0.10',
     [switch]$SkipBuild,
+    [switch]$Full,
+    [switch]$Portable,
     [string]$QtDir = 'C:\Qt\6.11.3\msvc2022_64'
 )
 $ErrorActionPreference = 'Stop'
@@ -69,6 +73,7 @@ function Build-Edition([string]$Edition) {
     # Nome fixo para /releases/latest/download/<prefixo>-Setup.exe; publique em cada release.
     Copy-Item (Join-Path $here "dist\$prefix-Setup-$Version.exe") (Join-Path $here "dist\$prefix-Setup.exe") -Force
 
+    if (-not $Portable) { return }
     # 5) Distribuição portátil com as mesmas dependências do instalador.
     $zip = Join-Path $here "dist\$prefix-$Version-portable.zip"
     Compress-Archive -Path $staging -DestinationPath $zip -Force
@@ -83,5 +88,5 @@ function Build-Edition([string]$Edition) {
 }
 
 Build-Edition 'lite'
-Build-Edition 'full'
+if ($Full) { Build-Edition 'full' }
 exit 0

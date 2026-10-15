@@ -74,4 +74,23 @@ QJsonObject selectInstallerRelease(const QJsonArray &releases, bool allowPrerele
     }
     return best;
 }
+QString releaseTagFromUrl(const QUrl &url) {
+    static const QRegularExpression tagPath(QStringLiteral("^/JonasHenriqueDev/OpenSpeak/releases/tag/(v[^/]+)$"));
+    if (url.scheme() != QLatin1String("https") || url.host() != QLatin1String("github.com")) return {};
+    const auto match = tagPath.match(url.path());
+    return match.hasMatch() && validReleaseVersion(match.captured(1)) ? match.captured(1) : QString();
+}
+QJsonObject releaseFromChecksums(const QString &tag, const QByteArray &sums, const QString &filename, qint64 size) {
+    static const QRegularExpression line(QStringLiteral("^([0-9a-fA-F]{64}) [ *](\\S+)$"));
+    for (const QByteArray &raw : sums.split('\n')) {
+        const auto match = line.match(QString::fromUtf8(raw.trimmed()));
+        if (!match.hasMatch() || match.captured(2) != filename) continue;
+        // Mesma forma da API, para passar pelas mesmas regras de selectInstallerRelease.
+        return {{"tag_name", tag}, {"prerelease", false}, {"draft", false}, {"assets", QJsonArray{QJsonObject{
+            {"name", filename}, {"size", double(size)}, {"state", "uploaded"},
+            {"digest", QStringLiteral("sha256:") + match.captured(1).toLower()},
+            {"browser_download_url", QStringLiteral("https://github.com/JonasHenriqueDev/OpenSpeak/releases/download/%1/%2").arg(tag, filename)}}}}};
+    }
+    return {};
+}
 }

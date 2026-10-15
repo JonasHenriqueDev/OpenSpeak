@@ -1,3 +1,11 @@
+# OpenSpeak 1.0.10 — verificação de atualizações mais confiável
+
+- Quando o GitHub limita as consultas da sua rede (60 por hora por IP), o app
+  não mostra mais "Não foi possível verificar atualizações": ele consulta a
+  página de releases e confere o instalador pelo arquivo `SHA256SUMS` publicado.
+- Versões de teste e perfis de depuração não consultam mais o GitHub sozinhos,
+  para não gastar o limite dividido com o app instalado.
+
 # OpenSpeak 1.0.9 — quem assiste junto e novidades
 
 - Quem está **assistindo** a uma transmissão também ouve o som quando alguém

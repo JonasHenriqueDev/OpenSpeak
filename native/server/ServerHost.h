@@ -71,12 +71,14 @@ private:
     QString m_monitoringFile;
     quint64 m_signalingRx = 0, m_signalingTx = 0;
     quint64 m_mediaTx = 0; // espectadores por WebSocket (SfuWsViewer)
-    // Tráfego de mídia do relay (entrada + saída), medido a cada heartbeat.
+    // Tráfego de mídia do relay (entrada + saída), medido a cada heartbeat (que
+    // também manda o webhook do bot se o Mbps arredondado mudou).
     QHash<QString, double> m_mediaBytes; // sessão -> bytes na amostra anterior
     qint64 m_mediaSampledAt = 0;
     double m_mediaMbps = 0;
     // Webhook do bot do Discord (OPENSPEAK_LIVE_WEBHOOK): POST do liveSnapshot() quando muda.
     QUrl m_liveWebhook;
+    bool m_liveEnabled = false;
     QByteArray m_liveSecret, m_lastLive;
     QTimer m_liveDebounce;
     QNetworkAccessManager m_liveNetwork;

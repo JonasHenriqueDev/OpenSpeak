@@ -653,9 +653,11 @@ void VirtualServer::broadcast(const QString &cmd, const QJsonObject &args, int e
     for (const auto &[id, c] : m_clients)
         if (c.loggedIn && id != exceptClid)
             notify(id, cmd, args);
-    // Todo começo/mudança/fim de stream e troca de apelido passa por aqui.
+    // Todo começo/mudança/fim de stream (inclusive espectadores), troca de apelido e
+    // entrada/saída de usuários (contador "online" do bot) passa por aqui.
     static const QStringList liveCommands{QStringLiteral("notifystreamstarted"), QStringLiteral("notifystreamupdated"),
-                                          QStringLiteral("notifystreamstopped"), QStringLiteral("notifyclientupdated")};
+                                          QStringLiteral("notifystreamstopped"), QStringLiteral("notifyclientupdated"),
+                                          QStringLiteral("notifycliententerview"), QStringLiteral("notifyclientleftview")};
     if (m_liveChanged && liveCommands.contains(cmd))
         m_liveChanged();
 }

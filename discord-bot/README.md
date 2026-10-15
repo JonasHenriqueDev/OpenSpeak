@@ -52,8 +52,14 @@ de usuários de lá.
 ### Webhook (instantâneo)
 
 Com o webhook ligado, o servidor avisa o bot no mesmo instante (~0,3 s) em
-vez de esperar a próxima consulta. A consulta continua como rede de segurança
-(dá para subir o `pollSeconds` para 60).
+vez de esperar a próxima consulta: transmissões, espectadores, troca de
+apelido e gente entrando ou saindo do servidor (contador "online"). O tráfego
+(Mbps, só no servidor nativo com SFU) vai no máximo a cada 15 s, e só quando o
+valor arredondado muda. O bot troca o próprio status no máximo a cada 5 s
+(limite do Discord), sempre com o dado mais recente.
+
+A consulta continua como rede de segurança (POST perdido, bot reiniciando,
+servidor fora do ar): com o webhook, use `"pollSeconds": 300`.
 
 No bot (`config.json`):
 

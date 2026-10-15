@@ -110,6 +110,7 @@ ServerHost::ServerHost(Options options, QObject *parent)
     m_liveWebhook = QUrl(QString::fromLocal8Bit(qgetenv("OPENSPEAK_LIVE_WEBHOOK")));
     m_liveSecret = qgetenv("OPENSPEAK_LIVE_WEBHOOK_SECRET");
     if (m_liveWebhook.isValid() && m_liveWebhook.scheme().startsWith(QLatin1String("http"))) {
+        m_liveEnabled = true;
         m_liveDebounce.setSingleShot(true);
         m_liveDebounce.setInterval(300); // junta mudanças seguidas num POST só
         connect(&m_liveDebounce, &QTimer::timeout, this, &ServerHost::sendLiveWebhook);
@@ -209,12 +210,15 @@ void ServerHost::sampleMediaRate()
 
 void ServerHost::sendLiveWebhook()
 {
-    // A comparação ignora as estatísticas: elas mudam o tempo todo e o bot já as
-    // pega na consulta periódica. O POST vai com elas.
+    // Compara com o Mbps arredondado: variações pequenas de tráfego não geram POST.
+    // Contagens (online, espectadores) mudam a comparação e vão na hora.
     const QJsonObject live = liveSnapshot();
-    QJsonObject withoutStats = live;
-    withoutStats.remove("stats");
-    const QByteArray key = QJsonDocument(withoutStats).toJson(QJsonDocument::Compact);
+    QJsonObject rounded = live;
+    QJsonObject stats = rounded.value("stats").toObject();
+    if (stats.value("mbps").isDouble())
+        stats["mbps"] = std::round(stats.value("mbps").toDouble());
+    rounded["stats"] = stats;
+    const QByteArray key = QJsonDocument(rounded).toJson(QJsonDocument::Compact);
     if (key == m_lastLive)
         return; // só a contagem de algo que o bot não mostra, ou nada mudou
     m_lastLive = key;
@@ -331,6 +335,9 @@ void ServerHost::sendTo(int clid, const QJsonObject &message)
 void ServerHost::heartbeat()
 {
     sampleMediaRate();
+    // Tráfego novo: no máximo um POST a cada heartbeat (15 s), só se o Mbps mudou.
+    if (m_liveEnabled && m_relay && !m_liveDebounce.isActive())
+        sendLiveWebhook();
     // Derruba sockets mortos para liberar streams presos.
     for (auto it = m_alive.begin(); it != m_alive.end(); ++it) {
         if (!it.value()) {

@@ -200,18 +200,20 @@ test('bot do Discord: liveSnapshot só lista streams com announce, com quem e qu
   assert.equal(live.streams[0].app, 'Chrome');
 });
 
-test('webhook do bot: onLiveChanged dispara no ciclo de vida do stream e na troca de apelido', () => {
+test('webhook do bot: onLiveChanged dispara no ciclo de vida do stream, troca de apelido e entrada/saída', () => {
   let calls = 0;
   const server = new VirtualServer({ send: () => {}, onLiveChanged: () => { calls++; } });
   const host = server.connect();
   server.handle(host, 'login', { nickname: 'host', uid: 'uid-host' });
-  assert.equal(calls, 0);
+  assert.equal(calls, 1); // login muda o contador "online"
+  server.disconnect(server.connect());
+  assert.equal(calls, 1); // quem nem fez login não conta
   const { streamIdentifier } = server.handle(host, 'setupstream', {});
-  assert.equal(calls, 1);
-  server.handle(host, 'updatestream', { streamIdentifier, app: 'Chrome' });
   assert.equal(calls, 2);
-  server.handle(host, 'clientupdate', { nickname: 'novo' });
+  server.handle(host, 'updatestream', { streamIdentifier, app: 'Chrome' });
   assert.equal(calls, 3);
-  server.disconnect(host);
+  server.handle(host, 'clientupdate', { nickname: 'novo' });
   assert.equal(calls, 4);
+  server.disconnect(host);
+  assert.ok(calls >= 5); // fim do stream e saída do usuário
 });

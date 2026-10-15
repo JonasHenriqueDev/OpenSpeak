@@ -32,7 +32,9 @@ function clampInt(value, min, max, fallback) {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-const LIVE_COMMANDS = new Set(['notifystreamstarted', 'notifystreamupdated', 'notifystreamstopped', 'notifyclientupdated']);
+// Mudanças de stream (inclusive espectadores), apelido e entrada/saída de usuários (contador "online" do bot).
+const LIVE_COMMANDS = new Set(['notifystreamstarted', 'notifystreamupdated', 'notifystreamstopped', 'notifyclientupdated',
+  'notifycliententerview', 'notifyclientleftview']);
 
 function cleanString(value, maxLength, fallback = '') {
   if (typeof value !== 'string') return fallback;

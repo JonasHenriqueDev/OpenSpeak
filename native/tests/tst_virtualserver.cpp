@@ -138,15 +138,18 @@ private slots:
         int calls = 0;
         server->setLiveChangedCallback([&] { ++calls; });
         const int host = login("host");
-        QCOMPARE(calls, 0); // login não muda a lista de transmissões
+        QCOMPARE(calls, 1); // login muda o contador "online"
+        const int pending = server->connect();
+        server->disconnect(pending);
+        QCOMPARE(calls, 1); // quem nem fez login não conta
         const QString sid = setup(host);
-        QCOMPARE(calls, 1);
-        server->handle(host, "updatestream", {{"streamIdentifier", sid}, {"app", "Chrome"}});
         QCOMPARE(calls, 2);
-        server->handle(host, "clientupdate", {{"nickname", "novo"}});
+        server->handle(host, "updatestream", {{"streamIdentifier", sid}, {"app", "Chrome"}});
         QCOMPARE(calls, 3);
-        server->disconnect(host);
+        server->handle(host, "clientupdate", {{"nickname", "novo"}});
         QCOMPARE(calls, 4);
+        server->disconnect(host);
+        QVERIFY(calls >= 5); // fim do stream e saída do usuário
     }
 
     void serverMeasuredLatencyIsPublicWithoutPrivateMetadata()

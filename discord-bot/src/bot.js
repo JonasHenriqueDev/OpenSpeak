@@ -24,6 +24,8 @@ const CONFIG_FILE = path.resolve(process.env.OPENSPEAK_BOT_CONFIG ?? path.join(R
 const STATE_FILE = path.resolve(process.env.OPENSPEAK_BOT_STATE ?? path.join(ROOT, 'state.json'));
 /** Falhas seguidas ao consultar o servidor até considerar que ninguém está ao vivo. */
 const OFFLINE_AFTER_FAILURES = 4;
+/** Intervalo mínimo entre trocas do status do bot (limite do Discord). */
+const PRESENCE_MIN_MS = 5000;
 
 const log = (...args) => console.log(new Date().toISOString(), ...args);
 
@@ -139,6 +141,10 @@ class LiveBot {
     this.presenceIndex = 0;
     this.presenceMain = null;
     this.presenceLive = false;
+    this.lastPresenceLive = null;
+    this.pendingPresence = null;
+    this.presenceAt = 0;
+    this.presenceTimer = null;
     this.streams = [];
     this.stats = parseStats(null); // carga do servidor (desconhecida até a primeira resposta)
     this.queue = Promise.resolve(); // consultas e webhooks, um de cada vez
@@ -351,9 +357,26 @@ class LiveBot {
     this.setPresence(texts.length ? texts[this.presenceIndex % texts.length] : '', this.presenceLive);
   }
 
+  /**
+   * Com o webhook, entradas e saídas chegam em rajadas: o Discord limita trocas de
+   * status, então aplica no máximo uma a cada PRESENCE_MIN_MS (sempre a mais recente).
+   */
   setPresence(text, live) {
-    if (text === this.lastPresence) return;
+    this.pendingPresence = { text, live };
+    const wait = this.presenceAt + PRESENCE_MIN_MS - Date.now();
+    if (wait <= 0) return this.flushPresence();
+    this.presenceTimer ??= setTimeout(() => {
+      this.presenceTimer = null;
+      this.flushPresence();
+    }, wait);
+  }
+
+  flushPresence() {
+    const { text, live } = this.pendingPresence;
+    if (!this.config.presence.enabled || (text === this.lastPresence && live === this.lastPresenceLive)) return;
     this.lastPresence = text;
+    this.lastPresenceLive = live;
+    this.presenceAt = Date.now();
     const type = ACTIVITY_TYPE[this.config.presence.type];
     // "custom" mostra só o texto; os outros tipos aparecem como "Jogando <texto>" etc.
     const activity = type === undefined ? { type: ActivityType.Custom, name: 'OpenSpeak', state: text } : { type, name: text };

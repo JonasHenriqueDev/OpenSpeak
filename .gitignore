@@ -10,3 +10,5 @@ native/*.log
 web-dist/
 .vercel/
 .env*
+discord-bot/config.json
+discord-bot/state.json

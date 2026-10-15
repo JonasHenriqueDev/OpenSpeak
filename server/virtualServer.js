@@ -104,6 +104,24 @@ export class VirtualServer {
       streams: [...this.streams.values()].map(s => this.#publicStream(s)) };
   }
 
+  /**
+   * Transmissões que o dono deixou anunciar, para o bot do Discord (GET /api/live).
+   * Só nomes públicos: nada de uid, IP ou miniatura. Espelho de liveSnapshot() no nativo.
+   */
+  liveSnapshot() {
+    const streams = [...this.streams.values()].filter(s => s.announce !== false).map(s => ({
+      id: s.streamIdentifier,
+      name: s.name,
+      owner: this.clients.get(s.ownerClid)?.nickname ?? '',
+      channel: this.channels.get(s.cid)?.name ?? '',
+      app: s.app ?? '',
+      type: s.type, access: s.access, mode: s.mode, paused: s.paused, audio: s.audio,
+      viewers: s.viewers.size, started: s.created,
+      quality: { width: s.quality.width, height: s.quality.height, fps: s.quality.fps },
+    }));
+    return { server: this.name, streams };
+  }
+
   disconnect(clid) {
     const client = this.clients.get(clid);
     if (!client) return;
@@ -191,7 +209,7 @@ export class VirtualServer {
         banned: new Set(), // uids
         ...this.#sanitizeStreamConfig(args, {
           name: `Stream de ${client.nickname}`, type: StreamType.SCREEN, access: StreamAccess.PUBLIC,
-          bitrate: 3_000_000, viewerLimit: 0, audio: false, quality: { width: 1280, height: 720, fps: 30 },
+          bitrate: 3_000_000, viewerLimit: 0, audio: false, announce: true, app: '', quality: { width: 1280, height: 720, fps: 30 },
         }),
       };
       this.streams.set(stream.streamIdentifier, stream);
@@ -349,6 +367,9 @@ export class VirtualServer {
     out.bitrate = 'bitrate' in args ? clampInt(args.bitrate, 100_000, 50_000_000, base.bitrate) : base.bitrate;
     out.viewerLimit = 'viewerLimit' in args ? clampInt(args.viewerLimit, 0, 1000, base.viewerLimit) : base.viewerLimit;
     out.audio = 'audio' in args ? !!args.audio : base.audio;
+    // Estado antigo (Redis) não tem o campo: anunciar é o padrão.
+    out.app = 'app' in args ? cleanString(args.app, 64) : (base.app ?? '');
+    out.announce = 'announce' in args ? args.announce !== false : base.announce !== false;
     if (args.quality && typeof args.quality === 'object') {
       out.quality = {
         width: clampInt(args.quality.width, -1, 7680, base.quality.width),
@@ -429,6 +450,8 @@ export class VirtualServer {
       bitrate: s.bitrate,
       viewerLimit: s.viewerLimit,
       audio: s.audio,
+      announce: s.announce !== false,
+      app: s.app ?? '',
       quality: s.quality,
       paused: s.paused,
       created: s.created,

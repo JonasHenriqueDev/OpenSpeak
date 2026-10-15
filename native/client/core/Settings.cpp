@@ -60,6 +60,7 @@ QVariantMap Settings::lastStreamingConfig() const
     def("bitrate", p->bitrate);
     def("viewerLimit", 0);
     def("audio", true);
+    def("announce", true); // "Mostrar ao vivo no bot do Discord"
     def("width", p->width);
     def("height", p->height);
     def("fps", p->fps);

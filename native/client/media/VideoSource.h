@@ -49,6 +49,10 @@ public:
 
     StreamType type() const { return m_desc.type; }
     QString label() const { return m_desc.label; }
+    /// Programa dono da janela (descrição do .exe, ex.: "Counter-Strike 2"); vazio
+    /// para telas e câmeras. Vai no `app` do stream (bot do Discord).
+    QString appName() const { return m_appName; }
+    static QString appNameForWindow(quintptr hwnd);
     bool isActive() const { return m_active; }
     QSize lastFrameSize() const { return m_lastSize; }
 
@@ -76,6 +80,7 @@ private:
     void startWindowCapture(const QCapturableWindow &window);
 
     SourceDescriptor m_desc;
+    QString m_appName;
     bool m_active = false;
     QString m_error;
     QString m_captureMethod;

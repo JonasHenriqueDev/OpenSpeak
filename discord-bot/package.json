@@ -1,0 +1,19 @@
+{
+  "name": "openspeak-discord-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bot do Discord que avisa quando alguém está transmitindo no OpenSpeak",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "main": "src/bot.js",
+  "scripts": {
+    "start": "node src/bot.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  }
+}

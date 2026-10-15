@@ -284,6 +284,11 @@ export class SetupStreamDialog {
           type: 'number', min: '0', max: '1000', value: String(c.viewerLimit),
           on: { input: ev => { c.viewerLimit = Math.max(0, Math.min(1000, Number(ev.target.value) || 0)); } },
         })),
+        h('label.toggle',
+          h('input', { type: 'checkbox', checked: c.announce !== false, on: { change: ev => { c.announce = ev.target.checked; } } }),
+          h('span.toggle-ui'),
+          h('span', t('video.announce')),
+          h('span.info-dot', { title: t('video.announce.info') }, icon('info'))),
         c.audio ? field(t('video.audio.bitrate'), null, segmented(
           AUDIO_BITRATES.map(b => ({ key: b, title: String(b / 1000) })), q.audioBitrate,
           v => { q.audioBitrate = Number(v); this.render(); })) : null,

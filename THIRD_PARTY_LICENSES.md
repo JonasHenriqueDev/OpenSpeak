@@ -37,3 +37,9 @@ o OpenSpeak a partir deste repositório.
 |---|---|
 | [ws](https://github.com/websockets/ws) | MIT |
 | [ioredis](https://github.com/redis/ioredis) | MIT |
+
+## Bot do Discord (`discord-bot/`)
+
+| Componente | Licença |
+|---|---|
+| [discord.js](https://github.com/discordjs/discord.js) (e dependências `@discordjs/*`) | Apache-2.0 |

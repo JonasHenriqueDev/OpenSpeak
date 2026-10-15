@@ -490,6 +490,7 @@ export class ScreenshareManager extends EventEmitter {
       bitrate: config.bitrate,
       viewerLimit: config.viewerLimit,
       audio: config.audio,
+      announce: config.announce !== false,
     };
   }
 

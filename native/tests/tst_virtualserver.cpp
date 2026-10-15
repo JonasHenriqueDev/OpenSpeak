@@ -103,6 +103,30 @@ private slots:
         QCOMPARE(server->monitoringSnapshot().value("streams").toArray().size(), 0);
     }
 
+    void liveSnapshotListsOnlyAnnouncedStreams()
+    {
+        const int host = login("host"), other = login("other");
+        const QString shown = setup(host, {{"name", "Ranked"}, {"app", "Counter-Strike 2"}, {"type", int(StreamType::Window)}});
+        setup(other, {{"name", "Segredo"}, {"announce", false}});
+        QVERIFY(notes(other, "notifystreamstarted").first().value("stream").toObject().value("announce").toBool());
+
+        auto streams = server->liveSnapshot().value("streams").toArray();
+        QCOMPARE(streams.size(), 1);
+        const QJsonObject s = streams.first().toObject();
+        QCOMPARE(s.value("id").toString(), shown);
+        QCOMPARE(s.value("owner").toString(), QStringLiteral("host"));
+        QCOMPARE(s.value("app").toString(), QStringLiteral("Counter-Strike 2"));
+        QCOMPARE(s.value("channel").toString(), QStringLiteral("Lobby"));
+        QVERIFY(!s.contains("uid"));
+        QVERIFY(!s.contains("thumbnail"));
+
+        server->handle(host, "updatestream", {{"streamIdentifier", shown}, {"announce", false}});
+        QCOMPARE(server->liveSnapshot().value("streams").toArray().size(), 0);
+        server->handle(host, "updatestream", {{"streamIdentifier", shown}, {"announce", true}, {"app", "Chrome"}});
+        streams = server->liveSnapshot().value("streams").toArray();
+        QCOMPARE(streams.first().toObject().value("app").toString(), QStringLiteral("Chrome"));
+    }
+
     void serverMeasuredLatencyIsPublicWithoutPrivateMetadata()
     {
         const int a = login("a"), b = login("b");

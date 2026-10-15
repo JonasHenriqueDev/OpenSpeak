@@ -46,6 +46,12 @@ function parseIceServers() {
 }
 
 function serveStatic(req, res) {
+  // Bot do Discord: transmissões ao vivo marcadas para anunciar (só leitura).
+  if (req.method === 'GET' && req.url.split('?')[0] === '/api/live') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(server.liveSnapshot()));
+    return;
+  }
   let pathname;
   try {
     pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);

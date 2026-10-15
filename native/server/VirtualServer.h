@@ -43,6 +43,9 @@ public:
     int streamCount() const { return int(m_streams.size()); }
     /// Somente para o arquivo local de monitoramento; não é um comando público.
     QJsonObject monitoringSnapshot() const;
+    /// Transmissões ao vivo que o dono deixou anunciar (`announce`), para o bot do
+    /// Discord via GET /api/live. Só nomes públicos: nada de uid, IP ou miniatura.
+    QJsonObject liveSnapshot() const;
     void setClientLatency(int clid, qint64 milliseconds);
 
     /// Habilita STREAM_SFU. O relay deve viver mais que o VirtualServer.
@@ -89,6 +92,8 @@ private:
         int bitrate = 3'000'000;
         int viewerLimit = 0;
         bool audio = false;
+        bool announce = true; // aparece no bot do Discord (GET /api/live)
+        QString app;          // programa transmitido (janela), informado pelo cliente
         Quality quality;
         QList<int> viewers; // ordem de entrada
         std::map<int, PendingRequest> pending;

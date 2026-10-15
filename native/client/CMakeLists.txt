@@ -30,7 +30,7 @@ target_link_libraries(openspeak_engine PUBLIC
     openspeak_rtc
     Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::WebSockets
     openspeak_ffmpeg
-    ole32 mmdevapi d3d11 dxgi dwmapi gdi32 user32 shell32
+    ole32 mmdevapi d3d11 dxgi dwmapi gdi32 user32 shell32 version
 )
 target_link_libraries(openspeak_engine PRIVATE Qt6::MultimediaPrivate dwmapi)
 target_compile_definitions(openspeak_engine PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)

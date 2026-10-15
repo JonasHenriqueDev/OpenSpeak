@@ -521,6 +521,15 @@ Dialog {
                         ToolTip.text: I18n.t("video.viewer_limit.info")
                     }
 
+                    Label { text: I18n.t("video.announce"); color: Theme.textDim }
+                    Switch {
+                        objectName: "announceSwitch"
+                        checked: dialog.cfg.announce !== false
+                        onToggled: dialog.patch({ announce: checked })
+                        ToolTip.visible: hovered
+                        ToolTip.text: I18n.t("video.announce.info")
+                    }
+
                     Label { text: I18n.t("video.audio.bitrate"); color: Theme.textDim; visible: !!dialog.cfg.audio }
                     ComboBox {
                         visible: !!dialog.cfg.audio

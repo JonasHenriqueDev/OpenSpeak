@@ -1,0 +1,27 @@
+{
+  "openspeakUrl": "https://openspeak.duckdns.org",
+  "pollSeconds": 15,
+  "guildId": "",
+
+  "voiceStatus": {
+    "enabled": false,
+    "channelId": "",
+    "live": "🔴 Ao vivo no OpenSpeak: {lista}",
+    "item": "{quem} ({app})",
+    "idle": ""
+  },
+
+  "chat": {
+    "enabled": false,
+    "channelId": "",
+    "mention": "",
+    "onEnd": "edit"
+  },
+
+  "presence": {
+    "enabled": false,
+    "live": "{quem} transmitindo {app}",
+    "liveMany": "{qtd} transmissões ao vivo no OpenSpeak",
+    "idle": "Ninguém ao vivo no OpenSpeak"
+  }
+}

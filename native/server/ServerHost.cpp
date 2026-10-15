@@ -70,6 +70,15 @@ ServerHost::ServerHost(Options options, QObject *parent)
         });
     });
 
+    // Bot do Discord: transmissões ao vivo marcadas para anunciar (só leitura).
+    m_http.route(QStringLiteral("/api/live"), QHttpServerRequest::Method::Get, [this] {
+        QHttpServerResponse response(m_server.liveSnapshot());
+        QHttpHeaders headers = response.headers();
+        headers.append(QHttpHeaders::WellKnownHeader::CacheControl, "no-store");
+        response.setHeaders(std::move(headers));
+        return response;
+    });
+
     if (!m_options.webRoot.isEmpty()) {
         const QDir root(m_options.webRoot);
         auto serve = [root](QString relative) -> QHttpServerResponse {

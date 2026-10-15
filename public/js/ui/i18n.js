@@ -207,6 +207,8 @@ const STRINGS = {
   'video.view_settings.show_own_streams': 'Mostrar meus streams',
   'video.viewer_limit': 'Limite de espectadores',
   'video.viewer_limit.info': 'Quantidade máxima de espectadores. 0 = ilimitado.',
+  'video.announce': 'Mostrar ao vivo no bot do Discord',
+  'video.announce.info': 'O bot do Discord do servidor avisa que você está ao vivo (status do canal de voz, chat e status do bot).',
   'video.viewers': 'Espectadores',
   'video.viewers.action.ban': 'Bloquear do stream',
   'video.viewers.action.kick': 'Remover do stream',

@@ -118,6 +118,8 @@ ScreenshareManager::StreamConfig ScreenshareManager::configFromMap(const QVarian
         c.viewerLimit = std::clamp(m.value("viewerLimit").toInt(), 0, 1000);
     if (m.contains("audio"))
         c.audio = m.value("audio").toBool();
+    if (m.contains("announce"))
+        c.announce = m.value("announce").toBool();
     if (m.contains("excludeDiscord"))
         c.excludeDiscord = m.value("excludeDiscord").toBool();
     if (m.contains("width"))
@@ -136,6 +138,7 @@ QJsonObject ScreenshareManager::wireConfig(const StreamConfig &c)
     return {
         {"name", c.name}, {"type", int(c.type)}, {"access", int(c.access)}, {"mode", int(c.mode)},
         {"bitrate", c.bitrate}, {"viewerLimit", c.viewerLimit}, {"audio", c.audio},
+        {"announce", c.announce}, {"app", c.app},
         {"quality", QJsonObject{{"width", c.width}, {"height", c.height}, {"fps", c.fps}}},
     };
 }
@@ -219,6 +222,7 @@ void ScreenshareManager::startStream(const QVariantMap &config)
         return;
     }
     cfg.type = m_preview->type();
+    cfg.app = m_preview->appName();
     if (cfg.name.isEmpty())
         cfg.name = QStringLiteral("Stream de %1").arg(m_handler->clientName(m_handler->ownClid()));
     // A captura passa a pertencer ao stream (guardada até o servidor responder).
@@ -439,12 +443,13 @@ void ScreenshareManager::changeSource(const QString &id)
     own.source = std::move(m_preview);
     emit previewChanged();
     own.config.type = own.source->type();
+    own.config.app = own.source->appName();
     configureEncoder(own);
     own.encoder->requestKeyFrame();
     connect(own.source.get(), &VideoSource::frameAvailable, this, [p](const QVideoFrame &f) { p->encoder->pushFrame(f); });
     connect(own.source.get(), &VideoSource::ended, this, [this, id] { stopStream(id); });
     startAudioFor(own); // o áudio acompanha a nova fonte
-    m_conn->sendCommand(QStringLiteral("updatestream"), {{"streamIdentifier", id}, {"type", int(own.config.type)}});
+    m_conn->sendCommand(QStringLiteral("updatestream"), {{"streamIdentifier", id}, {"type", int(own.config.type)}, {"app", own.config.app}});
     notifyChanged();
 }
 
@@ -485,7 +490,7 @@ QVariantMap ScreenshareManager::ownConfig(const QString &id) const
         return {};
     const StreamConfig &c = it->second->config;
     return {{"name", c.name}, {"type", int(c.type)}, {"access", int(c.access)}, {"mode", int(c.mode)},
-            {"bitrate", c.bitrate}, {"viewerLimit", c.viewerLimit}, {"audio", c.audio}, {"width", c.width},
+            {"bitrate", c.bitrate}, {"viewerLimit", c.viewerLimit}, {"audio", c.audio}, {"announce", c.announce}, {"width", c.width},
             {"height", c.height}, {"fps", c.fps}, {"audioBitrate", c.audioBitrate},
             {"sourceLabel", it->second->source->label()}};
 }

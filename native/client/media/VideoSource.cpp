@@ -13,6 +13,8 @@
 #include <windows.h>
 #include <dwmapi.h>
 
+#include <iterator>
+
 namespace openspeak {
 
 VideoSource::VideoSource(QObject *parent) : QObject(parent)
@@ -24,6 +26,44 @@ VideoSource::VideoSource(QObject *parent) : QObject(parent)
 }
 
 VideoSource::~VideoSource() { close(); }
+
+QString VideoSource::appNameForWindow(quintptr id)
+{
+    DWORD pid = 0;
+    GetWindowThreadProcessId(reinterpret_cast<HWND>(id), &pid);
+    HANDLE process = pid ? OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) : nullptr;
+    if (!process)
+        return {};
+    wchar_t path[MAX_PATH * 2]{};
+    DWORD size = DWORD(std::size(path));
+    const bool ok = QueryFullProcessImageNameW(process, 0, path, &size);
+    CloseHandle(process);
+    if (!ok)
+        return {};
+    // FileDescription ("Google Chrome", "Counter-Strike 2"); sem ela, o nome do .exe.
+    QString name;
+    DWORD unused = 0;
+    const DWORD infoSize = GetFileVersionInfoSizeW(path, &unused);
+    QByteArray info(int(infoSize), Qt::Uninitialized);
+    if (infoSize && GetFileVersionInfoW(path, 0, infoSize, info.data())) {
+        struct { WORD language, codePage; } *translations = nullptr;
+        UINT len = 0;
+        if (VerQueryValueW(info.data(), L"\\VarFileInfo\\Translation", reinterpret_cast<void **>(&translations), &len) && len >= 4) {
+            const QString key = QStringLiteral("\\StringFileInfo\\%1%2\\FileDescription")
+                                    .arg(translations[0].language, 4, 16, QLatin1Char('0'))
+                                    .arg(translations[0].codePage, 4, 16, QLatin1Char('0'));
+            wchar_t *value = nullptr;
+            if (VerQueryValueW(info.data(), reinterpret_cast<LPCWSTR>(key.utf16()), reinterpret_cast<void **>(&value), &len) && len > 1)
+                name = QString::fromWCharArray(value).trimmed();
+        }
+    }
+    if (name.isEmpty()) {
+        name = QString::fromWCharArray(path).section(QLatin1Char('\\'), -1);
+        if (name.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive))
+            name.chop(4);
+    }
+    return name.left(64);
+}
 
 bool VideoSource::isShareableWindow(const QCapturableWindow &window)
 {
@@ -76,6 +116,7 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
 {
     close();
     m_desc = desc;
+    m_appName.clear();
     m_error.clear();
 
     if (desc.testPattern) {
@@ -111,6 +152,8 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
         }
         const QCapturableWindow window = desc.windowSpecified ? desc.window : windows[idx];
         const auto *handle = QCapturableWindowPrivate::handle(window);
+        if (handle && handle->id)
+            m_appName = appNameForWindow(handle->id);
         // OPENSPEAK_WINDOW_CAPTURE=wgc força o Windows.Graphics.Capture (com a borda amarela).
         if (handle && handle->id && qEnvironmentVariable("OPENSPEAK_WINDOW_CAPTURE") != QLatin1String("wgc")) {
             m_grabber = std::make_unique<WindowGrabber>(handle->id, targetFps);

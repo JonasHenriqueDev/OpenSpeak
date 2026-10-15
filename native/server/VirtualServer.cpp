@@ -131,6 +131,26 @@ QJsonObject VirtualServer::monitoringSnapshot() const
             {"connections", int(m_clients.size())}, {"viewerSubscriptions", viewers}};
 }
 
+QJsonObject VirtualServer::liveSnapshot() const
+{
+    QJsonArray streams;
+    for (const auto &[id, s] : m_streams) {
+        if (!s.announce)
+            continue;
+        const auto owner = m_clients.find(s.ownerClid);
+        const auto channel = m_channels.find(s.cid);
+        streams.append(QJsonObject{
+            {"id", id}, {"name", s.name},
+            {"owner", owner != m_clients.end() ? owner->second.nickname : QString()},
+            {"channel", channel != m_channels.end() ? channel->second.name : QString()},
+            {"app", s.app}, {"type", s.type}, {"access", s.access}, {"mode", s.mode}, {"paused", s.paused},
+            {"audio", s.audio}, {"viewers", int(s.viewers.size())}, {"started", double(s.created)},
+            {"quality", QJsonObject{{"width", s.quality.width}, {"height", s.quality.height}, {"fps", s.quality.fps}}},
+        });
+    }
+    return {{"server", m_name}, {"streams", streams}};
+}
+
 void VirtualServer::setClientLatency(int clid, qint64 milliseconds)
 {
     auto it = m_clients.find(clid);
@@ -493,6 +513,10 @@ void VirtualServer::applyConfig(Stream &s, const QJsonObject &args)
         s.viewerLimit = clampInt(args.value("viewerLimit"), 0, 1000, s.viewerLimit);
     if (args.contains("audio"))
         s.audio = args.value("audio").toBool();
+    if (args.contains("app"))
+        s.app = cleanString(args.value("app"), 64);
+    if (args.contains("announce"))
+        s.announce = args.value("announce").toBool(true);
     if (args.value("quality").isObject()) {
         const QJsonObject q = args.value("quality").toObject();
         s.quality.width = clampInt(q.value("width"), -1, 7680, s.quality.width);
@@ -600,6 +624,8 @@ QJsonObject VirtualServer::publicStream(const Stream &s) const
         {"bitrate", s.bitrate},
         {"viewerLimit", s.viewerLimit},
         {"audio", s.audio},
+        {"announce", s.announce},
+        {"app", s.app},
         {"quality", QJsonObject{{"width", s.quality.width}, {"height", s.quality.height}, {"fps", s.quality.fps}}},
         {"paused", s.paused},
         {"created", double(s.created)},

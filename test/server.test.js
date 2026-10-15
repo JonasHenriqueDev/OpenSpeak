@@ -173,3 +173,27 @@ test('aceite informa peerClid (P2P: o próprio dono)', () => {
   assert.equal(resp.args.peerClid, host);
   assert.equal(resp.args.ownerClid, host);
 });
+
+test('bot do Discord: liveSnapshot só lista streams com announce, com quem e qual app', () => {
+  const { server, login, notes } = setup();
+  const host = login('host');
+  const other = login('other');
+  const { streamIdentifier: shown } = server.handle(host, 'setupstream', { name: 'Ranked', app: 'Counter-Strike 2', type: 3 });
+  server.handle(other, 'setupstream', { name: 'Segredo', announce: false });
+
+  assert.equal(notes(other, 'notifystreamstarted')[0].args.stream.announce, true);
+  let live = server.liveSnapshot();
+  assert.equal(live.streams.length, 1);
+  assert.equal(live.streams[0].id, shown);
+  assert.equal(live.streams[0].owner, 'host');
+  assert.equal(live.streams[0].app, 'Counter-Strike 2');
+  assert.equal(live.streams[0].channel, 'Lobby');
+  assert.equal(live.streams[0].uid, undefined);
+  assert.equal(live.streams[0].thumbnail, undefined);
+
+  server.handle(host, 'updatestream', { streamIdentifier: shown, announce: false });
+  assert.equal(server.liveSnapshot().streams.length, 0);
+  server.handle(host, 'updatestream', { streamIdentifier: shown, announce: true, app: 'Chrome' });
+  live = server.liveSnapshot();
+  assert.equal(live.streams[0].app, 'Chrome');
+});

@@ -38,6 +38,7 @@ const DEFAULTS = {
     bitrate: preset.bitrate,
     viewerLimit: 0,
     audio: true,
+    announce: true,
   },
   lastStreamingQuality: { width: preset.width, height: preset.height, fps: preset.fps, audioBitrate: preset.audioBitrate },
   preferStreamSettingsAdvancedMode: false,

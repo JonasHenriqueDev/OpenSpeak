@@ -1,4 +1,5 @@
 #include "SessionInbound.h"
+#include "RtpRecovery.h"
 #include "SdpFilter.h"
 
 #include <QDateTime>
@@ -72,9 +73,13 @@ void SessionInbound::onRemoteTrack(std::shared_ptr<rtc::Track> track)
     if (desc.type() == "video") {
         auto stats = std::make_shared<RtpStatsHandler>(90000, false);
         auto depacketizer = std::make_shared<rtc::H264RtpDepacketizer>(rtc::NalUnit::Separator::LongStartSequence);
+        // Pede reenvio do que se perdeu e só deixa passar quadros completos.
+        auto recovery = std::make_shared<RtpRecoveryHandler>(RtpRecoveryBuffer::Mode::Frames);
         // A entrada percorre a cadeia do fim para o início: sessão RTCP e
-        // estatísticas veem o RTP antes do depacketizador montar os quadros.
+        // estatísticas veem o RTP como chegou, a recuperação reordena e o
+        // depacketizador monta os quadros.
         track->setMediaHandler(depacketizer);
+        depacketizer->addToChain(recovery);
         depacketizer->addToChain(stats);
         depacketizer->addToChain(session);
         VideoDecoder *decoder = &m_decoder;

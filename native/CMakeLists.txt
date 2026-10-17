@@ -46,7 +46,8 @@ if(OPENSPEAK_LDC)
     add_library(openspeak_rtc STATIC
         common/rtc/RtcSession.cpp common/rtc/RtcSession.h
         common/rtc/SdpFilter.cpp common/rtc/SdpFilter.h
-        common/rtc/RtpStatsHandler.cpp common/rtc/RtpStatsHandler.h)
+        common/rtc/RtpStatsHandler.cpp common/rtc/RtpStatsHandler.h
+        common/rtc/RtpRecovery.cpp common/rtc/RtpRecovery.h)
     target_include_directories(openspeak_rtc PUBLIC common/rtc)
     target_link_libraries(openspeak_rtc PUBLIC openspeak_common Qt6::Core ${OPENSPEAK_LDC})
     if(WIN32)
@@ -105,6 +106,11 @@ if(OPENSPEAK_BUILD_TESTS)
     qt_add_executable(tst_virtualserver tests/tst_virtualserver.cpp)
     target_link_libraries(tst_virtualserver PRIVATE openspeak_server_core Qt6::Test)
     add_test(NAME tst_virtualserver COMMAND tst_virtualserver)
+    if(OPENSPEAK_LDC)
+        qt_add_executable(tst_rtprecovery tests/tst_rtprecovery.cpp)
+        target_link_libraries(tst_rtprecovery PRIVATE openspeak_rtc Qt6::Test)
+        add_test(NAME tst_rtprecovery COMMAND tst_rtprecovery)
+    endif()
     if(OPENSPEAK_BUILD_CLIENT)
         add_subdirectory(tests/client)
         add_test(NAME tst_windowthumbnail COMMAND tst_windowthumbnail)

@@ -1,4 +1,5 @@
 #include "SfuIngest.h"
+#include "RtpRecovery.h"
 #include "SdpFilter.h"
 
 #include <atomic>
@@ -123,13 +124,16 @@ void SfuIngest::onRemoteTrack(std::shared_ptr<rtc::Track> track)
     else
         return;
 
-    // A entrada percorre a cadeia do fim para o início: Tap -> sessão RTCP -> Drain.
+    // A entrada percorre a cadeia do fim para o início:
+    // recuperação (NACK) -> Tap -> sessão RTCP -> Drain.
     auto drain = std::make_shared<Drain>();
     auto session = std::make_shared<rtc::RtcpReceivingSession>(); // RR + PLI + REMB
     auto tap = std::make_shared<Tap>(m_forwarder, kind);
     track->setMediaHandler(drain);
     drain->addToChain(session);
     drain->addToChain(tap);
+    if (kind == sfu::Kind::Video) // reenvio do que se perdeu no caminho até o SFU
+        drain->addToChain(std::make_shared<RtpRecoveryHandler>(RtpRecoveryBuffer::Mode::PassThrough));
     if (kind == sfu::Kind::Video) {
         m_forwarder->setIngestVideoTrack(track);
         auto forwarder = m_forwarder;

@@ -5,7 +5,7 @@
 #   .\package.ps1 -Portable      # também ZIP e exe portáteis das edições geradas
 #   .\package.ps1 -SkipBuild
 param(
-    [string]$Version = '1.0.11',
+    [string]$Version = '1.0.12',
     [switch]$SkipBuild,
     [switch]$Full,
     [switch]$Portable,

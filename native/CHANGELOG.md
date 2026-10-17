@@ -1,3 +1,14 @@
+# OpenSpeak 1.0.12 — imagem sem pixels corrompidos quando a rede oscila
+
+- Quando um pacote de vídeo se perde no caminho, o app agora **pede de novo
+  só o pedaço que faltou**. Na maioria das vezes ele chega a tempo e você nem
+  percebe a perda.
+- Se o pedaço não chegar a tempo, o quadro quebrado **não é mostrado**: a
+  imagem segura o último quadro bom por um instante e volta limpa no próximo
+  quadro completo, em vez de mostrar blocos de pixels fora do lugar.
+- No modo **Servidor** (SFU), o servidor também pede de volta o que se perdeu
+  entre quem transmite e o servidor.
+
 # OpenSpeak 1.0.11 — bot do Discord e janela mais fácil de usar
 
 - **Bot do Discord**: o servidor pode avisar no Discord quem está ao vivo e

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { H264Depacketizer, avcCodecString, splitBatch } from '../public/js/activity/rtpH264.js';
+import { H264Depacketizer, RtpReorder, avcCodecString, splitBatch } from '../public/js/activity/rtpH264.js';
 
 function rtp(seq, timestamp, payload, marker = false) {
   const p = new Uint8Array(12 + payload.length);
@@ -79,4 +79,53 @@ test('pacote só de padding consome seq sem contar como perda', () => {
   d.push(rtp(3, 200, [0x41, 2], true));
   assert.equal(losses.length, 0);
   assert.equal(frames.length, 2);
+});
+
+function reorder(maxWaitMs = 250) {
+  const out = [];
+  const r = new RtpReorder({ onPacket: p => out.push((p[2] << 8) | p[3]), maxWaitMs });
+  return { r, out };
+}
+
+test('RtpReorder entrega o reenvio atrasado no lugar certo', () => {
+  const { r, out } = reorder();
+  r.push(rtp(1, 100, [0x41]), 0);
+  r.push(rtp(3, 100, [0x41]), 10); // 2 perdido, reenvio a caminho
+  r.push(rtp(4, 100, [0x41]), 20);
+  assert.deepEqual(out, [1]);
+  r.push(rtp(2, 100, [0x41]), 80);
+  assert.deepEqual(out, [1, 2, 3, 4]);
+});
+
+test('RtpReorder desiste da lacuna depois do prazo', () => {
+  const { r, out } = reorder(250);
+  r.push(rtp(1, 100, [0x41]), 0);
+  r.push(rtp(3, 100, [0x41]), 10);
+  r.poll(200);
+  assert.deepEqual(out, [1]);
+  r.poll(260);
+  assert.deepEqual(out, [1, 3]);
+  r.push(rtp(2, 100, [0x41]), 300); // tarde demais: descartado
+  r.push(rtp(4, 100, [0x41]), 310);
+  assert.deepEqual(out, [1, 3, 4]);
+});
+
+test('RtpReorder atravessa a volta do seq e ignora duplicados', () => {
+  const { r, out } = reorder();
+  r.push(rtp(65534, 100, [0x41]), 0);
+  r.push(rtp(0, 100, [0x41]), 1);
+  r.push(rtp(65535, 100, [0x41]), 2);
+  r.push(rtp(65535, 100, [0x41]), 3);
+  r.push(rtp(1, 100, [0x41]), 4);
+  assert.deepEqual(out, [65534, 65535, 0, 1]);
+});
+
+test('reenvio a tempo evita a perda no depacketizador', () => {
+  const { d, frames, losses } = collect();
+  const r = new RtpReorder({ onPacket: p => d.push(p) });
+  r.push(rtp(1, 100, [0x65, 1], true), 0);
+  r.push(rtp(3, 200, [0x41, 3], true), 10);
+  r.push(rtp(2, 150, [0x41, 2], true), 60);
+  assert.equal(losses.length, 0);
+  assert.equal(frames.length, 3);
 });

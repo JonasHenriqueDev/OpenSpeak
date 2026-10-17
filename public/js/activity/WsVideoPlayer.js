@@ -3,11 +3,12 @@
 // do buffer de áudio, para a imagem não ficar adiantada em relação ao som) e,
 // se a fila do decodificador crescer, descarta até o próximo keyframe.
 
-import { H264Depacketizer, MediaKind, avcCodecString, rtpClock, splitBatch } from './rtpH264.js';
+import { H264Depacketizer, MediaKind, RtpReorder, avcCodecString, rtpClock, splitBatch } from './rtpH264.js';
 
 const MAX_DECODE_QUEUE = 8;
 const MAX_PRESENT_QUEUE = 30;
 const KEYFRAME_REQUEST_INTERVAL_MS = 1000;
+const REORDER_POLL_MS = 20;
 
 export class WsVideoPlayer {
   /**
@@ -37,6 +38,9 @@ export class WsVideoPlayer {
       onFrame: frame => this.#decode(frame),
       onLoss: () => { this.stats.losses++; this.#requestKeyFrame(); },
     });
+    // Espera o reenvio de um pacote perdido antes de dar o quadro por perdido.
+    this.reorder = new RtpReorder({ onPacket: packet => this.depacketizer.push(packet) });
+    this.reorderTimer = setInterval(() => this.reorder.poll(performance.now()), REORDER_POLL_MS);
   }
 
   #window;
@@ -50,7 +54,7 @@ export class WsVideoPlayer {
     this.stats.bytes += buffer.byteLength;
     this.#window.bytes += buffer.byteLength;
     for (const { kind, packet } of splitBatch(buffer)) {
-      if (kind === MediaKind.VIDEO) this.depacketizer.push(packet);
+      if (kind === MediaKind.VIDEO) this.reorder.push(packet, performance.now());
       else if (kind === MediaKind.AUDIO) this.onAudio(packet);
     }
   }
@@ -154,6 +158,7 @@ export class WsVideoPlayer {
 
   dispose() {
     cancelAnimationFrame(this.raf);
+    clearInterval(this.reorderTimer);
     for (const { frame } of this.present) frame.close();
     this.present = [];
     if (this.decoder && this.decoder.state !== 'closed') this.decoder.close();

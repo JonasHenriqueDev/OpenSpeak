@@ -35,6 +35,80 @@ export function parseRtp(p) {
   };
 }
 
+/**
+ * Reordena o RTP por seq antes do depacketizador. O relay pede de volta ao
+ * transmissor o que se perdeu e repassa o reenvio atrasado; aqui uma lacuna
+ * segura os pacotes seguintes por até `maxWaitMs` à espera dele. Vencido o
+ * prazo, segue em frente e o depacketizador trata a lacuna como perda.
+ */
+export class RtpReorder {
+  static MAX_HELD = 1000;
+
+  constructor({ onPacket, maxWaitMs = 250 }) {
+    this.onPacket = onPacket;
+    this.maxWaitMs = maxWaitMs;
+    this.next = null;
+    this.held = new Map(); // seq -> { packet, at }
+  }
+
+  push(packet, now) {
+    if (packet.length < 12) return;
+    const seq = (packet[2] << 8) | packet[3];
+    if (this.next === null) this.next = seq;
+    const ahead = (seq - this.next) & 0xffff;
+    if (ahead >= 0x8000) return; // atrasado demais ou duplicado
+    if (ahead > RtpReorder.MAX_HELD) { // salto grande: o transmissor recomeçou
+      this.#releaseAll();
+      this.next = seq;
+    }
+    if (seq !== this.next) {
+      if (!this.held.has(seq)) this.held.set(seq, { packet, at: now });
+      if (this.held.size > RtpReorder.MAX_HELD) this.#skip();
+      return;
+    }
+    this.#deliver(packet);
+    this.#drain();
+  }
+
+  /** Aplica o prazo da lacuna; chamar periodicamente. */
+  poll(now) {
+    while (this.held.size) {
+      let oldest = Infinity;
+      for (const { at } of this.held.values()) oldest = Math.min(oldest, at);
+      if (now - oldest < this.maxWaitMs) return;
+      this.#skip();
+    }
+  }
+
+  /** Desiste da lacuna atual: pula até o próximo pacote guardado. */
+  #skip() {
+    let best = null, bestAhead = Infinity;
+    for (const seq of this.held.keys()) {
+      const ahead = (seq - this.next) & 0xffff;
+      if (ahead < bestAhead) { bestAhead = ahead; best = seq; }
+    }
+    if (best === null) return;
+    this.next = best;
+    this.#drain();
+  }
+
+  #releaseAll() {
+    while (this.held.size) this.#skip();
+  }
+
+  #deliver(packet) {
+    this.next = (this.next + 1) & 0xffff;
+    this.onPacket(packet);
+  }
+
+  #drain() {
+    for (let h; (h = this.held.get(this.next));) {
+      this.held.delete(this.next);
+      this.#deliver(h.packet);
+    }
+  }
+}
+
 const START_CODE = new Uint8Array([0, 0, 0, 1]);
 const NAL = Object.freeze({ IDR: 5, SPS: 7, PPS: 8, STAP_A: 24, FU_A: 28 });
 

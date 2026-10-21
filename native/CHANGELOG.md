@@ -1,3 +1,14 @@
+# OpenSpeak 1.0.14 — quedas de internet pausam em vez de desconectar
+
+- Se a sua internet cair ou parar de responder por alguns segundos, você
+  **não sai mais da sala**: o app reconecta sozinho ("Reconectando…") e volta
+  de onde parou, como no Discord.
+- A sua transmissão **não acaba**: para quem assiste ela aparece **pausada**
+  enquanto você está fora e volta sozinha quando a conexão retorna.
+- O app percebe uma conexão morta em segundos, em vez de ficar travado
+  esperando.
+- Se a queda passar de 90 segundos, você sai da sala como antes.
+
 # OpenSpeak 1.0.13 — transmissão de tela sem o áudio do Discord por padrão
 
 - A opção **"Sem áudio do Discord"** agora vem **ligada por padrão** ao

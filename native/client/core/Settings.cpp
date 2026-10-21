@@ -61,6 +61,7 @@ QVariantMap Settings::lastStreamingConfig() const
     def("viewerLimit", 0);
     def("audio", true);
     def("announce", true); // "Mostrar ao vivo no bot do Discord"
+    def("excludeDiscord", true); // "Sem áudio do Discord" ligado por padrão
     def("width", p->width);
     def("height", p->height);
     def("fps", p->fps);

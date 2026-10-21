@@ -1,3 +1,12 @@
+# OpenSpeak 1.0.13 — transmissão de tela sem o áudio do Discord por padrão
+
+- A opção **"Sem áudio do Discord"** agora vem **ligada por padrão** ao
+  transmitir a tela: vozes e sons do Discord não vão para quem assiste.
+  Quem já tinha desligado a opção antes continua com a escolha salva.
+- Enquanto ela estiver ativa, as transmissões que você assiste ficam sem som
+  durante a sua transmissão, para o áudio delas não vazar para a sua.
+  Desligue a opção na tela de transmissão se quiser ouvir.
+
 # OpenSpeak 1.0.12 — imagem sem pixels corrompidos quando a rede oscila
 
 - Quando um pacote de vídeo se perde no caminho, o app agora **pede de novo

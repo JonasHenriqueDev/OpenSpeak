@@ -3,6 +3,7 @@
 
 #include "AudioCapture.h"
 #include "AudioCodec.h"
+#include "Settings.h"
 #include "Layout.h"
 #include "SdpFilter.h"
 #include "StreamStats.h"
@@ -42,6 +43,17 @@ private slots:
         // Duas instâncias independentes (estável + PTB): a de menor PID.
         QCOMPARE(AudioCapture::rootProcess({{800, 1}, {810, 800}, {700, 2}}), 700u);
         QCOMPARE(AudioCapture::rootProcess({}), 0u);
+    }
+
+    void excludesDiscordAudioByDefault()
+    {
+        Settings settings(QStringLiteral("exclude-discord-default"), true);
+        settings.setLastStreamingConfig({});
+        QCOMPARE(settings.lastStreamingConfig().value("excludeDiscord"), QVariant(true));
+        // Quem desligou a opção continua com a escolha salva.
+        settings.setLastStreamingConfig({{"excludeDiscord", false}});
+        QCOMPARE(settings.lastStreamingConfig().value("excludeDiscord"), QVariant(false));
+        settings.setLastStreamingConfig({});
     }
 
     void excludingDiscordReportsWhatIsExcluded()

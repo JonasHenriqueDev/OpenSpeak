@@ -43,7 +43,12 @@ public:
 
 private:
     void onNewWebSocket();
-    void onMessage(int clid, const QString &text);
+    void onMessage(QWebSocket *ws, const QString &text);
+    void onSocketClosed(QWebSocket *ws);
+    /// `login` com resumeToken: o socket novo assume a sessão antiga.
+    void resumeSession(QWebSocket *ws, int tempClid, const QJsonObject &msg);
+    /// Remove o cliente de vez (logout, sessão sem retomada ou espera esgotada).
+    void dropClient(int clid);
     void sendTo(int clid, const QJsonObject &message);
     void heartbeat();
     void writeMonitoringSnapshot();
@@ -58,7 +63,16 @@ private:
     VirtualServer m_server;
     DiscordAuth m_discord;
     QHash<int, QWebSocket *> m_sockets;
+    QHash<QWebSocket *, int> m_clids; // inverso de m_sockets (a retomada troca o socket de um clid)
     QHash<QWebSocket *, bool> m_alive;
+    // Sessões com a conexão caída esperando a retomada (SessionGraceMs). As
+    // notificações ficam guardadas e vão, em ordem, antes da resposta da retomada.
+    struct Suspension {
+        qint64 since = 0;
+        QStringList backlog;
+        qint64 backlogBytes = 0;
+    };
+    QHash<int, Suspension> m_suspended;
     struct ConnectionInfo {
         QString ip, userAgent, origin;
         qint64 connectedAt = 0, lastActivityAt = 0;

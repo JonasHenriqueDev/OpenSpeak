@@ -8,6 +8,7 @@
 //                          conversa direto com os outros na tailnet
 //   - ConnectionRouter:    encaminha para a implementação ativa
 
+#include <QElapsedTimer>
 #include <QHash>
 #include <QJsonObject>
 #include <QObject>
@@ -76,7 +77,8 @@ private:
     QJsonObject m_loginArgs;
     int m_resumeClid = 0, m_retryMs = 1000;
     QUrl m_url;
-    QTimer m_retry, m_heartbeat;
+    QTimer m_retry, m_heartbeat, m_liveness;
+    QElapsedTimer m_sincePong;
 };
 
 /// Encaminha para o backend ativo (o motor guarda um ponteiro estável).

@@ -182,6 +182,17 @@ void SfuRelay::signaling(const QString &streamId, int fromClid, const QJsonObjec
         ws->second->requestKeyFrame();
 }
 
+void SfuRelay::resumePeer(int clid)
+{
+    for (auto &[id, s] : m_streams) {
+        if (s.ownerClid == clid)
+            s.ingest->restart();
+        auto viewer = s.viewers.find(clid);
+        if (viewer != s.viewers.end())
+            viewer->second->restart();
+    }
+}
+
 QJsonArray SfuRelay::monitoringSessions()
 {
     QJsonArray sessions;

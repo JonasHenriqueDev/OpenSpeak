@@ -33,6 +33,7 @@ inline const QString AlreadyJoined = QStringLiteral("already_joined");
 inline const QString NoPendingRequest = QStringLiteral("no_pending_request");
 inline const QString PayloadTooLarge = QStringLiteral("payload_too_large");
 inline const QString Internal = QStringLiteral("internal_error");
+inline const QString SessionExpired = QStringLiteral("session_expired");
 } // namespace rc
 
 // Extensões anunciadas em capabilityExtensions (TS: STREAM_P2P / STREAM_SFU).
@@ -45,5 +46,7 @@ constexpr int RelayClid = 0;
 constexpr int MaxStreamsPerClient = 3;
 constexpr int MaxThumbnailBytes = 256 * 1024;
 constexpr int MaxSignalingBytes = 64 * 1024;
+/// Quanto uma sessão `resumable` espera a reconexão depois que a conexão cai.
+constexpr int SessionGraceMs = 90'000;
 
 } // namespace openspeak

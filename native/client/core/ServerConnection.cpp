@@ -7,6 +7,10 @@ namespace openspeak {
 
 namespace {
 constexpr int CommandTimeoutMs = 15'000;
+// Ping próprio: sem pong nesse tempo a conexão está morta (a rede some sem
+// fechar o TCP). Derrubar e retomar a sessão é mais rápido que esperar o TCP.
+constexpr int LivenessPingMs = 5'000;
+constexpr int LivenessTimeoutMs = 15'000;
 }
 
 // ===================================================== WebSocketConnection
@@ -16,7 +20,9 @@ WebSocketConnection::WebSocketConnection(QObject *parent) : ServerConnection(par
     m_ws.setMaxAllowedIncomingMessageSize(4 * 1024 * 1024);
     connect(&m_ws, &QWebSocket::connected, this, [this] {
         m_wasOpen = true;
-        if (m_cloud && !m_resumeToken.isEmpty()) {
+        m_sincePong.start();
+        m_liveness.start();
+        if (!m_resumeToken.isEmpty()) {
             auto args = m_loginArgs;
             args.insert("resumeClid", m_resumeClid);
             args.insert("resumeToken", m_resumeToken);
@@ -48,10 +54,13 @@ WebSocketConnection::WebSocketConnection(QObject *parent) : ServerConnection(par
     });
     connect(&m_ws, &QWebSocket::textMessageReceived, this, &WebSocketConnection::onText);
     connect(&m_ws, &QWebSocket::disconnected, this, [this] {
+        m_liveness.stop();
         failAll(QStringLiteral("disconnected"));
         const QString reason = m_wasOpen ? m_ws.closeReason() : m_ws.errorString();
         m_wasOpen = false;
-        if (m_cloud && !m_stopped && !m_resumeToken.isEmpty()) {
+        // Com sessão retomável (sala web ou servidor nativo) a queda não tira
+        // ninguém da sala: reconecta e retoma o mesmo clid, mídia incluída.
+        if (!m_stopped && !m_resumeToken.isEmpty()) {
             emit notification("cloudconnection", {{"reconnecting", true}});
             m_retry.start(m_retryMs);
             m_retryMs = qMin(m_retryMs * 2, 10'000);
@@ -65,8 +74,19 @@ WebSocketConnection::WebSocketConnection(QObject *parent) : ServerConnection(par
     connect(&m_heartbeat, &QTimer::timeout, this, [this] {
         if (isConnected() && !m_resumeToken.isEmpty()) sendCommand("sync", {}, [this](const CommandResult &r) {
             if (r.ok()) emit notification("cloudview", r.data);
-            else m_ws.close();
+            else m_ws.abort();
         });
+    });
+    m_liveness.setInterval(LivenessPingMs);
+    connect(&m_ws, &QWebSocket::pong, this, [this] { m_sincePong.start(); });
+    connect(&m_liveness, &QTimer::timeout, this, [this] {
+        if (!isConnected())
+            return;
+        if (m_sincePong.elapsed() > LivenessTimeoutMs) {
+            m_ws.abort();
+            return;
+        }
+        m_ws.ping();
     });
 }
 
@@ -78,8 +98,8 @@ void WebSocketConnection::open(const QUrl &url) {
 }
 
 void WebSocketConnection::close() {
-    m_stopped = true; m_retry.stop(); m_heartbeat.stop();
-    if (m_cloud && isConnected() && !m_resumeToken.isEmpty()) {
+    m_stopped = true; m_retry.stop(); m_heartbeat.stop(); m_liveness.stop();
+    if (isConnected() && !m_resumeToken.isEmpty()) {
         const QJsonObject msg{{"type", "cmd"}, {"id", m_nextId++}, {"cmd", "logout"}, {"args", QJsonObject{}}};
         m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
         m_ws.flush();
@@ -112,14 +132,19 @@ void WebSocketConnection::sendCommand(const QString &cmd, const QJsonObject &arg
     if (cmd == "login") {
         outgoing["clientInfo"] = QJsonObject{{"name", "OpenSpeak"}, {"version", QStringLiteral(OPENSPEAK_VERSION)},
                                              {"kind", "native"}, {"platform", QSysInfo::prettyProductName()}};
+        outgoing["resumable"] = true;
     }
-    if (m_cloud && cmd == "login") {
+    // Servidor que devolve resumeToken (sala web ou servidor nativo novo) permite
+    // retomar a sessão depois de uma queda.
+    if (cmd == "login" && !args.contains("resumeToken")) {
         m_loginArgs = outgoing;
         callback = [this, next = std::move(callback)](const CommandResult &r) {
             if (r.ok()) {
                 m_resumeToken = r.data.value("resumeToken").toString();
                 m_resumeClid = r.data.value("clid").toInt();
-                m_heartbeat.start();
+                // A sala web precisa do sync para manter a sessão (lease).
+                if (m_cloud && !m_resumeToken.isEmpty())
+                    m_heartbeat.start();
             }
             if (next) next(r);
         };

@@ -43,6 +43,7 @@ public:
     void setBinarySender(BinaryFn send) override;
     void removeViewer(const QString &streamId, int clid) override;
     void signaling(const QString &streamId, int fromClid, const QJsonObject &payload) override;
+    void resumePeer(int clid) override;
     QJsonArray monitoringSessions() override;
 
     /// Piso do bitrate pedido ao transmissor: um espectador ruim não derruba

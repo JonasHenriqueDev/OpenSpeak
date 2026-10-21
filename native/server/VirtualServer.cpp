@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QJsonDocument>
+#include <QRandomGenerator>
 #include <QRegularExpression>
 
 #include <algorithm>
@@ -34,6 +35,14 @@ int clampInt(const QJsonValue &v, int min, int max, int fallback)
 bool isOneOf(int v, std::initializer_list<int> values) { return std::find(values.begin(), values.end(), v) != values.end(); }
 
 qint64 nowMs() { return QDateTime::currentMSecsSinceEpoch(); }
+
+QString newResumeToken()
+{
+    quint32 words[6];
+    QRandomGenerator::system()->fillRange(words);
+    return QString::fromLatin1(QByteArray(reinterpret_cast<const char *>(words), sizeof words)
+                                   .toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
+}
 
 } // namespace
 
@@ -88,6 +97,8 @@ const QHash<QString, VirtualServer::Handler> &VirtualServer::handlers()
 {
     static const QHash<QString, Handler> map = {
         {QStringLiteral("login"), &VirtualServer::cmdLogin},
+        {QStringLiteral("sync"), &VirtualServer::cmdSync},
+        {QStringLiteral("heartbeat"), &VirtualServer::cmdHeartbeat},
         {QStringLiteral("clientmove"), &VirtualServer::cmdClientMove},
         {QStringLiteral("clientupdate"), &VirtualServer::cmdClientUpdate},
         {QStringLiteral("setupstream"), &VirtualServer::cmdSetupStream},
@@ -111,7 +122,8 @@ QJsonObject VirtualServer::monitoringSnapshot() const
     QJsonArray clients, channels, streams;
     for (const auto &[id, c] : m_clients)
         if (c.loggedIn)
-            clients.append(QJsonObject{{"clid", id}, {"nickname", c.nickname}, {"cid", c.cid}, {"clientInfo", c.clientInfo}});
+            clients.append(QJsonObject{{"clid", id}, {"nickname", c.nickname}, {"cid", c.cid}, {"clientInfo", c.clientInfo},
+                                       {"away", c.suspended}});
     for (const auto &[id, ch] : m_channels)
         channels.append(QJsonObject{{"cid", id}, {"name", ch.name}});
     int viewers = 0;
@@ -143,7 +155,8 @@ QJsonObject VirtualServer::liveSnapshot() const
             {"id", id}, {"name", s.name},
             {"owner", owner != m_clients.end() ? owner->second.nickname : QString()},
             {"channel", channel != m_channels.end() ? channel->second.name : QString()},
-            {"app", s.app}, {"type", s.type}, {"access", s.access}, {"mode", s.mode}, {"paused", s.paused},
+            {"app", s.app}, {"type", s.type}, {"access", s.access}, {"mode", s.mode},
+            {"paused", s.paused || (owner != m_clients.end() && owner->second.suspended)},
             {"audio", s.audio}, {"viewers", int(s.viewers.size())}, {"started", double(s.created)},
             {"quality", QJsonObject{{"width", s.quality.width}, {"height", s.quality.height}, {"fps", s.quality.fps}}},
         });
@@ -193,6 +206,35 @@ void VirtualServer::disconnect(int clid)
         broadcast(QStringLiteral("notifyclientleftview"), {{"clid", clid}});
 }
 
+bool VirtualServer::suspend(int clid)
+{
+    auto it = m_clients.find(clid);
+    if (it == m_clients.end() || !it->second.loggedIn || it->second.resumeToken.isEmpty())
+        return false;
+    Client &client = it->second;
+    if (!client.suspended) {
+        client.suspended = true;
+        broadcastPresence(client);
+    }
+    return true;
+}
+
+QJsonObject VirtualServer::resume(int clid, const QString &token)
+{
+    auto it = m_clients.find(clid);
+    if (it == m_clients.end() || it->second.resumeToken.isEmpty() || token.isEmpty() || it->second.resumeToken != token)
+        fail(rc::SessionExpired, QStringLiteral("A sessão expirou. Conecte novamente."));
+    Client &client = it->second;
+    if (client.suspended) {
+        client.suspended = false;
+        broadcastPresence(client);
+    }
+    QJsonObject data = view(client);
+    data["resumed"] = true;
+    data["resumeToken"] = client.resumeToken;
+    return data;
+}
+
 QJsonObject VirtualServer::handle(int clid, const QString &cmd, const QJsonObject &args)
 {
     auto it = m_clients.find(clid);
@@ -225,8 +267,21 @@ QJsonObject VirtualServer::cmdLogin(Client &client, const QJsonObject &args)
         const auto value = cleanString(info.value(key), 80);
         if (!value.isEmpty()) client.clientInfo[key] = value;
     }
+    if (args.value("resumable").toBool())
+        client.resumeToken = newResumeToken();
     broadcast(QStringLiteral("notifycliententerview"), {{"client", publicClient(client)}}, client.clid);
+    QJsonObject data = view(client);
+    if (!client.resumeToken.isEmpty())
+        data["resumeToken"] = client.resumeToken;
+    return data;
+}
 
+QJsonObject VirtualServer::cmdSync(Client &client, const QJsonObject &) { return view(client); }
+
+QJsonObject VirtualServer::cmdHeartbeat(Client &, const QJsonObject &) { return {}; }
+
+QJsonObject VirtualServer::view(const Client &client) const
+{
     QJsonArray channels, clients, streams;
     QJsonArray caps{CapStreamP2P};
     if (m_relay)
@@ -611,10 +666,18 @@ void VirtualServer::notifyAttendees(const Stream &s)
     broadcast(QStringLiteral("notifystreamupdated"), {{"stream", publicStream(s)}});
 }
 
+void VirtualServer::broadcastPresence(const Client &c)
+{
+    broadcast(QStringLiteral("notifyclientupdated"), {{"client", publicClient(c)}});
+    for (const auto &[id, s] : m_streams)
+        if (s.ownerClid == c.clid)
+            broadcast(QStringLiteral("notifystreamupdated"), {{"stream", publicStream(s)}});
+}
+
 QJsonObject VirtualServer::publicClient(const Client &c) const
 {
     return {{"clid", c.clid}, {"nickname", c.nickname}, {"uid", c.uid}, {"cid", c.cid},
-            {"inputMuted", false}, {"outputMuted", false},
+            {"inputMuted", false}, {"outputMuted", false}, {"away", c.suspended},
             {"pingMs", c.pingMs < 0 ? QJsonValue(QJsonValue::Null) : QJsonValue(double(c.pingMs))},
             {"pingUpdatedAt", double(c.pingUpdatedAt)}};
 }
@@ -622,6 +685,9 @@ QJsonObject VirtualServer::publicClient(const Client &c) const
 QJsonObject VirtualServer::publicStream(const Stream &s) const
 {
     const bool isPublic = s.access == int(StreamAccess::Public);
+    // Dono com a conexão caída (aguardando retomada): para todos, o stream está pausado.
+    const auto owner = m_clients.find(s.ownerClid);
+    const bool paused = s.paused || (owner != m_clients.end() && owner->second.suspended);
     return {
         {"streamIdentifier", s.id},
         {"ownerClid", s.ownerClid},
@@ -636,7 +702,7 @@ QJsonObject VirtualServer::publicStream(const Stream &s) const
         {"announce", s.announce},
         {"app", s.app},
         {"quality", QJsonObject{{"width", s.quality.width}, {"height", s.quality.height}, {"fps", s.quality.fps}}},
-        {"paused", s.paused},
+        {"paused", paused},
         {"created", double(s.created)},
         {"viewerCount", int(s.viewers.size())},
         {"thumbnail", isPublic && !s.thumbnail.isEmpty() ? QJsonValue(s.thumbnail) : QJsonValue(QJsonValue::Null)},

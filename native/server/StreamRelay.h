@@ -44,6 +44,9 @@ public:
     virtual void removeViewer(const QString &streamId, int clid) = 0;
     /// `streamsignaling` com clid 0 vindo de `fromClid` (já validado).
     virtual void signaling(const QString &streamId, int fromClid, const QJsonObject &payload) = 0;
+    /// A sinalização de `clid` voltou depois de uma queda: renegocia já as
+    /// sessões dele que perderam a mídia.
+    virtual void resumePeer(int) {}
     virtual QJsonArray monitoringSessions() { return {}; }
 };
 

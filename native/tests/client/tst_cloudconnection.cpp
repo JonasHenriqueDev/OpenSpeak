@@ -8,7 +8,14 @@ using namespace openspeak;
 class TestCloudConnection : public QObject {
     Q_OBJECT
 private slots:
+    // Sala web (cloud) e servidor nativo retomam do mesmo jeito.
+    void resumesAndStopsOnClose_data() {
+        QTest::addColumn<bool>("cloud");
+        QTest::newRow("cloud") << true;
+        QTest::newRow("nativo") << false;
+    }
     void resumesAndStopsOnClose() {
+        QFETCH(bool, cloud);
         QWebSocketServer server("QA", QWebSocketServer::NonSecureMode);
         QVERIFY(server.listen(QHostAddress::LocalHost, 0));
         QPointer<QWebSocket> socket;
@@ -30,7 +37,7 @@ private slots:
             });
         });
         WebSocketConnection client;
-        client.setCloudMode(true);
+        client.setCloudMode(cloud);
         QSignalSpy connected(&client, &ServerConnection::connected);
         QSignalSpy notifications(&client, &ServerConnection::notification);
         client.open(QUrl(QString("ws://127.0.0.1:%1").arg(server.serverPort())));

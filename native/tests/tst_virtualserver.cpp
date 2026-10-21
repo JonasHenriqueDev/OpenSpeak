@@ -447,6 +447,52 @@ private slots:
         QCOMPARE(notes(viewer, "notifystreamstopped")[0].value("streamIdentifier").toString(), sid);
         QCOMPARE(relay.calls.last(), QStringLiteral("close %1").arg(sid));
     }
+
+    void suspendKeepsResumableClientAndPausesStreams()
+    {
+        const int host = server->connect();
+        const auto data = server->handle(host, "login", {{"nickname", "host"}, {"uid", "uid-host"}, {"resumable", true}});
+        const QString token = data.value("resumeToken").toString();
+        QVERIFY(token.size() >= 32);
+        const int viewer = login("viewer");
+        QVERIFY(!server->suspend(viewer)); // sem `resumable`: desconecta como antes
+        const int other = login("other");
+        const QString sid = setup(host);
+        inbox.clear();
+
+        QVERIFY(server->suspend(host));
+        QCOMPARE(server->streamCount(), 1);
+        QVERIFY(notes(other, "notifystreamupdated").last().value("stream").toObject().value("paused").toBool());
+        QVERIFY(notes(other, "notifyclientupdated").last().value("client").toObject().value("away").toBool());
+        QVERIFY(notes(other, "notifyclientleftview").isEmpty());
+
+        try {
+            server->resume(host, "forjado");
+            QFAIL("token falso aceito");
+        } catch (const CommandError &e) {
+            QCOMPARE(e.code, rc::SessionExpired);
+        }
+        const auto view = server->resume(host, token);
+        QCOMPARE(view.value("clid").toInt(), host);
+        QVERIFY(view.value("resumed").toBool());
+        QCOMPARE(view.value("streams").toArray().size(), 1);
+        QVERIFY(!view.value("streams").toArray()[0].toObject().value("paused").toBool());
+        QVERIFY(!notes(other, "notifystreamupdated").last().value("stream").toObject().value("paused").toBool());
+        QCOMPARE(server->handle(host, "sync", {}).value("clid").toInt(), host);
+        QCOMPARE(server->handle(host, "heartbeat", {}), QJsonObject{});
+
+        // A espera acabou (disconnect): agora sim sai e o stream acaba.
+        server->suspend(host);
+        server->disconnect(host);
+        QCOMPARE(server->streamCount(), 0);
+        QCOMPARE(notes(other, "notifystreamstopped").last().value("streamIdentifier").toString(), sid);
+        try {
+            server->resume(host, token);
+            QFAIL("sessão removida retomada");
+        } catch (const CommandError &e) {
+            QCOMPARE(e.code, rc::SessionExpired);
+        }
+    }
 };
 
 QTEST_GUILESS_MAIN(TestVirtualServer)

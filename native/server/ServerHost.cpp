@@ -28,6 +28,7 @@ namespace openspeak {
 
 namespace {
 constexpr qint64 MaxMessageBytes = 512 * 1024;
+constexpr qint64 MaxBacklogBytes = 2 * 1024 * 1024;
 }
 
 ServerHost::ServerHost(Options options, QObject *parent)
@@ -258,6 +259,7 @@ void ServerHost::onNewWebSocket()
         ws->setMaxAllowedIncomingMessageSize(MaxMessageBytes);
         const int clid = m_server.connect();
         m_sockets.insert(clid, ws);
+        m_clids.insert(ws, clid);
         m_alive.insert(ws, true);
         ConnectionInfo info;
         info.connectedAt = info.lastActivityAt = QDateTime::currentMSecsSinceEpoch();
@@ -272,30 +274,59 @@ void ServerHost::onNewWebSocket()
         info.userAgent = QString::fromUtf8(request.rawHeader("User-Agent")).left(512);
         info.origin = QString::fromUtf8(request.rawHeader("Origin")).left(256);
         m_connectionInfo.insert(clid, info);
-        qCInfo(lcServer).noquote() << "conexão clid=" << clid << "de" << ws->peerAddress().toString();
+        qCInfo(lcServer).noquote() << "conexão clid=" << clid << "de" << info.ip;
 
-        connect(ws, &QWebSocket::textMessageReceived, this, [this, clid](const QString &text) { onMessage(clid, text); });
-        connect(ws, &QWebSocket::pong, this, [this, ws, clid](quint64 elapsedMs, const QByteArray &) {
+        connect(ws, &QWebSocket::textMessageReceived, this, [this, ws](const QString &text) { onMessage(ws, text); });
+        connect(ws, &QWebSocket::pong, this, [this, ws](quint64 elapsedMs, const QByteArray &) {
+            const int clid = m_clids.value(ws);
+            if (!clid)
+                return;
             m_alive[ws] = true;
             auto &info = m_connectionInfo[clid];
             info.pingRttMs = qint64(elapsedMs);
             info.lastActivityAt = QDateTime::currentMSecsSinceEpoch();
             m_server.setClientLatency(clid, info.pingRttMs);
         });
-        connect(ws, &QWebSocket::disconnected, this, [this, ws, clid] {
-            m_sockets.remove(clid);
-            m_alive.remove(ws);
-            m_connectionInfo.remove(clid);
-            m_server.disconnect(clid);
-            ws->deleteLater();
-            qCInfo(lcServer) << "desconectado clid=" << clid;
-        });
+        connect(ws, &QWebSocket::disconnected, this, [this, ws] { onSocketClosed(ws); });
         ws->ping();
     }
 }
 
-void ServerHost::onMessage(int clid, const QString &text)
+void ServerHost::onSocketClosed(QWebSocket *ws)
 {
+    ws->deleteLater();
+    m_alive.remove(ws);
+    const int clid = m_clids.take(ws);
+    if (!clid)
+        return; // trocado por uma retomada ou já removido (logout)
+    m_sockets.remove(clid);
+    // Queda sem logout: quem sabe retomar continua na sala (streams pausados).
+    if (ws->closeReason() != QLatin1String("bye") && m_server.suspend(clid)) {
+        m_suspended.insert(clid, Suspension{QDateTime::currentMSecsSinceEpoch(), {}, 0});
+        qCInfo(lcServer) << "conexão perdida clid=" << clid << "(aguardando retomada)";
+        return;
+    }
+    dropClient(clid);
+}
+
+void ServerHost::dropClient(int clid)
+{
+    if (QWebSocket *ws = m_sockets.take(clid)) {
+        m_clids.remove(ws);
+        m_alive.remove(ws);
+        ws->close(QWebSocketProtocol::CloseCodeNormal, QStringLiteral("bye"));
+    }
+    m_suspended.remove(clid);
+    m_connectionInfo.remove(clid);
+    m_server.disconnect(clid);
+    qCInfo(lcServer) << "desconectado clid=" << clid;
+}
+
+void ServerHost::onMessage(QWebSocket *ws, const QString &text)
+{
+    const int clid = m_clids.value(ws);
+    if (!clid)
+        return;
     m_signalingRx += text.toUtf8().size();
     auto &info = m_connectionInfo[clid];
     info.rxBytes += text.toUtf8().size();
@@ -303,33 +334,107 @@ void ServerHost::onMessage(int clid, const QString &text)
     const QJsonObject msg = QJsonDocument::fromJson(text.toUtf8()).object();
     if (msg.value("type").toString() != QLatin1String("cmd") || !msg.value("cmd").isString())
         return;
+    const QString cmd = msg.value("cmd").toString();
+    if (cmd == QLatin1String("login") && msg.value("args").toObject().contains("resumeToken")) {
+        resumeSession(ws, clid, msg);
+        return;
+    }
     QJsonObject reply{{"type", "res"}, {"id", msg.value("id")}};
+    if (cmd == QLatin1String("logout")) {
+        reply["return_code"] = rc::Ok;
+        reply["data"] = QJsonObject{};
+        sendTo(clid, reply);
+        dropClient(clid);
+        return;
+    }
     try {
-        reply["data"] = m_server.handle(clid, msg.value("cmd").toString(), msg.value("args").toObject());
+        reply["data"] = m_server.handle(clid, cmd, msg.value("args").toObject());
         reply["return_code"] = rc::Ok;
     } catch (const CommandError &err) {
         reply["return_code"] = err.code;
         reply["error"] = QString::fromStdString(err.what());
     } catch (const std::exception &err) {
-        qCWarning(lcServer) << "erro em" << msg.value("cmd").toString() << err.what();
+        qCWarning(lcServer) << "erro em" << cmd << err.what();
         reply["return_code"] = rc::Internal;
         reply["error"] = QStringLiteral("erro interno");
     }
     sendTo(clid, reply);
     // Measure after login as well: native peers may still be opening when the
     // handshake ping arrives. The reply establishes the client's public view.
-    if (msg.value("cmd").toString() == QLatin1String("login") && reply.value("return_code").toString() == rc::Ok)
-        if (auto *ws = m_sockets.value(clid)) ws->ping();
+    if (cmd == QLatin1String("login") && reply.value("return_code").toString() == rc::Ok)
+        ws->ping();
+}
+
+void ServerHost::resumeSession(QWebSocket *ws, int tempClid, const QJsonObject &msg)
+{
+    const QJsonObject args = msg.value("args").toObject();
+    const int target = args.value("resumeClid").toInt();
+    QJsonObject reply{{"type", "res"}, {"id", msg.value("id")}};
+    QJsonObject data;
+    try {
+        if (target == tempClid)
+            throw CommandError(rc::SessionExpired);
+        data = m_server.resume(target, args.value("resumeToken").toString());
+    } catch (const CommandError &err) {
+        reply["return_code"] = err.code;
+        reply["error"] = QString::fromStdString(err.what());
+        sendTo(tempClid, reply);
+        return;
+    }
+    // A conexão antiga pode ainda não ter caído deste lado: a nova assume.
+    if (QWebSocket *old = m_sockets.take(target)) {
+        m_clids.remove(old);
+        m_alive.remove(old);
+        old->abort();
+    }
+    // O socket novo deixa o clid provisório (que nunca fez login) e vira o antigo.
+    m_sockets.remove(tempClid);
+    m_server.disconnect(tempClid);
+    ConnectionInfo info = m_connectionInfo.take(tempClid);
+    info.connectedAt = m_connectionInfo.value(target).connectedAt;
+    m_connectionInfo.insert(target, info);
+    m_sockets.insert(target, ws);
+    m_clids.insert(ws, target);
+    const Suspension suspension = m_suspended.take(target);
+    for (const QString &text : suspension.backlog) {
+        m_signalingTx += text.toUtf8().size();
+        ws->sendTextMessage(text);
+    }
+    reply["return_code"] = rc::Ok;
+    reply["data"] = data;
+    sendTo(target, reply);
+    qCInfo(lcServer) << "sessão retomada clid=" << target << "após"
+                     << (suspension.since ? (QDateTime::currentMSecsSinceEpoch() - suspension.since) / 1000 : 0) << "s";
+    ws->ping();
+    // Mídia que caiu junto renegocia já, sem esperar o próximo timeout.
+    if (m_relay)
+        m_relay->resumePeer(target);
 }
 
 void ServerHost::sendTo(int clid, const QJsonObject &message)
 {
-    if (QWebSocket *ws = m_sockets.value(clid)) {
-        const auto bytes = QJsonDocument(message).toJson(QJsonDocument::Compact);
-        m_signalingTx += bytes.size();
-        m_connectionInfo[clid].txBytes += bytes.size();
-        ws->sendTextMessage(QString::fromUtf8(bytes));
+    QWebSocket *ws = m_sockets.value(clid);
+    const auto suspended = ws ? m_suspended.end() : m_suspended.find(clid);
+    if (!ws && suspended == m_suspended.end())
+        return;
+    // Sinalização de mídia velha não serve na volta (a retomada renegocia) e o
+    // ping dos outros só ocupa a fila.
+    const QString cmd = message.value("cmd").toString();
+    if (!ws && (cmd == QLatin1String("notifystreamsignaling") || cmd == QLatin1String("notifyclientlatency")))
+        return;
+    const QString text = QString::fromUtf8(QJsonDocument(message).toJson(QJsonDocument::Compact));
+    if (!ws) {
+        // Fila cheia: a visão completa na resposta da retomada cobre o estado.
+        if (suspended->backlogBytes + text.size() > MaxBacklogBytes)
+            return;
+        suspended->backlogBytes += text.size();
+        suspended->backlog.append(text);
+        return;
     }
+    const auto bytes = text.toUtf8().size();
+    m_signalingTx += bytes;
+    m_connectionInfo[clid].txBytes += bytes;
+    ws->sendTextMessage(text);
 }
 
 void ServerHost::heartbeat()
@@ -338,14 +443,26 @@ void ServerHost::heartbeat()
     // Tráfego novo: no máximo um POST a cada heartbeat (15 s), só se o Mbps mudou.
     if (m_liveEnabled && m_relay && !m_liveDebounce.isActive())
         sendLiveWebhook();
-    // Derruba sockets mortos para liberar streams presos.
+    // Derruba sockets mortos; quem sabe retomar fica suspenso esperando a volta.
+    QList<QWebSocket *> dead;
     for (auto it = m_alive.begin(); it != m_alive.end(); ++it) {
         if (!it.value()) {
-            it.key()->abort();
+            dead.append(it.key());
             continue;
         }
         it.value() = false;
         it.key()->ping();
+    }
+    for (QWebSocket *ws : dead)
+        ws->abort();
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    QList<int> expired;
+    for (auto it = m_suspended.cbegin(); it != m_suspended.cend(); ++it)
+        if (now - it->since > SessionGraceMs)
+            expired.append(it.key());
+    for (const int clid : expired) {
+        qCInfo(lcServer) << "retomada não veio, clid=" << clid;
+        dropClient(clid);
     }
 }
 

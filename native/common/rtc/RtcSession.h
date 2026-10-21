@@ -43,6 +43,9 @@ public:
 
     virtual void start() = 0;
     void onSignalingMessage(const QJsonObject &payload);
+    /// A sinalização com o par voltou: se a mídia não está conectada, renegocia
+    /// já, com as tentativas de reconexão zeradas.
+    void restart();
     void close();
     void setBindAddress(const QString &address) { m_bindAddress = address; }
     void setTransport(const Transport &transport) { m_transport = transport; }

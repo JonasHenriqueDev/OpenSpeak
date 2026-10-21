@@ -298,6 +298,17 @@ void RtcSession::reconnect()
     }
 }
 
+void RtcSession::restart()
+{
+    if (m_state == State::New || m_state == State::Closed || m_state == State::Failed)
+        return;
+    if (m_state == State::Connected && m_pc && m_pc->state() == rtc::PeerConnection::State::Connected)
+        return;
+    m_disconnectTimer.stop();
+    m_reconnectAttempts = 0;
+    reconnect();
+}
+
 void RtcSession::fail(const QString &why)
 {
     if (m_state == State::Closed || m_state == State::Failed)

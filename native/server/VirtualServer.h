@@ -35,6 +35,13 @@ public:
 
     int connect();
     void disconnect(int clid);
+    /// A conexão caiu sem logout. Quem entrou com `resumable` continua na sala
+    /// ("away", os próprios streams aparecem pausados) até resume() ou
+    /// disconnect(); devolve false para os demais (desconecte já).
+    bool suspend(int clid);
+    /// Retoma a sessão com o token do login; devolve a visão atual da sala ou
+    /// lança CommandError(session_expired).
+    QJsonObject resume(int clid, const QString &token);
 
     /// Executa um comando; devolve `data` da resposta ou lança CommandError.
     QJsonObject handle(int clid, const QString &cmd, const QJsonObject &args);
@@ -64,6 +71,8 @@ private:
         QJsonObject clientInfo;
         qint64 pingMs = -1;
         qint64 pingUpdatedAt = 0;
+        QString resumeToken; // só para quem entrou com `resumable`
+        bool suspended = false;
     };
     struct Channel {
         int cid = 0;
@@ -107,6 +116,8 @@ private:
     static const QHash<QString, Handler> &handlers();
 
     QJsonObject cmdLogin(Client &, const QJsonObject &);
+    QJsonObject cmdSync(Client &, const QJsonObject &);
+    QJsonObject cmdHeartbeat(Client &, const QJsonObject &);
     QJsonObject cmdClientMove(Client &, const QJsonObject &);
     QJsonObject cmdClientUpdate(Client &, const QJsonObject &);
     QJsonObject cmdSetupStream(Client &, const QJsonObject &);
@@ -128,6 +139,9 @@ private:
     void stopStream(QString id, LeaveReason reason);
     void detachFromStreams(const Client &c, LeaveReason reason);
     void notifyAttendees(const Stream &s);
+    QJsonObject view(const Client &c) const;
+    /// Presença mudou (away): o cliente e os streams dele, que aparecem pausados.
+    void broadcastPresence(const Client &c);
     bool isSfu(const Stream &s) const { return m_relay && s.mode == int(StreamMode::SFU); }
     void onRelaySignal(const QString &id, int clid, const QJsonObject &payload);
     void onRelayFailed(const QString &id, int clid);

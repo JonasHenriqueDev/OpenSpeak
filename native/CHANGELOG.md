@@ -1,3 +1,15 @@
+# OpenSpeak 1.0.15 — volume até 500% e barra de tarefas em tela cheia
+
+- Nova opção **"Permitir aumentar o volume até 500%"** em Preferências ›
+  Streams assistidos: o controle de volume de cada stream passa a ir além de
+  100%, para transmissões com o som muito baixo. Ao arrastar, o valor aparece
+  em porcentagem.
+- Em **tela cheia**, se a barra de tarefas do Windows estiver configurada para
+  se ocultar automaticamente, ela agora **aparece ao levar o mouse até a borda**
+  da tela. Dá para desligar em Preferências › Streams assistidos.
+- A tela de **Atualizações** agora mostra as **novidades da versão** e tem um
+  atalho para ver todas.
+
 # OpenSpeak 1.0.14 — quedas de internet pausam em vez de desconectar
 
 - Se a sua internet cair ou parar de responder por alguns segundos, você

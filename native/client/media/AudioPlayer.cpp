@@ -2,6 +2,8 @@
 
 #include <QMediaDevices>
 
+#include <algorithm>
+
 namespace openspeak {
 
 AudioPlayer::AudioPlayer(QObject *parent) : QObject(parent)
@@ -33,14 +35,25 @@ void AudioPlayer::write(const QByteArray &pcm)
     const qsizetype queued = m_sink->bufferSize() - m_sink->bytesFree();
     if (queued > m_maxBuffered)
         return;
-    m_device->write(pcm);
+    if (m_volume <= 1.0) {
+        m_device->write(pcm);
+        return;
+    }
+    // Acima de 100% o QAudioSink não amplifica: aplica o ganho aqui, limitando o pico.
+    QByteArray boosted = pcm;
+    float *samples = reinterpret_cast<float *>(boosted.data());
+    const qsizetype count = boosted.size() / qsizetype(sizeof(float));
+    const float gain = float(m_volume);
+    for (qsizetype i = 0; i < count; ++i)
+        samples[i] = std::clamp(samples[i] * gain, -1.0f, 1.0f);
+    m_device->write(boosted);
 }
 
 void AudioPlayer::setVolume(double volume)
 {
-    m_volume = std::clamp(volume, 0.0, 1.0);
+    m_volume = std::clamp(volume, 0.0, kMaxVolume);
     if (m_sink)
-        m_sink->setVolume(m_volume);
+        m_sink->setVolume(std::min(m_volume, 1.0));
 }
 
 } // namespace openspeak

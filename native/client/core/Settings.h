@@ -34,6 +34,8 @@ class Settings : public QObject {
     Q_PROPERTY(bool soundEffects READ soundEffects WRITE setSoundEffects NOTIFY changed)
     Q_PROPERTY(QString soundTheme READ soundTheme WRITE setSoundTheme NOTIFY changed)
     Q_PROPERTY(int soundVolume READ soundVolume WRITE setSoundVolume NOTIFY changed)
+    Q_PROPERTY(bool volumeBoost READ volumeBoost WRITE setVolumeBoost NOTIFY changed)
+    Q_PROPERTY(bool fullscreenTaskbar READ fullscreenTaskbar WRITE setFullscreenTaskbar NOTIFY changed)
 public:
     explicit Settings(const QString &profile, bool debug, QObject *parent = nullptr);
 
@@ -92,6 +94,12 @@ public:
     /// Volume dos efeitos, 0 a 100.
     int soundVolume() const { return qBound(0, value("soundVolume", 60).toInt(), 100); }
     void setSoundVolume(int v) { set("soundVolume", qBound(0, v, 100)); }
+    /// Controle de volume dos streams assistidos vai até 500% (ganho no áudio).
+    bool volumeBoost() const { return value("volumeBoost", false).toBool(); }
+    void setVolumeBoost(bool v) { set("volumeBoost", v); }
+    /// Em tela cheia, a barra de tarefas que se oculta automaticamente aparece ao passar o mouse.
+    bool fullscreenTaskbar() const { return value("fullscreenTaskbar", true).toBool(); }
+    void setFullscreenTaskbar(bool v) { set("fullscreenTaskbar", v); }
 
     Q_INVOKABLE bool isContact(const QString &uid) const { return contacts().contains(uid); }
     Q_INVOKABLE void toggleContact(const QString &uid);

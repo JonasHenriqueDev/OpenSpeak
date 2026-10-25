@@ -14,6 +14,7 @@
 #include "WindowThumbnail.h"
 #include "AutoUpdater.h"
 #include "TrayIcon.h"
+#include "NativeWindow.h"
 #include "SoundEffects.h"
 
 #include <QApplication>
@@ -146,6 +147,7 @@ int main(int argc, char *argv[])
     StreamLayout layout;
     SourceThumbnails sourceThumbnails;
     TrayIcon tray;
+    NativeWindow nativeWindow;
     QLocalServer instanceServer;
     if (singleInstance) {
         QLocalServer::removeServer(instanceName);
@@ -175,6 +177,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("LiteEdition"), lite);
     engine.rootContext()->setContextProperty(QStringLiteral("Tray"), &tray);
     engine.rootContext()->setContextProperty(QStringLiteral("Sounds"), &sounds);
+    engine.rootContext()->setContextProperty(QStringLiteral("NativeWindow"), &nativeWindow);
     QString changelog;
     if (QFile f(QStringLiteral(":/changelog.md")); f.open(QIODevice::ReadOnly))
         changelog = QString::fromUtf8(f.readAll());

@@ -16,6 +16,9 @@ public:
     explicit AudioPlayer(QObject *parent = nullptr);
     ~AudioPlayer() override;
 
+    /// Volume máximo (500%); acima de 1.0 o ganho é aplicado no PCM.
+    static constexpr double kMaxVolume = 5.0;
+
     void write(const QByteArray &pcm);
     void setVolume(double volume);
     double volume() const { return m_volume; }

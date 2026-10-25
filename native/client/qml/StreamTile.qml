@@ -23,6 +23,8 @@ Rectangle {
     readonly property bool playing: own || status === "playing" || status === "reconnecting" || status === "connecting"
     readonly property bool small: height < 160
     readonly property bool hovered: hover.hovered
+    // 1 = 100%; com "volume até 500%" ligado nas preferências, vai a 5.
+    readonly property real maxVolume: Settings.volumeBoost ? 5 : 1
 
     color: "#05070b"
     radius: Theme.radius
@@ -98,6 +100,7 @@ Rectangle {
     function openFullscreen() {
         if (!tile.playing)
             return
+        NativeWindow.setTaskbarInFullScreen(fullscreenWindow, Settings.fullscreenTaskbar)
         fullscreenWindow.showFullScreen()
         attach(fullscreenVideo.videoSink)
     }
@@ -210,9 +213,11 @@ Rectangle {
                 Slider {
                     visible: !tile.own
                     Layout.preferredWidth: 120
-                    from: 0; to: 1
+                    from: 0; to: tile.maxVolume
                     value: volumeSlider.value
                     onMoved: volumeSlider.value = value
+                    ToolTip.visible: hovered || pressed
+                    ToolTip.text: Math.round(value * 100) + "%"
                 }
                 Item { Layout.fillWidth: true }
                 FullscreenButton {
@@ -380,9 +385,11 @@ Rectangle {
                 Slider {
                     visible: !tile.own && pipWindow.width >= 320
                     Layout.preferredWidth: 90
-                    from: 0; to: 1
+                    from: 0; to: tile.maxVolume
                     value: volumeSlider.value
                     onMoved: volumeSlider.value = value
+                    ToolTip.visible: hovered || pressed
+                    ToolTip.text: Math.round(value * 100) + "%"
                 }
                 Item { Layout.fillWidth: true }
                 PipButton {
@@ -709,8 +716,10 @@ Rectangle {
                 id: volumeSlider
                 visible: !tile.own && tile.playing && !tile.small
                 Layout.preferredWidth: 90
-                from: 0; to: 1
+                from: 0; to: tile.maxVolume
                 value: tile.data_.volume
+                ToolTip.visible: hovered || pressed
+                ToolTip.text: Math.round(value * 100) + "%"
                 onMoved: Screenshare.setVolume(tile.streamId, value)
                 onValueChanged: if (!pressed) Screenshare.setVolume(tile.streamId, value)
             }

@@ -209,6 +209,23 @@ ApplicationWindow {
                     onPressedChanged: if (!pressed) Sounds.preview(Settings.soundTheme, "alguem_entrou")
                 }
             }
+            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.watching"); font.weight: Font.DemiBold }
+            CheckBox {
+                objectName: "volumeBoost"
+                text: I18n.t("app.prefs.volume_boost")
+                checked: Settings.volumeBoost
+                onToggled: Settings.volumeBoost = checked
+            }
+            Label { Layout.fillWidth: true; Layout.leftMargin: 24; wrapMode: Text.WordWrap; color: Theme.textDim
+                text: I18n.t("app.prefs.volume_boost.hint") }
+            CheckBox {
+                objectName: "fullscreenTaskbar"
+                text: I18n.t("app.prefs.fullscreen_taskbar")
+                checked: Settings.fullscreenTaskbar
+                onToggled: Settings.fullscreenTaskbar = checked
+            }
+            Label { Layout.fillWidth: true; Layout.leftMargin: 24; wrapMode: Text.WordWrap; color: Theme.textDim
+                text: I18n.t("app.prefs.fullscreen_taskbar.hint") }
             Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.tray"); font.weight: Font.DemiBold }
             CheckBox {
                 objectName: "minimizeToTray"
@@ -284,6 +301,8 @@ ApplicationWindow {
         title: "Atualizações · OpenSpeak " + Updater.version + (Updater.edition === "lite" ? " Lite" : "")
         anchors.centerIn: parent
         width: Math.min(480, window.width - 40)
+        // Em janelas baixas, as novidades encolhem (e rolam) para o diálogo caber.
+        height: Math.min(implicitHeight, parent.height - 40)
         modal: true
         standardButtons: Dialog.Close
         contentItem: ColumnLayout {
@@ -329,7 +348,31 @@ ApplicationWindow {
                 Button { text: "Baixar atualização"; visible: Updater.installed && Updater.available && !Updater.ready; enabled: !Updater.busy; onClicked: Updater.downloadUpdate() }
                 Button { text: "Aplicar e reiniciar"; visible: Updater.ready; onClicked: installDialog.open() }
             }
-            Button { text: "Página de downloads"; flat: true; onClicked: Qt.openUrlExternally("https://github.com/JonasHenriqueDev/OpenSpeak/releases") }
+            Label { Layout.topMargin: 6; text: I18n.t("app.updates.changelog"); font.weight: Font.DemiBold }
+            ScrollView {
+                id: updatesChangelogScroll
+                objectName: "updatesChangelog"
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.min(updatesChangelogText.implicitHeight, 200)
+                Layout.fillHeight: true
+                Layout.minimumHeight: 48
+                contentWidth: availableWidth
+                clip: true
+                Label {
+                    id: updatesChangelogText
+                    width: updatesChangelogScroll.availableWidth
+                    wrapMode: Text.WordWrap
+                    textFormat: Text.MarkdownText
+                    color: Theme.textDim
+                    // Só a seção da versão atual (até o próximo "# OpenSpeak").
+                    text: Changelog.split(/\r?\n(?=# )/)[0]
+                    onLinkActivated: link => Qt.openUrlExternally(link)
+                }
+            }
+            RowLayout {
+                Button { text: I18n.t("app.updates.changelog.all"); onClicked: changelogDialog.open() }
+                Button { text: "Página de downloads"; flat: true; onClicked: Qt.openUrlExternally("https://github.com/JonasHenriqueDev/OpenSpeak/releases") }
+            }
         }
     }
     Dialog {

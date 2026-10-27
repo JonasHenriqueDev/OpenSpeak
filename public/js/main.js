@@ -59,6 +59,7 @@ function defaultServerUrl() {
 function renderLogin(message = '') {
   const nick = h('input.input', { value: entryParams.get('nickname')?.slice(0, 32) || settings.get('nickname'), placeholder: 'Ex.: Jonas', maxLength: 32, required: true });
   const server = h('input.input', { value: deployment.cloudSignaling ? defaultServerUrl() : settings.get('serverUrl') || defaultServerUrl() });
+  const password = h('input.input', { type: 'password', value: settings.get('serverPassword'), placeholder: 'Deixe vazio se o servidor não tiver senha', autocomplete: 'current-password' });
   const tailnetIp = h('input.input', { value: settings.get('tailnetIp') || '', placeholder: '100.x.x.x deste PC', required: !!deployment.cloudSignaling });
   const ipHint = h('small.muted', 'Tentando detectar o IP Tailscale…');
   let detecting = false;
@@ -92,6 +93,7 @@ function renderLogin(message = '') {
         }
         settings.set('nickname', nickname);
         settings.set('serverUrl', server.value.trim());
+        settings.set('serverPassword', password.value);
         if (deployment.tailscaleOnly && !deployment.cloudSignaling && new URL(server.value.trim()).hostname !== location.hostname) {
           location.assign(privateEntryUrl(server.value.trim(), nickname, entryParams.get('profile')));
           return;
@@ -111,6 +113,7 @@ function renderLogin(message = '') {
   deployment.tailscaleOnly ? h('p.login-status', deployment.cloudSignaling ? 'Tailscale obrigatório na mesma tailnet. O Vercel negocia as conexões; vídeo e áudio usam a rede P2P.' : 'Tailscale obrigatório: conecte este PC à mesma tailnet do servidor. A sessão abre no endereço privado da rede.') : null,
   h('label.field', h('span.field-label', t('app.nickname')), nick),
   deployment.cloudSignaling ? null : h('label.field', h('span.field-label', t('app.server')), server),
+  deployment.cloudSignaling ? null : h('label.field', h('span.field-label', 'Senha do servidor'), password),
   deployment.cloudSignaling ? h('label.field', h('span.field-label', 'IP Tailscale deste PC'), tailnetIp, ipHint) : null,
   deployment.cloudSignaling ? h('button.btn.ghost', { type: 'button', on: { click: detectIp } }, 'Detectar IP automaticamente') : null,
   submit,
@@ -128,7 +131,7 @@ function renderLogin(message = '') {
 
 async function startSession(url, nickname) {
   const handler = new ConnectionHandler();
-  await handler.connect(url, { nickname, uid: settings.get('uid') });
+  await handler.connect(url, { nickname, uid: settings.get('uid'), password: deployment.cloudSignaling ? '' : settings.get('serverPassword') });
   if (deployment.tailscaleOnly) handler.iceServers = [];
   const manager = new ScreenshareManager(handler, { contacts, settings });
   new SoundEffects(handler, settings, manager);

@@ -60,6 +60,8 @@ public:
 
     /// Habilita STREAM_SFU. O relay deve viver mais que o VirtualServer.
     void setRelay(StreamRelay *relay);
+    /// Senha exigida no `login` (vazia = servidor aberto).
+    void setPassword(const QString &password) { m_password = password; }
 
 private:
     struct Client {
@@ -156,6 +158,7 @@ private:
     std::function<void()> m_liveChanged;
     StreamRelay *m_relay = nullptr;
     QString m_name;
+    QString m_password;
     QJsonArray m_iceServers;
     std::map<int, Client> m_clients;
     std::map<int, Channel> m_channels;

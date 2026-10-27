@@ -98,17 +98,19 @@ void ConnectionHandler::connectTailnet(const QString &nickname)
     }
     m_pendingNickname = nickname;
     m_pendingUid = m_directory->self().identity();
+    m_pendingPassword.clear();
     m_connection.setBackend(m_mesh);
     emit connectionChanged();
     m_mesh->start(nickname);
 }
 
-void ConnectionHandler::connectTo(const QString &url, const QString &nickname, const QString &uid)
+void ConnectionHandler::connectTo(const QString &url, const QString &nickname, const QString &uid, const QString &password)
 {
     m_cloudMode = false;
     m_ws->setCloudMode(false);
     m_pendingNickname = nickname;
     m_pendingUid = uid;
+    m_pendingPassword = password;
     m_connection.setBackend(m_ws);
     emit connectionChanged();
     m_ws->open(QUrl(url));
@@ -124,6 +126,7 @@ void ConnectionHandler::connectCloud(const QString &nickname, const QString &uid
     m_reconnecting = false;
     m_pendingNickname = nickname;
     m_pendingUid = uid;
+    m_pendingPassword.clear();
     m_ws->setCloudMode(true);
     m_connection.setBackend(m_ws);
     emit connectionChanged();
@@ -132,8 +135,10 @@ void ConnectionHandler::connectCloud(const QString &nickname, const QString &uid
 
 void ConnectionHandler::login()
 {
-    m_connection.sendCommand(QStringLiteral("login"), {{"nickname", m_pendingNickname}, {"uid", m_pendingUid}},
-                             [this](const CommandResult &r) {
+    QJsonObject args{{"nickname", m_pendingNickname}, {"uid", m_pendingUid}};
+    if (!m_pendingPassword.isEmpty())
+        args.insert("password", m_pendingPassword);
+    m_connection.sendCommand(QStringLiteral("login"), args, [this](const CommandResult &r) {
         if (!r.ok()) {
             emit connectFailed(r.error.isEmpty() ? r.returnCode : r.error);
             m_connection.close();

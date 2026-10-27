@@ -27,12 +27,12 @@ Rectangle {
         Server.connectTailnet(nick)
     }
     function enterServer() {
-        // Capture ambos antes de alterar Settings: os bindings reavaliam no changed.
-        const nick = nickField.text.trim(), url = serverField.text.trim()
+        // Capture todos antes de alterar Settings: os bindings reavaliam no changed.
+        const nick = nickField.text.trim(), url = serverField.text.trim(), password = passwordField.text
         if (!nick.length || !url.length) return
-        Settings.serverUrl = url; Settings.nickname = nick; Settings.connectionMode = "server"
+        Settings.serverUrl = url; Settings.serverPassword = password; Settings.nickname = nick; Settings.connectionMode = "server"
         busy = true; message = I18n.t("app.connecting")
-        Server.connectTo(url, nick, Settings.uid)
+        Server.connectTo(url, nick, Settings.uid, password)
     }
     function enterCloud() {
         const nick = nickField.text.trim()
@@ -86,7 +86,17 @@ Rectangle {
                     objectName: "serverAddress"
                     Layout.fillWidth: true
                     text: Settings.serverUrl
-                    placeholderText: "wss://openspeak.duckdns.org/ws"
+                    placeholderText: "wss://seu-servidor/ws"
+                    onAccepted: root.enterServer()
+                }
+                Label { text: "Senha do servidor"; color: Theme.textDim }
+                TextField {
+                    id: passwordField
+                    objectName: "serverPassword"
+                    Layout.fillWidth: true
+                    text: Settings.serverPassword
+                    echoMode: TextInput.Password
+                    placeholderText: "Deixe vazio se o servidor não tiver senha"
                     onAccepted: root.enterServer()
                 }
                 Button {

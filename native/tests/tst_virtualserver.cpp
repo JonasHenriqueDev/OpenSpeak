@@ -82,6 +82,19 @@ private slots:
 
     void cleanup() { server.reset(); } // antes dos relays falsos (locais a cada teste)
 
+    void loginRequiresPasswordWhenSet()
+    {
+        server->setPassword("segredo");
+        const int a = server->connect();
+        QCOMPARE(expectError(a, "login", {{"nickname", "a"}, {"uid", "a"}}), rc::AccessDenied);
+        QCOMPARE(expectError(a, "login", {{"nickname", "a"}, {"uid", "a"}, {"password", "errada"}}), rc::AccessDenied);
+        QCOMPARE(expectError(a, "sync", {}), rc::NotLoggedIn);
+        QCOMPARE(expectError(a, "login", {{"nickname", "a"}, {"uid", "a"}, {"password", "segredo"}}), QStringLiteral("<sem erro>"));
+        server->setPassword({});
+        const int b = server->connect();
+        QCOMPARE(expectError(b, "login", {{"nickname", "b"}, {"uid", "b"}}), QStringLiteral("<sem erro>"));
+    }
+
     void monitoringTracksLoginStreamsAndDisconnect()
     {
         const int pending = server->connect();

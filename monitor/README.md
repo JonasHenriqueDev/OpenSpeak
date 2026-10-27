@@ -2,7 +2,7 @@
 
 Painel em `https://openspeak.duckdns.org/monitor/`, protegido por HTTP Basic Auth no Caddy.
 O usuário do painel é `admin`; a senha é fornecida separadamente e não fica no repositório.
-É um painel de leitura, sem ações de moderação.
+Além da leitura, o painel só troca a senha do servidor (sem ações de moderação).
 
 O servidor nativo escreve um snapshot local atômico a cada 2 segundos quando
 `OPENSPEAK_METRICS_FILE` está definido. O snapshot inclui somente participantes
@@ -74,6 +74,19 @@ Para trocar a senha, gere outro hash bcrypt, substitua o hash no Caddyfile,
 valide e recarregue o Caddy. A senha do painel é independente do admin cloud/Vercel.
 HTTP Basic Auth usa o diálogo de credenciais do navegador e pode permanecer em
 cache até fechar a sessão do navegador.
+
+## Senha do servidor
+
+O painel **Senha do servidor** mostra e troca a senha exigida no login. O monitor
+grava a senha em `OPENSPEAK_PASSWORD_FILE` (padrão
+`/var/lib/openspeak-monitor/server-password`, `0640`) de forma atômica, e o
+`openspeak-server`, com a mesma variável no drop-in `monitor.conf`, relê o arquivo
+a cada login: a troca vale já no próximo login, sem reiniciar, e quem está
+conectado continua na sala. A senha tem de 4 a 128 caracteres. Enquanto o arquivo
+não existir, vale `OPENSPEAK_PASSWORD` do serviço (ou nenhuma). O servidor precisa
+ler esse arquivo: rode os dois serviços com o mesmo usuário ou grupo `openspeak`.
+A troca exige o cabeçalho `X-OpenSpeak-Monitor` e a mesma origem, para que outro
+site não aproveite o Basic Auth em cache.
 
 ## Alertas
 

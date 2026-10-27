@@ -32,6 +32,8 @@ public:
         quint16 rtcPort = 10000; // UDP mux do relay (0 = portas efêmeras)
         QString publicIp;        // IP anunciado nos candidatos do relay (NAT 1:1)
         QString discordClientId, discordClientSecret; // login da atividade do Discord (opcional)
+        QString password;     // exigida no login (vazia = servidor aberto)
+        QString passwordFile; // se existir, vale no lugar de `password` (o monitor troca a senha nele)
     };
 
     explicit ServerHost(Options options, QObject *parent = nullptr);
@@ -50,6 +52,8 @@ private:
     /// Remove o cliente de vez (logout, sessão sem retomada ou espera esgotada).
     void dropClient(int clid);
     void sendTo(int clid, const QJsonObject &message);
+    /// Senha vigente: relida do arquivo a cada login, para trocar sem reiniciar.
+    QString currentPassword() const;
     void heartbeat();
     void writeMonitoringSnapshot();
     void sendLiveWebhook();

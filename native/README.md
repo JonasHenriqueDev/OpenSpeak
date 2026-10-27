@@ -57,9 +57,9 @@ powershell -ExecutionPolicy Bypass -File native/package.ps1
 
 ## Conexão via servidor (padrão)
 
-Informe seu nome e conecte ao endereço do servidor na tela inicial. O endereço
-padrão é `wss://openspeak.duckdns.org/ws`; endereços personalizados salvos são
-preservados. A lista de participantes mostra o RTT de cada pessoa até o servidor,
+Informe seu nome, o endereço do servidor (`wss://<host>/ws`) e, se ele for privado,
+a senha na tela inicial. Endereço e senha ficam salvos depois do primeiro login.
+A lista de participantes mostra o RTT de cada pessoa até o servidor,
 e a barra superior mostra seu próprio ping. A medição é por ping/pong WebSocket,
 com atualização a cada 15 segundos e uma primeira amostra ao conectar.
 
@@ -137,6 +137,13 @@ Opções do `openspeak-server`:
   relay. Necessário com NAT 1:1 (VM na nuvem com IP privado `10.0.0.x` e IP público
   fixo); sem ele os clientes só recebem o `10.0.0.x` e não conectam.
 - `--no-sfu`: só P2P.
+- `OPENSPEAK_PASSWORD=<senha>`: servidor privado; o `login` sem a senha certa recebe
+  `access_denied` e a conexão é derrubada. Vale para o app, a página web e a atividade
+  do Discord. Fica em variável de ambiente para não aparecer na linha de comando.
+- `OPENSPEAK_PASSWORD_FILE=<arquivo>`: a senha é relida desse arquivo (primeira linha)
+  a cada login e, se ele existir, vale no lugar de `OPENSPEAK_PASSWORD`. O painel de
+  [monitoramento](../monitor/README.md#senha-do-servidor) troca a senha nele, sem reiniciar.
+  Quem já está conectado continua na sala.
 - `OPENSPEAK_ICE='[{"urls":"stun:..."}]'`: STUN anunciado aos clientes e usado pelo
   próprio relay (padrão: `stun:stun.l.google.com:19302`).
 

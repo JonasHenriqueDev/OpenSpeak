@@ -15,9 +15,11 @@ Baixe o [instalador da última release estável](https://github.com/JonasHenriqu
 A partir da 1.0.0, o app instalado atualiza automaticamente e oferece um canal
 opcional de pré-releases. [Downloads e atualizações](docs/ATUALIZACOES.md).
 
-Instale o `OpenSpeak-Setup-<versão>.exe`, informe seu nome e conecte ao servidor.
-O endereço padrão é `wss://openspeak.duckdns.org/ws`. Tailscale e sala web ficam
-em **Avançado**; Tailscale é necessário somente para esses modos.
+Instale o `OpenSpeak-Setup-<versão>.exe`, informe seu nome e o endereço do servidor
+(`wss://<host>/ws`) e, se ele for privado, a senha; o app lembra os dois. Não há
+servidor público: hospede o seu com o `openspeak-server` ([Servidor com SFU](native/README.md#servidor-com-sfu))
+ou use o modo Tailnet, sem servidor. Tailscale e sala web ficam em **Avançado**;
+Tailscale é necessário somente para esses modos.
 Detalhes em [native/README.md](native/README.md).
 
 ## Cliente web

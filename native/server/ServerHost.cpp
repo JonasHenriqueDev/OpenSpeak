@@ -1,5 +1,6 @@
 #include "ServerHost.h"
 
+#include <QFile>
 #include <QFileInfo>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -37,6 +38,7 @@ ServerHost::ServerHost(Options options, QObject *parent)
       m_server([this](int clid, const QJsonObject &msg) { sendTo(clid, msg); }, m_options.name, m_options.iceServers),
       m_discord(m_options.discordClientId, m_options.discordClientSecret)
 {
+    m_server.setPassword(currentPassword());
 #ifdef OPENSPEAK_HAS_SFU
     if (m_options.sfu) {
         SfuRelay::Options relay;
@@ -240,6 +242,16 @@ void ServerHost::sendLiveWebhook()
     });
 }
 
+QString ServerHost::currentPassword() const
+{
+    if (!m_options.passwordFile.isEmpty()) {
+        QFile file(m_options.passwordFile);
+        if (file.open(QIODevice::ReadOnly))
+            return QString::fromUtf8(file.readLine(1024)).trimmed();
+    }
+    return m_options.password;
+}
+
 quint16 ServerHost::port() const { return m_tcp ? m_tcp->serverPort() : 0; }
 
 bool ServerHost::sfuAvailable()
@@ -339,6 +351,8 @@ void ServerHost::onMessage(QWebSocket *ws, const QString &text)
         resumeSession(ws, clid, msg);
         return;
     }
+    if (cmd == QLatin1String("login"))
+        m_server.setPassword(currentPassword());
     QJsonObject reply{{"type", "res"}, {"id", msg.value("id")}};
     if (cmd == QLatin1String("logout")) {
         reply["return_code"] = rc::Ok;
@@ -359,6 +373,12 @@ void ServerHost::onMessage(QWebSocket *ws, const QString &text)
         reply["error"] = QStringLiteral("erro interno");
     }
     sendTo(clid, reply);
+    // Senha errada: derruba a conexão (cada nova tentativa paga um handshake).
+    if (cmd == QLatin1String("login") && reply.value("return_code").toString() == rc::AccessDenied) {
+        qCInfo(lcServer).noquote() << "senha incorreta clid=" << clid << "de" << info.ip;
+        dropClient(clid);
+        return;
+    }
     // Measure after login as well: native peers may still be opening when the
     // handshake ping arrives. The reply establishes the client's public view.
     if (cmd == QLatin1String("login") && reply.value("return_code").toString() == rc::Ok)

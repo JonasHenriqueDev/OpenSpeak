@@ -25,6 +25,7 @@ const preset = QUALITY_PRESETS.find(p => p.id === DEFAULT_PRESET_ID);
 const DEFAULTS = {
   nickname: '',
   serverUrl: '',
+  serverPassword: '', // servidor privado (OPENSPEAK_PASSWORD), lembrada após digitar
   preferredCodec: 'auto',
   contacts: [], // uids
   hiddenStreams: [],

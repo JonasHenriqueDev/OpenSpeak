@@ -33,10 +33,10 @@ export class ConnectionHandler extends EventEmitter {
   }
   get serverPingMs() { return this.ownClient?.pingMs ?? null; }
 
-  async connect(url, { nickname, uid }) {
+  async connect(url, { nickname, uid, password }) {
     await this.connection.connect(url);
     let data;
-    try { data = await this.connection.sendCommand('login', { nickname, uid }); }
+    try { data = await this.connection.sendCommand('login', password ? { nickname, uid, password } : { nickname, uid }); }
     catch (err) { this.connection.disconnect(); throw err; }
     this.applyView(data);
     this.emit('connected');

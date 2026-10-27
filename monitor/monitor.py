@@ -17,6 +17,9 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parent
 STATE = Path(os.environ.get('STATE_DIRECTORY', '/var/lib/openspeak-monitor'))
 SNAPSHOT = Path(os.environ.get('OPENSPEAK_METRICS_FILE', '/run/openspeak/metrics.json'))
+# O servidor nativo relê este arquivo a cada login (OPENSPEAK_PASSWORD_FILE).
+PASSWORD_FILE = Path(os.environ.get('OPENSPEAK_PASSWORD_FILE', str(STATE / 'server-password')))
+PASSWORD_MIN, PASSWORD_MAX = 4, 128
 TZ = ZoneInfo(os.environ.get('MONITOR_TIMEZONE', 'America/Sao_Paulo'))
 INTERVAL = 5
 RETENTION = 7 * 86400
@@ -66,6 +69,25 @@ def room_snapshot():
         return {**data, 'online': True, 'ageSeconds': age}
     except (OSError, ValueError, KeyError, TypeError):
         return {'online': False, 'ageSeconds': None, 'clients': [], 'streams': []}
+
+
+def read_password():
+    try:
+        return PASSWORD_FILE.read_text(encoding='utf-8').splitlines()[0].strip()
+    except (OSError, IndexError):
+        return ''
+
+
+def write_password(password):
+    """Troca atômica: o servidor nunca lê um arquivo pela metade."""
+    password = password.strip() if isinstance(password, str) else ''
+    if not PASSWORD_MIN <= len(password) <= PASSWORD_MAX or any(ord(ch) < 32 for ch in password):
+        raise ValueError(f'A senha deve ter de {PASSWORD_MIN} a {PASSWORD_MAX} caracteres, sem quebras de linha.')
+    temporary = PASSWORD_FILE.with_name(PASSWORD_FILE.name + '.tmp')
+    temporary.write_text(password + '\n', encoding='utf-8')
+    os.chmod(temporary, 0o640)
+    os.replace(temporary, PASSWORD_FILE)
+    return password
 
 
 def database():
@@ -275,7 +297,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         if url.path in ('/monitor', '/monitor/'):
             self.reply(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
-        elif url.path in ('/monitor/dashboard.js', '/monitor/participants.js'):
+        elif url.path in ('/monitor/dashboard.js', '/monitor/participants.js', '/monitor/password.js'):
             self.reply(200, (ROOT / url.path.rsplit('/', 1)[1]).read_bytes(), 'text/javascript; charset=utf-8')
         elif url.path == '/monitor/api/status':
             with lock:
@@ -284,6 +306,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(503, b'{"error":"Coleta indisponivel"}', 'application/json')
             else:
                 self.reply(200, json.dumps(data).encode(), 'application/json')
+        elif url.path == '/monitor/api/password':
+            self.reply(200, json.dumps({'password': read_password()}).encode(), 'application/json')
         elif url.path == '/monitor/api/history':
             hours = parse_qs(url.query).get('hours', ['1'])[0]
             if hours not in ('1', '24', '168'):
@@ -297,6 +321,31 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(200, json.dumps({'points': rows}).encode(), 'application/json')
         else:
             self.reply(404, b'Not found', 'text/plain')
+
+    def do_POST(self):
+        if urlsplit(self.path).path != '/monitor/api/password':
+            self.reply(404, b'Not found', 'text/plain')
+            return
+        # O Basic Auth vai junto em qualquer POST do navegador: exija o cabeçalho
+        # próprio (outro site não o envia sem preflight) e a mesma origem.
+        origin = self.headers.get('Origin')
+        host = self.headers.get('X-Forwarded-Host') or self.headers.get('Host')
+        if self.headers.get('X-OpenSpeak-Monitor') != '1' or (origin and urlsplit(origin).netloc != host):
+            self.reply(403, b'{"error":"Origem recusada"}', 'application/json')
+            return
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+            if length > 4096:
+                raise ValueError('Pedido grande demais.')
+            password = write_password(json.loads(self.rfile.read(length) or b'{}').get('password'))
+        except (ValueError, AttributeError) as exc:
+            self.reply(400, json.dumps({'error': str(exc) or 'Pedido inválido.'}).encode(), 'application/json')
+            return
+        except OSError as exc:
+            self.reply(500, json.dumps({'error': f'Não foi possível gravar a senha: {exc.strerror}'}).encode(), 'application/json')
+            return
+        print('Senha do servidor alterada pelo painel', flush=True)
+        self.reply(200, json.dumps({'password': password}).encode(), 'application/json')
 
     def reply(self, status, body, content_type):
         self.send_response(status)

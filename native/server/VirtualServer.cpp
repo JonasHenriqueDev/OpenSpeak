@@ -1,5 +1,6 @@
 #include "VirtualServer.h"
 
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QRandomGenerator>
@@ -35,6 +36,17 @@ int clampInt(const QJsonValue &v, int min, int max, int fallback)
 bool isOneOf(int v, std::initializer_list<int> values) { return std::find(values.begin(), values.end(), v) != values.end(); }
 
 qint64 nowMs() { return QDateTime::currentMSecsSinceEpoch(); }
+
+/// Compara pelos hashes, em tempo constante (não vaza o tamanho nem o prefixo).
+bool samePassword(const QString &given, const QString &expected)
+{
+    const QByteArray a = QCryptographicHash::hash(given.toUtf8(), QCryptographicHash::Sha256);
+    const QByteArray b = QCryptographicHash::hash(expected.toUtf8(), QCryptographicHash::Sha256);
+    char diff = 0;
+    for (qsizetype i = 0; i < a.size(); ++i)
+        diff |= char(a[i] ^ b[i]);
+    return diff == 0;
+}
 
 QString newResumeToken()
 {
@@ -258,6 +270,8 @@ QJsonObject VirtualServer::cmdLogin(Client &client, const QJsonObject &args)
     const QString uid = cleanString(args.value("uid"), 64);
     if (nickname.isEmpty() || uid.isEmpty())
         fail(rc::InvalidArgs, QStringLiteral("nickname e uid são obrigatórios"));
+    if (!m_password.isEmpty() && !samePassword(args.value("password").toString(), m_password))
+        fail(rc::AccessDenied, QStringLiteral("Senha do servidor incorreta."));
     client.nickname = nickname;
     client.uid = uid;
     client.cid = m_defaultChannel;

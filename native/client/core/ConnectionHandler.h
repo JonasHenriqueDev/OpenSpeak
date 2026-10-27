@@ -82,7 +82,7 @@ public:
     PeerDirectory *directory() const { return m_directory; }
 
     Q_INVOKABLE void connectTailnet(const QString &nickname);
-    Q_INVOKABLE void connectTo(const QString &url, const QString &nickname, const QString &uid);
+    Q_INVOKABLE void connectTo(const QString &url, const QString &nickname, const QString &uid, const QString &password = {});
     Q_INVOKABLE void connectCloud(const QString &nickname, const QString &uid);
     Q_INVOKABLE void disconnectFromServer();
     Q_INVOKABLE void moveTo(int cid);
@@ -142,7 +142,7 @@ private:
     QMap<int, ChannelInfo> m_channels;
     QMap<int, ClientInfo> m_clients;
     QMap<QString, StreamInfo> m_streams;
-    QString m_pendingNickname, m_pendingUid;
+    QString m_pendingNickname, m_pendingUid, m_pendingPassword;
 };
 
 QVariantMap streamToVariant(const StreamInfo &s);

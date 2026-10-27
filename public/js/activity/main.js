@@ -45,11 +45,13 @@ function serverUrl() {
 
 function renderLogin(error = '') {
   const nick = h('input.input', { value: settings.get('nickname'), placeholder: 'Seu nome', maxLength: 32, required: true });
+  const password = h('input.input', { type: 'password', value: settings.get('serverPassword'), placeholder: 'Se o servidor tiver senha' });
   const button = h('button.btn.primary', { type: 'submit' }, 'Entrar');
   const form = h('form.act-card',
     h('div.act-brand', icon('logo'), h('span', 'OpenSpeak')),
     h('p.act-dim', 'Assista às transmissões do servidor OpenSpeak sem sair do Discord.'),
     h('label.act-field', h('span', 'Nome'), nick),
+    h('label.act-field', h('span', 'Senha do servidor'), password),
     error ? h('p.act-error', error) : null,
     button,
     h('p.act-faint', 'Somente para assistir. Para transmitir, use o app do Windows ou a página web.'),
@@ -59,10 +61,11 @@ function renderLogin(error = '') {
     const nickname = nick.value.trim();
     if (!nickname) return;
     settings.set('nickname', nickname);
+    settings.set('serverPassword', password.value);
     button.disabled = true;
     button.textContent = 'Conectando…';
     try {
-      await handler.connect(serverUrl(), { nickname, uid: settings.get('uid') });
+      await handler.connect(serverUrl(), { nickname, uid: settings.get('uid'), password: settings.get('serverPassword') });
       renderLobby();
     } catch (err) {
       renderLogin(err?.message || 'Não foi possível conectar ao servidor.');
@@ -328,7 +331,7 @@ async function start() {
   }
   if (!nickname) return renderLogin();
   try {
-    await handler.connect(serverUrl(), { nickname, uid: settings.get('uid') });
+    await handler.connect(serverUrl(), { nickname, uid: settings.get('uid'), password: settings.get('serverPassword') });
     renderLobby();
   } catch (err) {
     renderLogin(err?.message || 'Não foi possível conectar ao servidor.');

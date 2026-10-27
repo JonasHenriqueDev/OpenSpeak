@@ -34,6 +34,7 @@ inline const QString NoPendingRequest = QStringLiteral("no_pending_request");
 inline const QString PayloadTooLarge = QStringLiteral("payload_too_large");
 inline const QString Internal = QStringLiteral("internal_error");
 inline const QString SessionExpired = QStringLiteral("session_expired");
+inline const QString AccessDenied = QStringLiteral("access_denied");
 } // namespace rc
 
 // Extensões anunciadas em capabilityExtensions (TS: STREAM_P2P / STREAM_SFU).

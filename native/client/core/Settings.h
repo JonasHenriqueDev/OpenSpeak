@@ -13,6 +13,7 @@ class Settings : public QObject {
     Q_OBJECT
     Q_PROPERTY(QString nickname READ nickname WRITE setNickname NOTIFY changed)
     Q_PROPERTY(QString serverUrl READ serverUrl WRITE setServerUrl NOTIFY changed)
+    Q_PROPERTY(QString serverPassword READ serverPassword WRITE setServerPassword NOTIFY changed)
     Q_PROPERTY(QString uid READ uid CONSTANT)
     Q_PROPERTY(QString preferredEncoder READ preferredEncoder WRITE setPreferredEncoder NOTIFY changed)
     Q_PROPERTY(bool showOwnStreams READ showOwnStreams WRITE setShowOwnStreams NOTIFY changed)
@@ -41,8 +42,11 @@ public:
 
     QString nickname() const { return value("nickname").toString(); }
     void setNickname(const QString &v) { set("nickname", v); }
-    QString serverUrl() const { return value("serverUrl", QStringLiteral("wss://openspeak.duckdns.org/ws")).toString(); }
+    QString serverUrl() const { return value("serverUrl").toString(); }
     void setServerUrl(const QString &v) { set("serverUrl", v); }
+    /// Senha do servidor privado (OPENSPEAK_PASSWORD), lembrada depois do primeiro login.
+    QString serverPassword() const { return value("serverPassword").toString(); }
+    void setServerPassword(const QString &v) { set("serverPassword", v); }
     QString uid() const { return m_uid; }
     QString preferredEncoder() const { return value("preferredEncoder").toString(); }
     void setPreferredEncoder(const QString &v) { set("preferredEncoder", v); }

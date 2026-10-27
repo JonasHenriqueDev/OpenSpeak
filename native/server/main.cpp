@@ -3,6 +3,8 @@
 //
 //   openspeak-server [--port 9988] [--name OpenSpeak] [--web <pasta do cliente web>]
 //                    [--rtc-port 10000] [--public-ip <ip>] [--no-sfu]
+//   OPENSPEAK_PASSWORD=<senha> exige a senha no login (servidor privado);
+//   OPENSPEAK_PASSWORD_FILE=<arquivo> lê a senha dele a cada login (o monitor troca a senha ali).
 //   OPENSPEAK_ICE='[{"urls":"stun:..."}]' define os iceServers anunciados
 //   (e usados pelo próprio relay para descobrir o endereço público).
 
@@ -83,6 +85,9 @@ int main(int argc, char *argv[])
     // Login da atividade do Discord (opcional): credenciais do app no Developer Portal.
     options.discordClientId = qEnvironmentVariable("DISCORD_CLIENT_ID");
     options.discordClientSecret = qEnvironmentVariable("DISCORD_CLIENT_SECRET");
+    // Pela variável de ambiente, não por argumento: a linha de comando aparece no `ps`.
+    options.password = qEnvironmentVariable("OPENSPEAK_PASSWORD");
+    options.passwordFile = qEnvironmentVariable("OPENSPEAK_PASSWORD_FILE");
     if (!ServerHost::sfuAvailable() && (parser.isSet(rtcPortOpt) || parser.isSet(publicIpOpt)))
         qWarning("compilado sem o relay SFU: --rtc-port/--public-ip ignorados");
 
@@ -94,6 +99,11 @@ int main(int argc, char *argv[])
         qInfo().noquote() << QStringLiteral("[openspeak] cliente web: http://localhost:%1 (%2)").arg(host.port()).arg(options.webRoot);
     if (!options.discordClientId.isEmpty() && !options.discordClientSecret.isEmpty())
         qInfo().noquote() << QStringLiteral("[openspeak] login do Discord: app %1").arg(options.discordClientId);
+    if (!options.passwordFile.isEmpty())
+        qInfo().noquote() << QStringLiteral("[openspeak] senha do servidor em %1 (relida a cada login)").arg(options.passwordFile);
+    else
+        qInfo().noquote() << (options.password.isEmpty() ? QStringLiteral("[openspeak] servidor aberto (sem OPENSPEAK_PASSWORD)")
+                                                         : QStringLiteral("[openspeak] servidor privado: login exige senha"));
     if (host.sfuEnabled())
         qInfo().noquote() << QStringLiteral("[openspeak] relay SFU: UDP %1%2")
                                  .arg(options.rtcPort ? QString::number(options.rtcPort) : QStringLiteral("(portas efêmeras)"),

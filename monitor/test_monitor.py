@@ -98,6 +98,21 @@ class MonitoringTests(unittest.TestCase):
         alerts.check(state(False), 4220)
         self.assertEqual(len(sent), 3)
 
+    def test_password_file_roundtrip_and_validation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            original = monitor.PASSWORD_FILE
+            monitor.PASSWORD_FILE = Path(folder) / 'server-password'
+            try:
+                self.assertEqual(monitor.read_password(), '')
+                self.assertEqual(monitor.write_password('  nova-senha  '), 'nova-senha')
+                self.assertEqual(monitor.read_password(), 'nova-senha')
+                for bad in ('abc', 'x' * 129, 'com\nquebra', None):
+                    with self.assertRaises(ValueError):
+                        monitor.write_password(bad)
+                self.assertEqual(monitor.read_password(), 'nova-senha')
+            finally:
+                monitor.PASSWORD_FILE = original
+
     def test_monthly_egress_projection(self):
         tz = monitor.TZ
         started = monitor.dt.datetime(2026, 10, 1, tzinfo=tz).isoformat()

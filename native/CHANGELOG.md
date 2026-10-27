@@ -1,3 +1,12 @@
+# OpenSpeak 1.0.16 — servidor com senha
+
+- A tela de entrada ganhou o campo **"Senha do servidor"**. Se o servidor for
+  privado, digite a senha uma vez: o app lembra dela nas próximas vezes.
+- O app **não vem mais com um servidor preenchido**: informe o endereço do
+  servidor que você usa (quem já entrou antes continua com o endereço salvo).
+- Quem hospeda o próprio servidor pode exigir uma senha com
+  `OPENSPEAK_PASSWORD` e trocá-la a qualquer momento, sem reiniciar.
+
 # OpenSpeak 1.0.15 — volume até 500% e barra de tarefas em tela cheia
 
 - Nova opção **"Permitir aumentar o volume até 500%"** em Preferências ›

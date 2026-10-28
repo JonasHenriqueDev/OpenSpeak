@@ -87,9 +87,13 @@ Rectangle {
                             width: channel.width
 
                             ItemDelegate {
+                                id: clientRow
                                 width: parent.width
                                 height: 28
-                                leftPadding: 26
+                                // Destaque recuado junto com o nome, com folga igual dos dois lados.
+                                leftInset: 18; rightInset: 2; topInset: 1; bottomInset: 1
+                                leftPadding: 26; rightPadding: 10
+                                background: RowHighlight { control: clientRow }
                                 onClicked: if (!client.modelData.me) contextMenu.popup()
                                 // Identidade real (Tailscale) fica discreta: só no hover/menu.
                                 ToolTip.visible: hovered && !!client.modelData.identity
@@ -143,7 +147,9 @@ Rectangle {
                                     readonly property bool clickable: channel.modelData.current && !client.modelData.me
                                     width: client.width
                                     height: 26
-                                    leftPadding: 44
+                                    leftInset: 36; rightInset: 2; topInset: 1; bottomInset: 1
+                                    leftPadding: 44; rightPadding: 10
+                                    background: RowHighlight { control: streamRow }
                                     hoverEnabled: clickable
                                     onClicked: if (clickable) root.streamClicked(modelData.streamIdentifier)
                                     ToolTip.visible: hovered && !streamViewers.hovered
@@ -185,5 +191,12 @@ Rectangle {
                 }
             }
         }
+    }
+
+    // Fundo de hover das linhas de cliente e de stream: arredondado, só sobre a área recuada.
+    component RowHighlight: Rectangle {
+        required property ItemDelegate control
+        radius: 5
+        color: control.down ? Theme.panel3 : control.hovered ? Theme.panel2 : "transparent"
     }
 }

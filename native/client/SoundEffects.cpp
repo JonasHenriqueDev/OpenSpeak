@@ -5,6 +5,7 @@
 #include "Settings.h"
 
 #include <QAudio>
+#include <QRandomGenerator>
 #include <QSoundEffect>
 #include <QTimer>
 #include <QUrl>
@@ -59,6 +60,19 @@ void SoundEffects::preview(const QString &theme, const QString &event)
                                             QAudio::LinearVolumeScale));
         fx->play();
     }
+}
+
+void SoundEffects::previewRandom(const QString &theme)
+{
+    QStringList pool = events();
+    pool.removeOne(m_lastPreviewEvent);
+    const QString event = pool.at(QRandomGenerator::global()->bounded(pool.size()));
+    // Cliques seguidos não empilham sons: corta a prévia anterior.
+    if (m_lastPreview)
+        m_lastPreview->stop();
+    m_lastPreviewEvent = event;
+    m_lastPreview = effect(theme, event);
+    preview(theme, event);
 }
 
 // Vários sinais chegam juntos para a mesma notificação; compara uma vez só.

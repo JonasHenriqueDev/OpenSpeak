@@ -46,6 +46,9 @@ qt_add_resources(OpenSpeak app_sounds PREFIX "/" BASE assets FILES ${OPENSPEAK_S
 # Novidades da versão (Preferências › Novidades), em qrc:/changelog.md.
 set_source_files_properties(../CHANGELOG.md PROPERTIES QT_RESOURCE_ALIAS changelog.md)
 qt_add_resources(OpenSpeak app_changelog PREFIX "/" FILES ../CHANGELOG.md)
+# Licenças de terceiros (Preferências › Licenças e créditos), em qrc:/licenses.md.
+set_source_files_properties(../../THIRD_PARTY_LICENSES.md PROPERTIES QT_RESOURCE_ALIAS licenses.md)
+qt_add_resources(OpenSpeak app_licenses PREFIX "/" FILES ../../THIRD_PARTY_LICENSES.md)
 set_target_properties(OpenSpeak PROPERTIES OUTPUT_NAME "OpenSpeak")
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)

@@ -2,6 +2,7 @@
 // Ajustes de janela que dependem da plataforma (Windows), chamados pelo QML.
 
 #include <QAbstractNativeEventFilter>
+#include <QColor>
 #include <QList>
 #include <QObject>
 #include <QPointer>
@@ -22,6 +23,10 @@ public:
     /// Janela sem moldura não tem o Aero Snap: ao fim de um arrasto (startSystemMove)
     /// com o cursor no topo do monitor, maximiza como as janelas do Windows.
     Q_INVOKABLE void enableSnapToTop(QWindow *window);
+
+    /// Cor dos links em Markdown/RichText: o QTextDocument usa a paleta da
+    /// aplicação e ignora `linkColor`/`palette` do Label.
+    Q_INVOKABLE void setLinkColor(const QColor &color);
 
     bool nativeEventFilter(const QByteArray &eventType, void *message, qintptr *result) override;
 

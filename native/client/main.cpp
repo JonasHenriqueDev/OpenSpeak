@@ -183,6 +183,10 @@ int main(int argc, char *argv[])
     if (QFile f(QStringLiteral(":/changelog.md")); f.open(QIODevice::ReadOnly))
         changelog = QString::fromUtf8(f.readAll());
     engine.rootContext()->setContextProperty(QStringLiteral("Changelog"), changelog);
+    QString licenses;
+    if (QFile f(QStringLiteral(":/licenses.md")); f.open(QIODevice::ReadOnly))
+        licenses = QString::fromUtf8(f.readAll());
+    engine.rootContext()->setContextProperty(QStringLiteral("ThirdPartyLicenses"), licenses);
     engine.rootContext()->setContextProperty(QStringLiteral("JustUpdated"), updated && !parser.isSet(uiSmokeOpt));
     // Aberto pelo Windows com "Iniciar minimizado": só o ícone na bandeja.
     engine.rootContext()->setContextProperty(QStringLiteral("StartHidden"),
@@ -206,7 +210,7 @@ int main(int argc, char *argv[])
             } else if (panel == "startup") {
                 auto *startup = findVisualItem(window->contentItem(), QStringLiteral("startupScreen"));
                 valid = valid && startup && startup->isVisible() && startup->width() >= 800;
-            } else if (panel == "updates" || panel == "preferences" || panel == "changelog") {
+            } else if (panel == "updates" || panel == "preferences" || panel == "changelog" || panel == "licenses") {
                 auto *dialog = window->findChild<QObject *>(panel + QStringLiteral("Dialog"));
                 valid = valid && dialog && dialog->property("visible").toBool()
                     && dialog->property("width").toDouble() >= 400
@@ -214,6 +218,9 @@ int main(int argc, char *argv[])
                 if (panel == "changelog")
                     valid = valid && engine.rootContext()->contextProperty(QStringLiteral("Changelog")).toString()
                                          .startsWith(QStringLiteral("# OpenSpeak "));
+                if (panel == "licenses")
+                    valid = valid && engine.rootContext()->contextProperty(QStringLiteral("ThirdPartyLicenses")).toString()
+                                         .contains(QStringLiteral("libdatachannel"));
             } else if (panel != "view-menu") {
                 auto *grid = findVisualItem(window->contentItem(), QStringLiteral("sourceGrid"));
                 valid = valid && grid && grid->isVisible() && grid->height() >= 120 && grid->width() >= 200;

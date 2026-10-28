@@ -1,6 +1,8 @@
 #include "NativeWindow.h"
 
 #include <QCoreApplication>
+#include <QGuiApplication>
+#include <QPalette>
 #include <QWindow>
 #include <QtGui/qpa/qplatformwindow_p.h>
 
@@ -30,6 +32,14 @@ void NativeWindow::enableSnapToTop(QWindow *window)
         QCoreApplication::instance()->installNativeEventFilter(this);
         m_filterInstalled = true;
     }
+}
+
+void NativeWindow::setLinkColor(const QColor &color)
+{
+    QPalette palette = QGuiApplication::palette();
+    palette.setColor(QPalette::Link, color);
+    palette.setColor(QPalette::LinkVisited, color);
+    QGuiApplication::setPalette(palette);
 }
 
 bool NativeWindow::nativeEventFilter(const QByteArray &eventType, void *message, qintptr *)

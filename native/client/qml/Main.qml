@@ -284,6 +284,17 @@ ApplicationWindow {
                     onClicked: changelogDialog.open()
                 }
             }
+            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.about"); font.weight: Font.DemiBold }
+            RowLayout {
+                Layout.fillWidth: true
+                Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
+                    text: I18n.t("app.prefs.about.text") }
+                Button {
+                    objectName: "openLicenses"
+                    text: I18n.t("app.prefs.about.open")
+                    onClicked: licensesDialog.open()
+                }
+            }
             Button {
                 Layout.topMargin: 6
                 text: I18n.t("app.prefs.quit")
@@ -312,6 +323,31 @@ ApplicationWindow {
                 textFormat: Text.MarkdownText
                 text: Changelog
                 onLinkActivated: link => Qt.openUrlExternally(link)
+            }
+        }
+    }
+    Dialog {
+        id: licensesDialog
+        objectName: "licensesDialog"
+        title: I18n.t("app.about.title")
+        anchors.centerIn: parent
+        width: Math.min(680, window.width - 40)
+        height: Math.min(600, parent.height - 40)
+        modal: true
+        standardButtons: Dialog.Close
+        contentItem: ScrollView {
+            id: licensesScroll
+            contentWidth: availableWidth
+            clip: true
+            Label {
+                width: licensesScroll.availableWidth
+                wrapMode: Text.WordWrap
+                textFormat: Text.MarkdownText
+                // Créditos + THIRD_PARTY_LICENSES.md (título rebaixado ao nível das seções).
+                // Montado ao abrir: o Markdown fixa a cor dos links (paleta do app) no parse.
+                text: !licensesDialog.visible ? "" : I18n.t("app.about.credits") + ThirdPartyLicenses.replace(/^# /, "## ")
+                      .replace("](LICENSE)", "](https://github.com/JonasHenriqueDev/OpenSpeak/blob/main/LICENSE)")
+                onLinkActivated: link => { if (/^https?:/.test(link)) Qt.openUrlExternally(link) }
             }
         }
     }
@@ -386,9 +422,11 @@ ApplicationWindow {
     }
     Component.onCompleted: {
         NativeWindow.enableSnapToTop(window)
+        NativeWindow.setLinkColor(Theme.accent)
         if (DebugOpen === "updates") Qt.callLater(() => updatesDialog.open())
         if (DebugOpen === "preferences") Qt.callLater(() => preferencesDialog.open())
         if (DebugOpen === "changelog") Qt.callLater(() => changelogDialog.open())
+        if (DebugOpen === "licenses") Qt.callLater(() => licensesDialog.open())
         if (JustUpdated) {
             const text = I18n.t("app.updated", { version: Updater.version })
             if (StartHidden)

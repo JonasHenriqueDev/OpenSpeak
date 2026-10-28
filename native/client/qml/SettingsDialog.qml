@@ -338,7 +338,7 @@ Popup {
                         width: 168; height: 58
                         hoverEnabled: true
                         Accessible.name: I18n.t("app.prefs.sounds." + modelData)
-                        onClicked: { Settings.soundTheme = modelData; Sounds.preview(modelData, "entrar_sala") }
+                        onClicked: { Settings.soundTheme = modelData; Sounds.previewRandom(modelData) }
                         background: Rectangle {
                             radius: Theme.radius
                             color: soundCard.selected ? Theme.accentSoft : soundCard.hovered ? Theme.panel2 : Theme.panel
@@ -371,7 +371,7 @@ Popup {
                                 ToolTip.visible: hovered
                                 ToolTip.text: I18n.t("app.prefs.sounds.preview")
                                 contentItem: Item { Icon { anchors.centerIn: parent; name: "play"; size: 14; color: Theme.textDim } }
-                                onClicked: Sounds.preview(soundCard.modelData, "entrar_sala")
+                                onClicked: Sounds.previewRandom(soundCard.modelData)
                             }
                         }
                     }

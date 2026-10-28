@@ -29,6 +29,18 @@ export function previewSound(settings, theme, event) {
   el.play().catch(() => { /* sem interação ainda (autoplay bloqueado) */ });
 }
 
+let lastPreview = { event: '', el: null };
+
+/** Prévia de um tema: um evento sorteado a cada vez (nunca o mesmo da anterior). */
+export function previewRandomSound(settings, theme) {
+  const pool = EVENTS.filter(e => e !== lastPreview.event);
+  const event = pool[Math.floor(Math.random() * pool.length)];
+  // cliques seguidos não empilham sons: corta a prévia anterior
+  lastPreview.el?.pause();
+  lastPreview = { event, el: audio(theme, event) };
+  previewSound(settings, theme, event);
+}
+
 export class SoundEffects {
   /** @param manager ScreenshareManager (opcional): streams que estou assistindo */
   constructor(handler, settings, manager = null) {

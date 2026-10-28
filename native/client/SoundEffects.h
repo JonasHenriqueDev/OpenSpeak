@@ -26,6 +26,9 @@ public:
 
     /// Toca um evento ("entrar_sala", "alguem_entrou"...) no tema indicado; usado pela prévia nas Preferências.
     Q_INVOKABLE void preview(const QString &theme, const QString &event);
+    /// Prévia de um tema nas Preferências: a cada chamada um evento sorteado (nunca o mesmo
+    /// da vez anterior), para dar para ouvir os vários sons do tema.
+    Q_INVOKABLE void previewRandom(const QString &theme);
 
 private:
     void preload();
@@ -39,6 +42,8 @@ private:
     Settings *m_settings;
     QHash<QString, QSoundEffect *> m_effects;
     bool m_pending = false;
+    QSoundEffect *m_lastPreview = nullptr; // última prévia sorteada (parada na próxima)
+    QString m_lastPreviewEvent;
     int m_channel = 0;
     QSet<int> m_others;              // clientes no meu canal, exceto eu
     QHash<QString, bool> m_streams;  // streams do meu canal -> pausado

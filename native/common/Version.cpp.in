@@ -1,0 +1,6 @@
+// Gerado pelo CMake a partir de common/Version.cpp.in; não edite.
+#include "Version.h"
+
+namespace openspeak {
+QString version() { return QStringLiteral("@OPENSPEAK_RELEASE_VERSION@"); }
+}

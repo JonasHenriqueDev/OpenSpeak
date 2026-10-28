@@ -1,4 +1,5 @@
 #include "ServerConnection.h"
+#include "Version.h"
 
 #include <QJsonDocument>
 #include <QSysInfo>
@@ -130,7 +131,7 @@ void WebSocketConnection::sendCommand(const QString &cmd, const QJsonObject &arg
     timer->start(CommandTimeoutMs);
     QJsonObject outgoing = args;
     if (cmd == "login") {
-        outgoing["clientInfo"] = QJsonObject{{"name", "OpenSpeak"}, {"version", QStringLiteral(OPENSPEAK_VERSION)},
+        outgoing["clientInfo"] = QJsonObject{{"name", "OpenSpeak"}, {"version", openspeak::version()},
                                              {"kind", "native"}, {"platform", QSysInfo::prettyProductName()}};
         outgoing["resumable"] = true;
     }

@@ -22,7 +22,32 @@ powershell -ExecutionPolicy Bypass -File native/build.ps1
 
 O script configura, compila em Release e roda os testes. O `windeployqt` copia as
 DLLs do Qt para `build\Release`, que fica autônomo. FFmpeg, libdatachannel e
-OpenSSL são linkados estaticamente.
+OpenSSL são linkados estaticamente. A compilação usa todos os núcleos
+(`--parallel $env:NUMBER_OF_PROCESSORS` e `/MP` do MSVC).
+
+A versão (`-Version`) entra só em `build\generated\Version.cpp`, gerado de
+`common/Version.cpp.in` e exposto por `openspeak::version()` (`common/Version.h`).
+Trocar de versão recompila apenas esse arquivo e refaz o link.
+
+No dia a dia dá para rodar só parte dos testes (o build continua completo):
+
+```bash
+powershell -ExecutionPolicy Bypass -File native/build.ps1 -Tests 'tst_engine|ui_'   # regex passada ao ctest -R
+powershell -ExecutionPolicy Bypass -File native/build.ps1 -Changed                  # só o afetado desde a última tag v*
+```
+
+O `-Changed` olha `git diff <última tag v*>..HEAD`, a working tree e os arquivos não
+rastreados:
+
+| Mudou | Testes |
+|---|---|
+| `client/qml/` | `ui_*` |
+| `server/` | `tst_virtualserver`, `tst_sfu_e2e`, `tst_p2p_e2e` |
+| `client/core`, `rtc`, `video`, `media` | `tst_engine`, `tst_p2p_e2e`, `tst_cloudconnection` |
+| só `installer/`, `*.md` (CHANGELOG, docs) ou fora de `native/` | nenhum (pula o ctest) |
+| qualquer outra coisa (CMake, `common/`, `tests/`…) | todos |
+
+O `package.ps1` sempre roda a suíte completa antes de gerar a release.
 
 Para reinstalar as dependências (≈30 min na primeira vez):
 

@@ -13,6 +13,8 @@ option(OPENSPEAK_BUILD_TESTS "Compila os testes" ON)
 
 if(MSVC)
     add_compile_options(/utf-8 /W3 /permissive- /Zc:__cplusplus)
+    # Compila os .cpp de cada alvo em paralelo (além do paralelismo entre alvos).
+    add_compile_options(/MP)
 endif()
 
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Network WebSockets HttpServer)
@@ -38,8 +40,15 @@ endif()
 
 # ---------------------------------------------------------------- common
 add_library(openspeak_common INTERFACE)
-target_compile_definitions(openspeak_common INTERFACE OPENSPEAK_VERSION="${OPENSPEAK_RELEASE_VERSION}")
 target_include_directories(openspeak_common INTERFACE common)
+
+# Versão num único .cpp gerado: o configure_file só regrava o arquivo quando o conteúdo
+# muda, então trocar -Version recompila apenas Version.cpp e refaz o link.
+configure_file(common/Version.cpp.in "${CMAKE_CURRENT_BINARY_DIR}/generated/Version.cpp" @ONLY)
+add_library(openspeak_version STATIC "${CMAKE_CURRENT_BINARY_DIR}/generated/Version.cpp" common/Version.h)
+target_include_directories(openspeak_version PUBLIC common)
+target_link_libraries(openspeak_version PUBLIC Qt6::Core)
+target_link_libraries(openspeak_common INTERFACE openspeak_version)
 
 # Sessão WebRTC base + ajustes de SDP, comuns ao cliente e ao relay do servidor.
 if(OPENSPEAK_LDC)

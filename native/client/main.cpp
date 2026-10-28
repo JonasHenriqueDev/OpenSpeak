@@ -16,6 +16,7 @@
 #include "TrayIcon.h"
 #include "NativeWindow.h"
 #include "SoundEffects.h"
+#include "Version.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
@@ -50,7 +51,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("OpenSpeak"));
     QGuiApplication::setOrganizationName(QStringLiteral("OpenSpeak"));
-    QGuiApplication::setApplicationVersion(QStringLiteral(OPENSPEAK_VERSION));
+    QGuiApplication::setApplicationVersion(openspeak::version());
     QGuiApplication::setWindowIcon(QIcon(QStringLiteral(":/assets/openspeak.ico")));
     QQuickStyle::setStyle(QStringLiteral("FluentWinUI3"));
     QGuiApplication::styleHints()->setColorScheme(Qt::ColorScheme::Dark);
@@ -128,7 +129,7 @@ int main(int argc, char *argv[])
         settings.setConnectionMode(QStringLiteral("server"));
     }
     // Primeira abertura depois de uma atualização: avisa e oferece as novidades.
-    const bool updated = settings.markVersionSeen(QStringLiteral(OPENSPEAK_VERSION));
+    const bool updated = settings.markVersionSeen(openspeak::version());
     if (parser.isSet(nickOpt))
         settings.setNickname(parser.value(nickOpt));
     ConnectionHandler handler;

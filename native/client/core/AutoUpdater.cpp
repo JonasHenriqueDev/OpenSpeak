@@ -1,5 +1,6 @@
 #include "AutoUpdater.h"
 #include "UpdatePolicy.h"
+#include "Version.h"
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -21,7 +22,7 @@ namespace {
 QString cachePath() { return QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/updates"); }
 QNetworkRequest requestFor(const QUrl &url) {
     QNetworkRequest request(url);
-    request.setRawHeader("User-Agent", "OpenSpeak/" OPENSPEAK_VERSION);
+    request.setRawHeader("User-Agent", "OpenSpeak/" + version().toUtf8());
     request.setRawHeader("Accept", "application/vnd.github+json");
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     request.setTransferTimeout(30'000);
@@ -45,7 +46,7 @@ AutoUpdater::AutoUpdater(Settings *settings, QObject *parent)
     });
 }
 void AutoUpdater::setAutomaticChecks(bool enabled) { m_automaticChecks = enabled; }
-QString AutoUpdater::version() const { return QStringLiteral(OPENSPEAK_VERSION); }
+QString AutoUpdater::version() const { return openspeak::version(); }
 QString AutoUpdater::installedEdition() {
     QFile file(QCoreApplication::applicationDirPath() + QStringLiteral("/edition.txt"));
     return file.open(QIODevice::ReadOnly) ? normalizeEdition(QString::fromLatin1(file.read(16))) : QStringLiteral("full");

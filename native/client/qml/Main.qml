@@ -23,7 +23,27 @@ ApplicationWindow {
         MouseArea {
             anchors.fill: parent
             anchors.rightMargin: 246
-            onPressed: window.startSystemMove()
+            // Maximizada: o arrasto só começa depois de alguns pixels, restaurando a
+            // janela sob o cursor (como no Windows); assim o duplo clique continua livre.
+            property point pressPoint
+            property bool fromMaximized: false
+            onPressed: mouse => {
+                fromMaximized = window.visibility === Window.Maximized
+                pressPoint = Qt.point(mouse.x, mouse.y)
+                if (!fromMaximized) window.startSystemMove()
+            }
+            onPositionChanged: mouse => {
+                if (!fromMaximized || !pressed) return
+                if (Math.abs(mouse.x - pressPoint.x) + Math.abs(mouse.y - pressPoint.y) < 6) return
+                fromMaximized = false
+                const ratio = mouse.x / width
+                const cursor = mapToGlobal(mouse.x, mouse.y)
+                window.showNormal()
+                window.x = Math.round(cursor.x - ratio * window.width)
+                window.y = Math.round(cursor.y - mouse.y)
+                window.startSystemMove()
+            }
+            onReleased: fromMaximized = false
             onDoubleClicked: window.toggleMaximized()
         }
         RowLayout {
@@ -365,6 +385,7 @@ ApplicationWindow {
         onAccepted: Updater.installNow()
     }
     Component.onCompleted: {
+        NativeWindow.enableSnapToTop(window)
         if (DebugOpen === "updates") Qt.callLater(() => updatesDialog.open())
         if (DebugOpen === "preferences") Qt.callLater(() => preferencesDialog.open())
         if (DebugOpen === "changelog") Qt.callLater(() => changelogDialog.open())

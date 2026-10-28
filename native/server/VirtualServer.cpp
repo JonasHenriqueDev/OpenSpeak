@@ -58,18 +58,12 @@ QString newResumeToken()
 
 } // namespace
 
-VirtualServer::VirtualServer(SendFn send, QString name, QJsonArray iceServers)
+VirtualServer::VirtualServer(SendFn send, QString name, QJsonArray iceServers, const ChannelList &channels)
     : m_send(std::move(send)), m_name(std::move(name)), m_iceServers(std::move(iceServers))
 {
-    const struct { const char *name; const char *description; } defaults[] = {
-        {"Lobby", "Canal padrão"},
-        {"Jogos", "Partidas e transmissões de gameplay"},
-        {"Trabalho", "Reuniões e compartilhamento de tela"},
-        {"AFK", "Ausente"},
-    };
     int cid = 1;
-    for (const auto &d : defaults) {
-        m_channels[cid] = Channel{cid, cid, QString::fromUtf8(d.name), QString::fromUtf8(d.description)};
+    for (const auto &[channelName, description] : channels) {
+        m_channels[cid] = Channel{cid, cid, channelName, description};
         ++cid;
     }
 }

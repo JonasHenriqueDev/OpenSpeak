@@ -19,11 +19,9 @@ class CommandError extends Error {
 
 const fail = (code, message) => { throw new CommandError(code, message); };
 
-const DEFAULT_CHANNELS = [
-  { name: 'Lobby', description: 'Canal padrão' },
-  { name: 'Jogos', description: 'Partidas e transmissões de gameplay' },
-  { name: 'Trabalho', description: 'Reuniões e compartilhamento de tela' },
-  { name: 'AFK', description: 'Ausente' },
+// Uma sala só: todos se encontram no "Geral".
+export const DEFAULT_CHANNELS = [
+  { name: 'Geral', description: 'Canal padrão' },
 ];
 
 function clampInt(value, min, max, fallback) {
@@ -48,8 +46,9 @@ export class VirtualServer {
    * @param {string} [options.name]
    * @param {object[]} [options.iceServers]
    * @param {() => void} [options.onLiveChanged] algo do liveSnapshot() pode ter mudado (webhook do bot)
+   * @param {{name:string, description:string}[]} [options.channels] canais (padrão: só o "Geral")
    */
-  constructor({ send, name = 'OpenSpeak', iceServers = [], idPrefix = '', onLiveChanged = null }) {
+  constructor({ send, name = 'OpenSpeak', iceServers = [], idPrefix = '', onLiveChanged = null, channels = DEFAULT_CHANNELS }) {
     this.send = send;
     this.onLiveChanged = onLiveChanged;
     this.name = name;
@@ -61,7 +60,7 @@ export class VirtualServer {
     this.nextStreamId = 1;
     this.idPrefix = idPrefix;
     let cid = 1;
-    for (const ch of DEFAULT_CHANNELS) {
+    for (const ch of channels) {
       this.channels.set(cid, { cid, order: cid, ...ch });
       cid++;
     }

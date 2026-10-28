@@ -82,6 +82,22 @@ private slots:
 
     void cleanup() { server.reset(); } // antes dos relays falsos (locais a cada teste)
 
+    // O padrão é só o "Geral"; os testes de troca de canal recriam o servidor com três.
+    void useThreeChannels()
+    {
+        server = std::make_unique<VirtualServer>([this](int clid, const QJsonObject &m) { inbox[clid].append(m); },
+                                                 QStringLiteral("OpenSpeak"), QJsonArray{},
+                                                 VirtualServer::ChannelList{{"Geral", {}}, {"B", {}}, {"C", {}}});
+    }
+
+    void defaultServerHasOnlyGeral()
+    {
+        const int a = login("a");
+        const QJsonArray channels = server->handle(a, "sync", {}).value("channels").toArray();
+        QCOMPARE(channels.size(), 1);
+        QCOMPARE(channels.first().toObject().value("name").toString(), QStringLiteral("Geral"));
+    }
+
     void loginRequiresPasswordWhenSet()
     {
         server->setPassword("segredo");
@@ -129,7 +145,7 @@ private slots:
         QCOMPARE(s.value("id").toString(), shown);
         QCOMPARE(s.value("owner").toString(), QStringLiteral("host"));
         QCOMPARE(s.value("app").toString(), QStringLiteral("Counter-Strike 2"));
-        QCOMPARE(s.value("channel").toString(), QStringLiteral("Lobby"));
+        QCOMPARE(s.value("channel").toString(), QStringLiteral("Geral"));
         QVERIFY(!s.contains("uid"));
         QVERIFY(!s.contains("thumbnail"));
         // Contagens contam também streams sem anúncio, mas sem dizer de quem.
@@ -259,6 +275,7 @@ private slots:
 
     void leavingChannelStopsStreams()
     {
+        useThreeChannels();
         const int host = login("host"), viewer = login("viewer");
         const QString s1 = setup(host);
         server->handle(host, "clientmove", {{"cid", 2}});
@@ -271,6 +288,7 @@ private slots:
 
     void joinRequiresSameChannel()
     {
+        useThreeChannels();
         const int host = login("host"), viewer = login("viewer");
         const QString sid = setup(host);
         server->handle(viewer, "clientmove", {{"cid", 3}});

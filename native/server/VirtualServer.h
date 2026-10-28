@@ -31,7 +31,12 @@ class VirtualServer {
 public:
     using SendFn = std::function<void(int clid, const QJsonObject &message)>;
 
-    VirtualServer(SendFn send, QString name = QStringLiteral("OpenSpeak"), QJsonArray iceServers = {});
+    /// Nome e descrição de cada canal; o padrão é uma sala só, o "Geral".
+    using ChannelList = QList<std::pair<QString, QString>>;
+    static ChannelList defaultChannels() { return {{QStringLiteral("Geral"), QStringLiteral("Canal padrão")}}; }
+
+    VirtualServer(SendFn send, QString name = QStringLiteral("OpenSpeak"), QJsonArray iceServers = {},
+                  const ChannelList &channels = defaultChannels());
 
     int connect();
     void disconnect(int clid);

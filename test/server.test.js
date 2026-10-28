@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { VirtualServer } from '../server/virtualServer.js';
 import { StreamAccess, LeaveReason } from '../server/protocol.js';
 
-function setup() {
+function setup(options = {}) {
   const inbox = new Map();
-  const server = new VirtualServer({ send: (clid, msg) => inbox.get(clid)?.push(msg) });
+  const server = new VirtualServer({ send: (clid, msg) => inbox.get(clid)?.push(msg), ...options });
   const login = nickname => {
     const clid = server.connect();
     inbox.set(clid, []);
@@ -118,8 +118,16 @@ test('limite de espectadores', () => {
   assert.throws(() => server.handle(host, 'respondjoinstreamrequest', { streamIdentifier, clid: b, accept: true }), { code: 'viewer_limit' });
 });
 
+// O servidor padrão só tem o "Geral"; estes testes precisam de outros canais.
+const THREE_CHANNELS = { channels: [{ name: 'Geral' }, { name: 'B' }, { name: 'C' }] };
+
+test('servidor padrão tem só o canal Geral', () => {
+  const { server } = setup();
+  assert.deepEqual([...server.channels.values()].map(c => c.name), ['Geral']);
+});
+
 test('sair do canal encerra os próprios streams; desconectar idem', () => {
-  const { server, login, notes } = setup();
+  const { server, login, notes } = setup(THREE_CHANNELS);
   const host = login('host');
   const viewer = login('viewer');
   const s1 = server.handle(host, 'setupstream', {}).streamIdentifier;
@@ -132,7 +140,7 @@ test('sair do canal encerra os próprios streams; desconectar idem', () => {
 });
 
 test('pedido exige estar no mesmo canal', () => {
-  const { server, login } = setup();
+  const { server, login } = setup(THREE_CHANNELS);
   const host = login('host');
   const viewer = login('viewer');
   const { streamIdentifier } = server.handle(host, 'setupstream', {});
@@ -187,7 +195,7 @@ test('bot do Discord: liveSnapshot só lista streams com announce, com quem e qu
   assert.equal(live.streams[0].id, shown);
   assert.equal(live.streams[0].owner, 'host');
   assert.equal(live.streams[0].app, 'Counter-Strike 2');
-  assert.equal(live.streams[0].channel, 'Lobby');
+  assert.equal(live.streams[0].channel, 'Geral');
   assert.equal(live.streams[0].uid, undefined);
   assert.equal(live.streams[0].thumbnail, undefined);
   // Contagens contam também streams sem anúncio, mas sem dizer de quem.

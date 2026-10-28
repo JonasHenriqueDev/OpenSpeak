@@ -210,14 +210,13 @@ Rectangle {
                     tip: I18n.t("video.action.volume")
                     onClicked: volumeSlider.value = volumeSlider.value === 0 ? 1 : 0
                 }
-                Slider {
+                VolumeSlider {
+                    id: fullscreenVolume
                     visible: !tile.own
                     Layout.preferredWidth: 120
                     from: 0; to: tile.maxVolume
-                    value: volumeSlider.value
-                    onMoved: volumeSlider.value = value
-                    ToolTip.visible: hovered || pressed
-                    ToolTip.text: Math.round(value * 100) + "%"
+                    onVolumeEdited: v => volumeSlider.value = v
+                    Binding { target: fullscreenVolume; property: "value"; value: volumeSlider.value }
                 }
                 Item { Layout.fillWidth: true }
                 FullscreenButton {
@@ -382,14 +381,13 @@ Rectangle {
                     tip: I18n.t("video.action.volume")
                     onClicked: volumeSlider.value = volumeSlider.value === 0 ? 1 : 0
                 }
-                Slider {
+                VolumeSlider {
+                    id: pipVolume
                     visible: !tile.own && pipWindow.width >= 320
                     Layout.preferredWidth: 90
                     from: 0; to: tile.maxVolume
-                    value: volumeSlider.value
-                    onMoved: volumeSlider.value = value
-                    ToolTip.visible: hovered || pressed
-                    ToolTip.text: Math.round(value * 100) + "%"
+                    onVolumeEdited: v => volumeSlider.value = v
+                    Binding { target: pipVolume; property: "value"; value: volumeSlider.value }
                 }
                 Item { Layout.fillWidth: true }
                 PipButton {
@@ -712,15 +710,13 @@ Rectangle {
                 tip: tile.data_.audioBlocked ? I18n.t("video.audio.discord.blocked") : I18n.t("video.action.volume")
                 onClicked: volumeSlider.value = volumeSlider.value === 0 ? 1 : 0
             }
-            Slider {
+            VolumeSlider {
                 id: volumeSlider
                 visible: !tile.own && tile.playing && !tile.small
                 Layout.preferredWidth: 90
                 from: 0; to: tile.maxVolume
                 value: tile.data_.volume
-                ToolTip.visible: hovered || pressed
-                ToolTip.text: Math.round(value * 100) + "%"
-                onMoved: Screenshare.setVolume(tile.streamId, value)
+                onVolumeEdited: v => Screenshare.setVolume(tile.streamId, v)
                 onValueChanged: if (!pressed) Screenshare.setVolume(tile.streamId, value)
             }
 

@@ -36,8 +36,9 @@ AppVerName={#AppVerName}
 AppPublisher=OpenSpeak
 AppPublisherURL=https://github.com/JonasHenriqueDev/OpenSpeak
 DefaultDirName={localappdata}\Programs\{#AppName}
-UsePreviousAppDir=no
-DisableDirPage=yes
+; A primeira instalação deixa escolher a pasta; atualizações reaproveitam a anterior.
+UsePreviousAppDir=yes
+DisableDirPage=auto
 DefaultGroupName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 OutputDir=..\dist
@@ -94,6 +95,36 @@ function RelaunchAfterUpdate(): Boolean;
 begin
   Result := (ExpandConstant('{param:UPDATE|0}') = '1') and
             (ExpandConstant('{param:RELAUNCH|0}') = '1');
+end;
+
+// Instalação por usuário (sem elevação): recusa pastas onde não dá para gravar,
+// como "Arquivos de Programas", antes de começar a copiar.
+function DirIsWritable(const Dir: String): Boolean;
+var
+  Probe: String;
+  Created: Boolean;
+begin
+  Created := not DirExists(Dir);
+  if Created and not ForceDirectories(Dir) then begin
+    Result := False;
+    Exit;
+  end;
+  Probe := AddBackslash(Dir) + '.openspeak-write-test';
+  Result := SaveStringToFile(Probe, '', False);
+  DeleteFile(Probe);
+  if Created then
+    RemoveDir(Dir);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CurPageID = wpSelectDir) and not DirIsWritable(WizardDirValue) then begin
+    MsgBox('Sem permissão para gravar em:' + #13#10 + WizardDirValue + #13#10#13#10 +
+           'Escolha uma pasta do seu usuário (o OpenSpeak instala sem pedir administrador).',
+           mbError, MB_OK);
+    Result := False;
+  end;
 end;
 
 // Tailscale é opcional, oferecido apenas nos modos avançados do app.

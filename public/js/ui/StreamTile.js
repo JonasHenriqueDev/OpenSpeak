@@ -295,6 +295,13 @@ export class StreamTile {
           this.video.muted = this.muted;
         },
         click: ev => ev.stopPropagation(),
+        // Roda do mouse sobre o slider ajusta o volume em passos de 5%.
+        wheel: ev => {
+          ev.preventDefault();
+          const v = Math.min(1, Math.max(0, Number(slider.value) + (ev.deltaY < 0 ? 0.05 : -0.05)));
+          slider.value = String(Math.round(v * 100) / 100);
+          slider.dispatchEvent(new Event('input'));
+        },
       },
     });
     return h('span.volume',

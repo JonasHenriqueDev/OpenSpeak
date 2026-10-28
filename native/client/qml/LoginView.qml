@@ -6,6 +6,9 @@ import "I18n.js" as I18n
 Rectangle {
     id: root
     property string message: ""
+    // Quem usa a tela mostra "Conectando…" em message; atribuir message aqui
+    // quebraria o binding e o erro do login (ex.: senha errada) nunca apareceria.
+    signal connecting()
     property bool busy: false
     property bool autoTried: false
     property bool advancedExpanded: false
@@ -23,7 +26,7 @@ Rectangle {
         const nick = nickField.text.trim()
         if (!nick.length || !tailnetReady) return
         Settings.nickname = nick; Settings.connectionMode = "tailnet"
-        busy = true; message = I18n.t("app.connecting")
+        busy = true; root.connecting()
         Server.connectTailnet(nick)
     }
     function enterServer() {
@@ -31,14 +34,14 @@ Rectangle {
         const nick = nickField.text.trim(), url = serverField.text.trim(), password = passwordField.text
         if (!nick.length || !url.length) return
         Settings.serverUrl = url; Settings.serverPassword = password; Settings.nickname = nick; Settings.connectionMode = "server"
-        busy = true; message = I18n.t("app.connecting")
+        busy = true; root.connecting()
         Server.connectTo(url, nick, Settings.uid, password)
     }
     function enterCloud() {
         const nick = nickField.text.trim()
         if (!nick.length || !tailnetReady) return
         Settings.nickname = nick; Settings.connectionMode = "cloud"
-        busy = true; message = I18n.t("app.connecting")
+        busy = true; root.connecting()
         Server.connectCloud(nick, Settings.uid)
     }
     function tryAuto() {

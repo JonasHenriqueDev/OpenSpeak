@@ -460,6 +460,7 @@ ApplicationWindow {
         id: loginView
         LoginView {
             message: window.loginMessage
+            onConnecting: window.loginMessage = I18n.t("app.connecting")
         }
     }
     Component {

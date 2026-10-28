@@ -134,6 +134,7 @@ private:
     MeshConnection *m_mesh = nullptr;
     PeerDirectory *m_directory = nullptr;
     bool m_loggedIn = false;
+    bool m_loginRejected = false;
     bool m_reconnecting = false, m_cloudMode = false;
     QString m_serverName;
     QStringList m_capabilities;

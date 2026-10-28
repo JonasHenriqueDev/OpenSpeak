@@ -3,6 +3,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <utility>
 
 namespace openspeak {
 
@@ -49,7 +50,12 @@ ConnectionHandler::ConnectionHandler(QObject *parent) : QObject(parent)
     connect(&m_connection, &ServerConnection::connected, this, &ConnectionHandler::login);
     connect(&m_connection, &ServerConnection::disconnected, this, [this](const QString &reason) {
         const bool was = m_loggedIn;
+        // Login recusado já avisou o motivo (ex.: senha errada); a queda que vem
+        // em seguida não deve trocá-lo por "bye"/"conexão encerrada".
+        const bool rejected = std::exchange(m_loginRejected, false);
         reset();
+        if (rejected)
+            return;
         if (was)
             emit disconnected(reason);
         else
@@ -99,6 +105,7 @@ void ConnectionHandler::connectTailnet(const QString &nickname)
     m_pendingNickname = nickname;
     m_pendingUid = m_directory->self().identity();
     m_pendingPassword.clear();
+    m_loginRejected = false;
     m_connection.setBackend(m_mesh);
     emit connectionChanged();
     m_mesh->start(nickname);
@@ -111,6 +118,7 @@ void ConnectionHandler::connectTo(const QString &url, const QString &nickname, c
     m_pendingNickname = nickname;
     m_pendingUid = uid;
     m_pendingPassword = password;
+    m_loginRejected = false;
     m_connection.setBackend(m_ws);
     emit connectionChanged();
     m_ws->open(QUrl(url));
@@ -127,6 +135,7 @@ void ConnectionHandler::connectCloud(const QString &nickname, const QString &uid
     m_pendingNickname = nickname;
     m_pendingUid = uid;
     m_pendingPassword.clear();
+    m_loginRejected = false;
     m_ws->setCloudMode(true);
     m_connection.setBackend(m_ws);
     emit connectionChanged();
@@ -140,6 +149,7 @@ void ConnectionHandler::login()
         args.insert("password", m_pendingPassword);
     m_connection.sendCommand(QStringLiteral("login"), args, [this](const CommandResult &r) {
         if (!r.ok()) {
+            m_loginRejected = true;
             emit connectFailed(r.error.isEmpty() ? r.returnCode : r.error);
             m_connection.close();
             return;

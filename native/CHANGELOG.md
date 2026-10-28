@@ -1,3 +1,13 @@
+# OpenSpeak 1.0.17 — pasta de instalação e volume com a roda do mouse
+
+- Na primeira instalação dá para **escolher a pasta** onde o OpenSpeak fica.
+  As atualizações continuam na mesma pasta, sem perguntar.
+- O volume de cada transmissão agora muda com a **roda do mouse** e com as
+  **setas do teclado**. Acima de 100% há uma pequena trava: arraste um pouco
+  além ou insista na roda para passar.
+- Corrigido: com a **senha do servidor errada**, a tela ficava em
+  "Conectando…" para sempre. Agora o erro aparece e dá para tentar de novo.
+
 # OpenSpeak 1.0.16 — servidor com senha
 
 - A tela de entrada ganhou o campo **"Senha do servidor"**. Se o servidor for

@@ -1,3 +1,24 @@
+# OpenSpeak 1.0.18 — preferências novas, temas e mais sons
+
+- As **Preferências** foram refeitas: abrem em tela cheia, com as categorias
+  na lateral (Aparência, Sons, Streams assistidos, Windows, Atualizações e
+  Licenças e créditos), no estilo das configurações do Discord.
+- **Temas de cores**: Meia-noite, Grafite, Preto OLED, Ameixa, Floresta e um
+  tema **Claro**, além de 8 **cores de destaque** à escolha (Preferências ›
+  Aparência).
+- **Seis temas de sons novos**: Cristal, Retrô, Kalimba, Espacial, Discreto e
+  **Nostalgia**, uma paródia com o clima dos sons do Discord, criada do zero.
+  Cada tema tem um botão para ouvir antes de escolher.
+- **Atualizações** viraram uma página das Preferências, com a versão, o estado
+  e as novidades no mesmo lugar. A escolha da edição Completa saiu dali.
+- Nova página **Licenças e créditos**.
+- Arrastar a janela até o **topo da tela** maximiza, e arrastar a janela
+  maximizada pela barra de título restaura, como nos programas do Windows.
+- O servidor tem agora **uma sala só, "Geral"**.
+- O codificador de vídeo fica **sempre no automático** (saiu o menu ao lado de
+  "Desconectar").
+- Os controles deslizantes não mostram mais os tracinhos de escala.
+
 # OpenSpeak 1.0.17 — pasta de instalação e volume com a roda do mouse
 
 - Na primeira instalação dá para **escolher a pasta** onde o OpenSpeak fica.

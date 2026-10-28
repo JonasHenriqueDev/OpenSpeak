@@ -31,7 +31,10 @@ Popup {
     leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
     leftInset: 0; rightInset: 0; topInset: 0; bottomInset: 0
     margins: 0
-    modal: true
+    // Não modal: um Popup modal bloqueia a barra de título e as bordas da janela, e
+    // aí não dava para redimensionar com as Preferências abertas. Ele já cobre tudo
+    // abaixo da barra, então o resto do app continua inacessível.
+    modal: false
     dim: false
     focus: true
     closePolicy: Popup.CloseOnEscape
@@ -63,107 +66,117 @@ Popup {
 
     background: Rectangle { color: Theme.background }
 
-    contentItem: RowLayout {
-        spacing: 0
+    contentItem: Item {
+        RowLayout {
+            anchors.fill: parent
+            spacing: 0
 
-        // ------------------------------------------------------------ categorias
-        Rectangle {
-            Layout.fillHeight: true
-            Layout.preferredWidth: Math.max(220, Math.min(300, root.width * 0.26))
-            color: Theme.contrast
-            Flickable {
-                anchors.fill: parent
-                contentHeight: sidebar.implicitHeight + 40
-                clip: true
-                ColumnLayout {
-                    id: sidebar
-                    x: 16; y: 24
-                    width: parent.width - 32
-                    spacing: 2
-                    Repeater {
-                        model: root.categories
-                        delegate: Loader {
-                            required property var modelData
+            // ------------------------------------------------------------ categorias
+            Rectangle {
+                Layout.fillHeight: true
+                Layout.preferredWidth: Math.max(220, Math.min(300, root.width * 0.26))
+                color: Theme.contrast
+                Flickable {
+                    anchors.fill: parent
+                    contentHeight: sidebar.implicitHeight + 40
+                    clip: true
+                    ColumnLayout {
+                        id: sidebar
+                        x: 16; y: 24
+                        width: parent.width - 32
+                        spacing: 2
+                        Repeater {
+                            model: root.categories
+                            delegate: Loader {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                sourceComponent: modelData.header !== undefined ? sidebarHeader : sidebarItem
+                                property var entry: modelData
+                            }
+                        }
+                        Rectangle { Layout.fillWidth: true; Layout.topMargin: 8; Layout.bottomMargin: 8; height: 1; color: Theme.border }
+                        SidebarButton {
+                            objectName: "quitApp"
                             Layout.fillWidth: true
-                            sourceComponent: modelData.header !== undefined ? sidebarHeader : sidebarItem
-                            property var entry: modelData
+                            label: I18n.t("app.prefs.quit")
+                            iconName: "power"
+                            textColor: Theme.danger
+                            onClicked: root.quitRequested()
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 12
+                            leftPadding: 10
+                            text: "OpenSpeak " + Updater.version + (Updater.edition === "lite" ? " Lite" : "")
+                            color: Theme.textFaint
+                            font.pixelSize: 11
                         }
                     }
-                    Rectangle { Layout.fillWidth: true; Layout.topMargin: 8; Layout.bottomMargin: 8; height: 1; color: Theme.border }
-                    SidebarButton {
-                        objectName: "quitApp"
-                        Layout.fillWidth: true
-                        label: I18n.t("app.prefs.quit")
-                        iconName: "power"
-                        textColor: Theme.danger
-                        onClicked: root.quitRequested()
+                }
+            }
+
+            // --------------------------------------------------------------- página
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+
+                ScrollView {
+                    id: pageScroll
+                    anchors.fill: parent
+                    contentWidth: availableWidth
+                    clip: true
+                    Item {
+                        width: pageScroll.availableWidth
+                        implicitHeight: pageLoader.implicitHeight + 80
+                        Loader {
+                            id: pageLoader
+                            objectName: "settingsPage"
+                            x: 40; y: 40
+                            width: Math.min(parent.width - 120, 720)
+                            sourceComponent: root.pages[root.page] || appearancePage
+                        }
+                    }
+                }
+
+                // Fechar (X + "ESC"), como no Discord.
+                Column {
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.topMargin: 40
+                    anchors.rightMargin: 24
+                    spacing: 6
+                    RoundButton {
+                        id: closeButton
+                        objectName: "closeSettings"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: 36; height: 36
+                        padding: 0
+                        Accessible.name: I18n.t("app.prefs.close")
+                        background: Rectangle {
+                            radius: width / 2
+                            color: closeButton.hovered ? Theme.panel3 : "transparent"
+                            border.width: 2
+                            border.color: closeButton.hovered ? Theme.textDim : Theme.textFaint
+                        }
+                        contentItem: Item { Icon { anchors.centerIn: parent; name: "close"; size: 16; color: Theme.textDim } }
+                        onClicked: root.close()
                     }
                     Label {
-                        Layout.fillWidth: true
-                        Layout.topMargin: 12
-                        leftPadding: 10
-                        text: "OpenSpeak " + Updater.version + (Updater.edition === "lite" ? " Lite" : "")
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "ESC"
                         color: Theme.textFaint
                         font.pixelSize: 11
+                        font.weight: Font.DemiBold
                     }
                 }
             }
         }
 
-        // --------------------------------------------------------------- página
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-
-            ScrollView {
-                id: pageScroll
-                anchors.fill: parent
-                contentWidth: availableWidth
-                clip: true
-                Item {
-                    width: pageScroll.availableWidth
-                    implicitHeight: pageLoader.implicitHeight + 80
-                    Loader {
-                        id: pageLoader
-                        objectName: "settingsPage"
-                        x: 40; y: 40
-                        width: Math.min(parent.width - 120, 720)
-                        sourceComponent: root.pages[root.page] || appearancePage
-                    }
-                }
-            }
-
-            // Fechar (X + "ESC"), como no Discord.
-            Column {
-                anchors.top: parent.top
-                anchors.right: parent.right
-                anchors.topMargin: 40
-                anchors.rightMargin: 24
-                spacing: 6
-                RoundButton {
-                    id: closeButton
-                    objectName: "closeSettings"
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: 36; height: 36
-                    padding: 0
-                    Accessible.name: I18n.t("app.prefs.close")
-                    background: Rectangle {
-                        radius: width / 2
-                        color: closeButton.hovered ? Theme.panel3 : "transparent"
-                        border.width: 2
-                        border.color: closeButton.hovered ? Theme.textDim : Theme.textFaint
-                    }
-                    contentItem: Item { Icon { anchors.centerIn: parent; name: "close"; size: 16; color: Theme.textDim } }
-                    onClicked: root.close()
-                }
-                Label {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "ESC"
-                    color: Theme.textFaint
-                    font.pixelSize: 11
-                    font.weight: Font.DemiBold
-                }
-            }
+        // As bordas da janela ficam por baixo do painel; repete as de baixo e dos lados
+        // aqui dentro (a de cima fica na barra de título, que continua livre).
+        ResizeHandles {
+            window: root.parent ? root.parent.Window.window : null
+            edges: Qt.LeftEdge | Qt.RightEdge | Qt.BottomEdge
         }
     }
 

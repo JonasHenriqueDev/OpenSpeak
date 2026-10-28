@@ -211,18 +211,19 @@ int main(int argc, char *argv[])
                 auto *startup = findVisualItem(window->contentItem(), QStringLiteral("startupScreen"));
                 valid = valid && startup && startup->isVisible() && startup->width() >= 800;
             } else if (panel == "updates" || panel == "preferences" || panel == "changelog" || panel == "licenses") {
-                // Licenças e créditos é uma página das Preferências.
-                auto *dialog = window->findChild<QObject *>(panel == "licenses" ? QStringLiteral("preferencesDialog")
-                                                                                 : panel + QStringLiteral("Dialog"));
+                // Atualizações, novidades e licenças são páginas das Preferências.
+                auto *dialog = window->findChild<QObject *>(QStringLiteral("preferencesDialog"));
                 valid = valid && dialog && dialog->property("visible").toBool()
                     && dialog->property("width").toDouble() >= 400
                     && dialog->property("height").toDouble() < window->height();
                 if (panel == "changelog")
                     valid = valid && engine.rootContext()->contextProperty(QStringLiteral("Changelog")).toString()
                                          .startsWith(QStringLiteral("# OpenSpeak "));
+                if (panel != "preferences")
+                    valid = valid && dialog->property("page").toString()
+                                         == (panel == "licenses" ? QStringLiteral("about") : QStringLiteral("updates"));
                 if (panel == "licenses")
-                    valid = valid && dialog && dialog->property("page").toString() == QStringLiteral("about")
-                            && engine.rootContext()->contextProperty(QStringLiteral("ThirdPartyLicenses")).toString()
+                    valid = valid && engine.rootContext()->contextProperty(QStringLiteral("ThirdPartyLicenses")).toString()
                                          .contains(QStringLiteral("libdatachannel"));
             } else if (panel != "view-menu") {
                 auto *grid = findVisualItem(window->contentItem(), QStringLiteral("sourceGrid"));

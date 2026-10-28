@@ -10,8 +10,11 @@ Popup {
     id: root
 
     property string page: "appearance"
+    // Atualizações › Novidades: só a versão atual ou o histórico inteiro.
+    property bool allChangelog: false
     readonly property real topOffset: 34 // altura da barra de título do Main.qml
     signal quitRequested()
+    signal installRequested()
 
     function openAt(p) {
         page = p
@@ -48,11 +51,12 @@ Popup {
         { id: "watching", label: I18n.t("app.prefs.section.watching"), icon: "eye" },
         { id: "system", label: I18n.t("app.prefs.section.system"), icon: "pin" },
         { header: I18n.t("app.prefs.group.about") },
+        { id: "updates", label: I18n.t("app.prefs.section.updates"), icon: "download" },
         { id: "about", label: I18n.t("app.prefs.section.about"), icon: "info" }
     ]
     readonly property var pages: ({
         appearance: appearancePage, sounds: soundsPage, watching: watchingPage,
-        system: systemPage, about: aboutPage
+        system: systemPage, updates: updatesPage, about: aboutPage
     })
 
     background: Rectangle { color: Theme.background }
@@ -393,6 +397,132 @@ Popup {
                 description: I18n.t("app.prefs.start_minimized.hint")
                 checked: Settings.startMinimized
                 onToggled: c => Settings.startMinimized = c
+            }
+        }
+    }
+
+    Component {
+        id: updatesPage
+        ColumnLayout {
+            objectName: "updatesContent"
+            spacing: 10
+            PageTitle { text: I18n.t("app.prefs.section.updates") }
+
+            // Cartão com a versão instalada, o estado e as ações.
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: versionCard.implicitHeight + 36
+                radius: Theme.radius
+                color: Theme.panel
+                border.color: Theme.border
+                ColumnLayout {
+                    id: versionCard
+                    anchors.fill: parent
+                    anchors.margins: 18
+                    spacing: 12
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 14
+                        Rectangle {
+                            Layout.preferredWidth: 44; Layout.preferredHeight: 44
+                            radius: 12
+                            color: Theme.accentSoft
+                            Icon { anchors.centerIn: parent; name: "logo"; size: 24; color: Theme.accent }
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Label {
+                                text: "OpenSpeak " + Updater.version + (Updater.edition === "lite" ? " Lite" : "")
+                                color: Theme.text
+                                font.pixelSize: 16
+                                font.weight: Font.DemiBold
+                            }
+                            Label {
+                                objectName: "updateStatus"
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: Updater.status
+                                color: Updater.available || Updater.ready ? Theme.accent : Theme.textDim
+                            }
+                        }
+                        BusyIndicator {
+                            Layout.preferredWidth: 28; Layout.preferredHeight: 28
+                            visible: Updater.busy
+                            running: visible
+                        }
+                    }
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Button {
+                            text: "Aplicar e reiniciar"
+                            highlighted: true
+                            visible: Updater.ready
+                            onClicked: root.installRequested()
+                        }
+                        Button {
+                            text: "Baixar atualização"
+                            highlighted: true
+                            visible: Updater.installed && Updater.available && !Updater.ready
+                            enabled: !Updater.busy
+                            onClicked: Updater.downloadUpdate()
+                        }
+                        Button { text: "Verificar agora"; enabled: !Updater.busy; onClicked: Updater.check() }
+                        Button {
+                            text: "Página de downloads"
+                            flat: true
+                            onClicked: Qt.openUrlExternally("https://github.com/JonasHenriqueDev/OpenSpeak/releases")
+                        }
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: Theme.textFaint
+                        font.pixelSize: 12
+                        text: Updater.installed
+                              ? "Ao abrir, o app baixa e instala atualizações automaticamente antes de conectar. A instalação por usuário preserva suas configurações."
+                              : "O app verifica ao abrir. Na versão portátil, baixe o novo instalador ou pacote na página de downloads."
+                    }
+                }
+            }
+
+            SectionHeader { text: I18n.t("app.updates.options") }
+            SwitchRow {
+                switchObjectName: "automaticUpdates"
+                title: "Verificar também a cada 6 horas"
+                description: "A verificação ao abrir o app acontece sempre."
+                checked: Settings.automaticUpdates
+                onToggled: c => Settings.automaticUpdates = c
+            }
+            SwitchRow {
+                switchObjectName: "prereleaseUpdates"
+                title: "Receber pré-releases"
+                description: Settings.prereleaseUpdates
+                             ? "Canal pré: releases estáveis e versões de teste mais novas."
+                             : "Canal estável: recebe somente releases, sem pré-releases."
+                checked: Settings.prereleaseUpdates
+                onToggled: c => Settings.prereleaseUpdates = c
+            }
+
+            SectionHeader { text: root.allChangelog ? I18n.t("app.changelog.title") : I18n.t("app.updates.changelog") }
+            Label {
+                objectName: "updatesChangelog"
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                textFormat: Text.MarkdownText
+                color: Theme.textDim
+                // Só a seção da versão atual (até o próximo "# OpenSpeak"), ou tudo.
+                // A página é criada ao abrir, então o Markdown já pega a cor de link do tema.
+                // Cabeçalhos rebaixados dois níveis para caber no tamanho da página.
+                text: (root.allChangelog ? Changelog : Changelog.split(/\r?\n(?=# )/)[0]).replace(/^(#+) /gm, "##$1 ")
+                onLinkActivated: link => Qt.openUrlExternally(link)
+            }
+            Button {
+                objectName: "toggleChangelog"
+                flat: true
+                text: root.allChangelog ? I18n.t("app.updates.changelog.current") : I18n.t("app.updates.changelog.all")
+                onClicked: root.allChangelog = !root.allChangelog
             }
         }
     }

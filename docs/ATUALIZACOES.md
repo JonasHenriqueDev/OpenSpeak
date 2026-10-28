@@ -16,13 +16,13 @@ reabre automaticamente, sem perguntar. A tela inicial mostra o estado da
 verificação e do download. Se já está atualizado ou a consulta/download falha,
 a entrada é liberada normalmente.
 
-No botão com ícone de download na barra da janela:
+Em Preferências › Atualizações (também pelo botão com ícone de download na barra da janela):
 
 - **Verificar também a cada 6 horas**: habilitado por padrão. Controla somente
   as consultas periódicas; a verificação ao abrir ocorre sempre.
 - **Receber pré-releases**: desabilitado por padrão. Desligado recebe somente
   releases estáveis. Ligado recebe a versão mais nova entre releases e pré-releases.
-- **Edição**: não há mais escolha na janela. Cada instalação continua na própria
+- **Edição**: não há mais escolha nas preferências. Cada instalação continua na própria
   edição: **Lite** (padrão, só o cliente do servidor, com streams P2P ou pelo
   servidor/SFU) ou **Completa** (inclui também Tailscale, sala web e servidor
   dedicado). Para trocar, instale o instalador da outra edição; as duas usam a

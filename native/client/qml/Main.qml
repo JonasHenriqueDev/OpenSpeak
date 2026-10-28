@@ -83,7 +83,7 @@ ApplicationWindow {
                 ToolTip.text: "Atualizações · " + Updater.version
                 // Centralizado: como contentItem direto, o ícone estica e fica achatado.
                 contentItem: Item { Icon { anchors.centerIn: parent; name: "download"; size: 16 } }
-                onClicked: updatesDialog.open()
+                onClicked: preferencesDialog.openAt("updates")
             }
             ToolButton {
                 objectName: "preferencesButton"
@@ -189,89 +189,7 @@ ApplicationWindow {
         id: preferencesDialog
         objectName: "preferencesDialog"
         onQuitRequested: window.quitApp()
-    }
-    Dialog {
-        id: changelogDialog
-        objectName: "changelogDialog"
-        title: I18n.t("app.changelog.title")
-        anchors.centerIn: parent
-        width: Math.min(620, window.width - 40)
-        height: Math.min(560, parent.height - 40)
-        modal: true
-        standardButtons: Dialog.Close
-        contentItem: ScrollView {
-            id: changelogScroll
-            contentWidth: availableWidth
-            clip: true
-            Label {
-                width: changelogScroll.availableWidth
-                wrapMode: Text.WordWrap
-                textFormat: Text.MarkdownText
-                text: changelogDialog.visible ? Changelog : "" // montado ao abrir: o Markdown fixa a cor dos links no parse
-                onLinkActivated: link => Qt.openUrlExternally(link)
-            }
-        }
-    }
-    Dialog {
-        id: updatesDialog
-        objectName: "updatesDialog"
-        title: "Atualizações · OpenSpeak " + Updater.version + (Updater.edition === "lite" ? " Lite" : "")
-        anchors.centerIn: parent
-        width: Math.min(480, window.width - 40)
-        // Em janelas baixas, as novidades encolhem (e rolam) para o diálogo caber.
-        height: Math.min(implicitHeight, parent.height - 40)
-        modal: true
-        standardButtons: Dialog.Close
-        contentItem: ColumnLayout {
-            objectName: "updatesContent"
-            spacing: 12
-            CheckBox {
-                text: "Verificar também a cada 6 horas"
-                checked: Settings.automaticUpdates
-                onToggled: Settings.automaticUpdates = checked
-            }
-            CheckBox {
-                text: "Receber pré-releases"
-                checked: Settings.prereleaseUpdates
-                onToggled: Settings.prereleaseUpdates = checked
-            }
-            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
-                text: Settings.prereleaseUpdates ? "Canal pré: releases estáveis e versões de teste mais novas." : "Canal estável: recebe somente releases, sem pré-releases." }
-            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: Updater.status }
-            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
-                text: Updater.installed ? "Ao abrir, o app baixa e instala atualizações automaticamente antes de conectar. A instalação por usuário preserva suas configurações." : "O app verifica ao abrir. Na versão portátil, baixe o novo instalador ou pacote na página de downloads." }
-            RowLayout {
-                Button { text: "Verificar agora"; enabled: !Updater.busy; onClicked: Updater.check() }
-                Button { text: "Baixar atualização"; visible: Updater.installed && Updater.available && !Updater.ready; enabled: !Updater.busy; onClicked: Updater.downloadUpdate() }
-                Button { text: "Aplicar e reiniciar"; visible: Updater.ready; onClicked: installDialog.open() }
-            }
-            Label { Layout.topMargin: 6; text: I18n.t("app.updates.changelog"); font.weight: Font.DemiBold }
-            ScrollView {
-                id: updatesChangelogScroll
-                objectName: "updatesChangelog"
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(updatesChangelogText.implicitHeight, 200)
-                Layout.fillHeight: true
-                Layout.minimumHeight: 48
-                contentWidth: availableWidth
-                clip: true
-                Label {
-                    id: updatesChangelogText
-                    width: updatesChangelogScroll.availableWidth
-                    wrapMode: Text.WordWrap
-                    textFormat: Text.MarkdownText
-                    color: Theme.textDim
-                    // Só a seção da versão atual (até o próximo "# OpenSpeak").
-                    // Montado ao abrir: o Markdown fixa a cor dos links (paleta do app) no parse.
-                    text: !updatesDialog.visible ? "" : Changelog.split(/\r?\n(?=# )/)[0]
-                    onLinkActivated: link => Qt.openUrlExternally(link)
-                }
-            }
-            RowLayout {
-                Button { text: I18n.t("app.updates.changelog.all"); onClicked: changelogDialog.open() }
-                Button { text: "Página de downloads"; flat: true; onClicked: Qt.openUrlExternally("https://github.com/JonasHenriqueDev/OpenSpeak/releases") }
-            }
-        }
+        onInstallRequested: installDialog.open()
     }
     Dialog {
         id: installDialog
@@ -285,9 +203,9 @@ ApplicationWindow {
     Component.onCompleted: {
         NativeWindow.enableSnapToTop(window)
         NativeWindow.setLinkColor(Theme.accent)
-        if (DebugOpen === "updates") Qt.callLater(() => updatesDialog.open())
+        if (DebugOpen === "updates") Qt.callLater(() => preferencesDialog.openAt("updates"))
         if (DebugOpen === "preferences") Qt.callLater(() => preferencesDialog.open())
-        if (DebugOpen === "changelog") Qt.callLater(() => changelogDialog.open())
+        if (DebugOpen === "changelog") Qt.callLater(() => { preferencesDialog.allChangelog = true; preferencesDialog.openAt("updates") })
         if (DebugOpen === "licenses") Qt.callLater(() => preferencesDialog.openAt("about"))
         if (JustUpdated) {
             const text = I18n.t("app.updated", { version: Updater.version })
@@ -295,7 +213,7 @@ ApplicationWindow {
                 Tray.showMessage("OpenSpeak", text)
             Qt.callLater(() => toasts.show({
                 key: "updated", kind: "info", icon: "download", timeout: 15000, text: text,
-                actions: [{ label: I18n.t("app.updated.open"), primary: true, run: function() { updatesDialog.open() } }]
+                actions: [{ label: I18n.t("app.updated.open"), primary: true, run: function() { preferencesDialog.openAt("updates") } }]
             }))
         }
         Tray.texts = {

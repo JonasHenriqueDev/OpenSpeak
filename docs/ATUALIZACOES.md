@@ -22,11 +22,11 @@ No botão com ícone de download na barra da janela:
   as consultas periódicas; a verificação ao abrir ocorre sempre.
 - **Receber pré-releases**: desabilitado por padrão. Desligado recebe somente
   releases estáveis. Ligado recebe a versão mais nova entre releases e pré-releases.
-- **Edição**: **Lite** (padrão) é só o cliente do servidor, com streams P2P
-  direto ou pelo servidor (SFU). **Completa** inclui também Tailscale, sala web
-  e servidor dedicado. Escolher a outra edição baixa e instala o instalador dela
-  como uma atualização (mesma versão ou mais nova, nunca mais antiga). As duas
-  usam a mesma pasta e as mesmas configurações.
+- **Edição**: não há mais escolha na janela. Cada instalação continua na própria
+  edição: **Lite** (padrão, só o cliente do servidor, com streams P2P ou pelo
+  servidor/SFU) ou **Completa** (inclui também Tailscale, sala web e servidor
+  dedicado). Para trocar, instale o instalador da outra edição; as duas usam a
+  mesma pasta e as mesmas configurações.
 - **Verificar agora**: consulta manual. Atualizações encontradas durante o uso
   ficam para a próxima abertura, sem interromper conexões ou transmissões.
 - **Baixar atualização**: apenas baixa e valida. Para antecipar uma atualização

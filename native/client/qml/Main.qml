@@ -320,26 +320,6 @@ ApplicationWindow {
             }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
                 text: Settings.prereleaseUpdates ? "Canal pré: releases estáveis e versões de teste mais novas." : "Canal estável: recebe somente releases, sem pré-releases." }
-            Label { text: "Edição"; color: Theme.textDim }
-            RowLayout {
-                objectName: "editionChoice"
-                spacing: 16
-                RadioButton {
-                    text: "Lite"
-                    checked: Updater.targetEdition === "lite"
-                    onClicked: Settings.updateEdition = "lite"
-                }
-                RadioButton {
-                    text: "Completa"
-                    checked: Updater.targetEdition === "full"
-                    onClicked: Settings.updateEdition = "full"
-                }
-            }
-            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
-                text: (Updater.targetEdition === "lite"
-                       ? "Lite: cliente do servidor, com streams P2P ou pelo servidor (SFU)."
-                       : "Completa: inclui também Tailscale, sala web e servidor dedicado.")
-                      + (Updater.targetEdition !== Updater.edition ? " A troca é instalada como atualização." : "") }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: Updater.status }
             Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
                 text: Updater.installed ? "Ao abrir, o app baixa e instala atualizações automaticamente antes de conectar. A instalação por usuário preserva suas configurações." : "O app verifica ao abrir. Na versão portátil, baixe o novo instalador ou pacote na página de downloads." }

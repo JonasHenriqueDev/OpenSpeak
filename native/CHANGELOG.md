@@ -1,3 +1,14 @@
+# OpenSpeak 1.0.19 — sons do Nostalgia e ajustes de interface
+
+- O tema de sons **Nostalgia** ganhou sons novos, mais próximos do clima dos
+  avisos do Discord.
+- O botão de **ouvir um tema** agora toca um som diferente a cada clique, para
+  dar para conhecer todos os sons do tema.
+- Corrigido: com as **Preferências** abertas não dava para redimensionar a
+  janela pelas bordas.
+- O destaque ao passar o mouse sobre as **pessoas do canal** ficou do tamanho
+  da linha, alinhado com o nome e com cantos arredondados.
+
 # OpenSpeak 1.0.18 — preferências novas, temas e mais sons
 
 - As **Preferências** foram refeitas: abrem em tela cheia, com as categorias

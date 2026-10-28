@@ -7,7 +7,7 @@
 # Sem -Tests/-Changed roda a suíte completa (é o que o package.ps1 usa nas releases).
 param(
     [string]$Config = 'Release',
-    [string]$Version = '1.0.18',
+    [string]$Version = '1.0.19',
     [switch]$ServerOnly,
     [string]$Tests,
     [switch]$Changed,

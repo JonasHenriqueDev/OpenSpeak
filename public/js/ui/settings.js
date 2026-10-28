@@ -44,7 +44,7 @@ const DEFAULTS = {
   lastStreamingQuality: { width: preset.width, height: preset.height, fps: preset.fps, audioBitrate: preset.audioBitrate },
   preferStreamSettingsAdvancedMode: false,
   soundEffects: true,
-  soundTheme: 'suave', // ou 'bolha'
+  soundTheme: 'suave', // ver SOUND_THEMES em ui/sounds.js
   soundVolume: 60,
 };
 

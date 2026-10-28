@@ -1,9 +1,9 @@
 // Efeitos sonoros de canal e transmissão (mesma lógica do SoundEffects do app nativo):
 // entrar/sair do canal, alguém entrar/sair, streams iniciados/pausados no canal atual
 // e espectadores entrando/saindo das minhas transmissões e das que estou assistindo.
-// Temas: "suave" (padrão) e "bolha"; arquivos em /sounds/<tema>/<evento>.wav.
+// Temas (scripts/gen_sounds.py; "suave" é o padrão); arquivos em /sounds/<tema>/<evento>.wav.
 
-export const SOUND_THEMES = ['suave', 'bolha'];
+export const SOUND_THEMES = ['suave', 'bolha', 'cristal', 'retro', 'kalimba', 'espacial', 'discreto'];
 const EVENTS = ['entrar_sala', 'sair_sala', 'alguem_entrou', 'alguem_saiu', 'iniciar_transmissao', 'pausar_transmissao',
   'espectador_entrou', 'espectador_saiu'];
 

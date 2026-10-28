@@ -54,6 +54,8 @@ Popup {
         { id: "updates", label: I18n.t("app.prefs.section.updates"), icon: "download" },
         { id: "about", label: I18n.t("app.prefs.section.about"), icon: "info" }
     ]
+    // Mesma ordem de SoundEffects.cpp / scripts/gen_sounds.py.
+    readonly property var soundThemes: ["suave", "bolha", "cristal", "retro", "kalimba", "espacial", "discreto"]
     readonly property var pages: ({
         appearance: appearancePage, sounds: soundsPage, watching: watchingPage,
         system: systemPage, updates: updatesPage, about: aboutPage
@@ -306,19 +308,60 @@ Popup {
                 onToggled: c => Settings.soundEffects = c
             }
             SectionHeader { text: I18n.t("app.prefs.sounds.theme") }
-            RowLayout {
+            // Cartões: clicar escolhe e toca uma prévia; o botão de play só ouve.
+            Flow {
                 objectName: "soundTheme"
-                spacing: 12
+                Layout.fillWidth: true
+                spacing: 10
                 enabled: Settings.soundEffects
-                RadioButton {
-                    text: I18n.t("app.prefs.sounds.suave")
-                    checked: Settings.soundTheme !== "bolha"
-                    onClicked: { Settings.soundTheme = "suave"; Sounds.preview("suave", "entrar_sala") }
-                }
-                RadioButton {
-                    text: I18n.t("app.prefs.sounds.bolha")
-                    checked: Settings.soundTheme === "bolha"
-                    onClicked: { Settings.soundTheme = "bolha"; Sounds.preview("bolha", "entrar_sala") }
+                opacity: enabled ? 1 : 0.5
+                Repeater {
+                    model: root.soundThemes
+                    delegate: AbstractButton {
+                        id: soundCard
+                        required property string modelData
+                        readonly property bool selected: Settings.soundTheme === modelData
+                            || (modelData === "suave" && root.soundThemes.indexOf(Settings.soundTheme) < 0)
+                        width: 168; height: 58
+                        hoverEnabled: true
+                        Accessible.name: I18n.t("app.prefs.sounds." + modelData)
+                        onClicked: { Settings.soundTheme = modelData; Sounds.preview(modelData, "entrar_sala") }
+                        background: Rectangle {
+                            radius: Theme.radius
+                            color: soundCard.selected ? Theme.accentSoft : soundCard.hovered ? Theme.panel2 : Theme.panel
+                            border.width: soundCard.selected ? 2 : 1
+                            border.color: soundCard.selected ? Theme.accent : Theme.border
+                        }
+                        contentItem: RowLayout {
+                            spacing: 8
+                            ColumnLayout {
+                                Layout.leftMargin: 12
+                                Layout.fillWidth: true
+                                spacing: 1
+                                Label {
+                                    text: I18n.t("app.prefs.sounds." + soundCard.modelData)
+                                    color: Theme.text
+                                    font.weight: Font.DemiBold
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    text: I18n.t("app.prefs.sounds." + soundCard.modelData + ".hint")
+                                    color: Theme.textDim
+                                    font.pixelSize: 11
+                                    elide: Text.ElideRight
+                                }
+                            }
+                            ToolButton {
+                                Layout.rightMargin: 4
+                                Layout.preferredWidth: 30; Layout.preferredHeight: 30
+                                Accessible.name: I18n.t("app.prefs.sounds.preview")
+                                ToolTip.visible: hovered
+                                ToolTip.text: I18n.t("app.prefs.sounds.preview")
+                                contentItem: Item { Icon { anchors.centerIn: parent; name: "play"; size: 14; color: Theme.textDim } }
+                                onClicked: Sounds.preview(soundCard.modelData, "entrar_sala")
+                            }
+                        }
+                    }
                 }
             }
             SectionHeader { text: I18n.t("app.prefs.sounds.volume") }

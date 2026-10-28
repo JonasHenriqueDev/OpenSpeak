@@ -1,7 +1,8 @@
 """Sintetiza os efeitos sonoros do OpenSpeak (originais, inspirados no estilo Discord/Skype).
 
+Tudo é gerado do zero (osciladores, FM, envelopes); nenhum som de terceiros é usado.
 Uso: python scripts/gen_sounds.py
-Gera public/sounds/{suave,bolha}/*.wav e native/client/assets/sounds/{suave,bolha}/*.wav.
+Gera public/sounds/<tema>/*.wav e native/client/assets/sounds/<tema>/*.wav.
 """
 import sys, wave
 from pathlib import Path
@@ -10,7 +11,8 @@ import numpy as np
 SR = 48000
 ROOT = Path(__file__).resolve().parent.parent
 DESTS = [ROOT / "public" / "sounds", ROOT / "native" / "client" / "assets" / "sounds"]
-THEMES = {"A": "suave", "B": "bolha"}
+THEMES = {"A": "suave", "B": "bolha", "C": "cristal", "D": "retro", "E": "kalimba", "F": "espacial",
+          "G": "discreto"}
 
 
 def env(n, attack=0.004, decay=6.0):
@@ -139,3 +141,125 @@ finish(place([(0.00, mallet(E6, 0.25, decay=16, bright=0.3), 0.6),
               (0.06, mallet(G6, 0.35, decay=13, bright=0.3), 0.55)], 0.45), "B_espectador_entrou", peak_db=-7)
 finish(place([(0.00, mallet(G6, 0.25, decay=16, bright=0.3), 0.55),
               (0.06, mallet(E6, 0.35, decay=13, bright=0.3), 0.6)], 0.45), "B_espectador_saiu", peak_db=-7)
+
+
+# ======================= temas extras (mesmos 8 eventos) =======================
+
+def fm_bell(f, dur, decay=5.0, ratio=3.5, index=2.2):
+    """Sino de vidro (FM): modulador inarmônico cujo brilho some antes do tom."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    mod = index * np.exp(-t * decay * 1.8) * np.sin(2 * np.pi * f * ratio * t)
+    s = np.sin(2 * np.pi * f * t + mod) + 0.25 * np.sin(2 * np.pi * f * 2.01 * t) * np.exp(-t * decay * 2)
+    return s * env(n, 0.002, decay)
+
+
+def chip(f, dur, decay=10.0):
+    """Onda quadrada de console 8-bit (só harmônicos ímpares, para não ficar áspera)."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    s = sum(np.sin(2 * np.pi * f * k * t) / k for k in range(1, 10, 2))
+    # envelope em degraus, como o volume de 4 bits dos consoles
+    return 0.8 * s * (np.round(env(n, 0.001, decay) * 15) / 15)
+
+
+def chip_slide(f0, f1, dur, decay=10.0):
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    f = f0 * (f1 / f0) ** np.clip(t / dur, 0, 1)
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    s = sum(np.sin(k * ph) / k for k in range(1, 10, 2))
+    return 0.8 * s * (np.round(env(n, 0.001, decay) * 15) / 15)
+
+
+def kalimba(f, dur, decay=7.0):
+    """Lâmina dedilhada: fundamental + parcial inarmônico (~5.4x) curto + estalo do dedo."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    fund = np.sin(2 * np.pi * f * t) * np.exp(-t * decay)
+    tine = 0.45 * np.sin(2 * np.pi * f * 5.43 * t) * np.exp(-t * decay * 6)
+    click = 0.3 * np.sin(2 * np.pi * 2400 * t) * np.exp(-t * 400)
+    return (fund + tine + click) * np.clip(t / 0.0015, 0, 1)
+
+
+def space(f0, f1, dur, decay=4.0, attack=0.03):
+    """Synth etéreo: dois osciladores desafinados com vibrato e glissando lento."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    k = np.clip(t / (dur * 0.6), 0, 1)
+    f = (f0 + (f1 - f0) * (1 - (1 - k) ** 2)) * (1 + 0.006 * np.sin(2 * np.pi * 5.5 * t))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    s = np.sin(ph) + 0.7 * np.sin(ph * 1.004) + 0.2 * np.sin(2 * ph)
+    return s * env(n, attack, decay)
+
+
+def tick(f, dur=0.09, decay=45.0):
+    """Toque curtinho e abafado (tema discreto)."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    return (np.sin(2 * np.pi * f * t) + 0.2 * np.sin(2 * np.pi * f * 2 * t)) * env(n, 0.001, decay)
+
+
+# ---------- C: "Cristal" (sinos de vidro) ----------
+finish(place([(0.00, fm_bell(E5, 0.8), 0.6), (0.10, fm_bell(B5, 1.0, decay=4), 0.7)], 1.2), "C_entrar_sala")
+finish(place([(0.00, fm_bell(B5, 0.8), 0.7), (0.11, fm_bell(E5, 1.0, decay=4), 0.6)], 1.2), "C_sair_sala")
+finish(place([(0.00, fm_bell(A5, 0.6, decay=7), 0.7)], 0.7), "C_alguem_entrou")
+finish(place([(0.00, fm_bell(E5, 0.6, decay=7), 0.7)], 0.7), "C_alguem_saiu")
+finish(place([(0.00, fm_bell(C5, 0.6, decay=7), 0.5), (0.08, fm_bell(E5, 0.6, decay=7), 0.5),
+              (0.16, fm_bell(G5, 0.6, decay=7), 0.55), (0.24, fm_bell(C6, 1.2, decay=3.5), 0.65)], 1.5),
+       "C_iniciar_transmissao")
+finish(place([(0.00, fm_bell(G5, 0.6, decay=7), 0.6), (0.12, fm_bell(D5, 0.9, decay=5), 0.6)], 1.1),
+       "C_pausar_transmissao")
+finish(place([(0.00, fm_bell(G6, 0.4, decay=12, index=1.2), 0.5)], 0.45), "C_espectador_entrou", peak_db=-7)
+finish(place([(0.00, fm_bell(E6, 0.4, decay=12, index=1.2), 0.5)], 0.45), "C_espectador_saiu", peak_db=-7)
+
+# ---------- D: "Retrô" (chiptune 8-bit) ----------
+finish(place([(0.00, chip(C5, 0.09), 0.5), (0.07, chip(E5, 0.09), 0.5), (0.14, chip(G5, 0.25, decay=7), 0.55)], 0.45),
+       "D_entrar_sala", peak_db=-8)
+finish(place([(0.00, chip(G5, 0.09), 0.55), (0.07, chip(E5, 0.09), 0.5), (0.14, chip(C5, 0.25, decay=7), 0.5)], 0.45),
+       "D_sair_sala", peak_db=-8)
+finish(place([(0.00, chip_slide(E5, A5, 0.14, decay=14), 0.55)], 0.2), "D_alguem_entrou", peak_db=-8)
+finish(place([(0.00, chip_slide(A5, E5, 0.14, decay=14), 0.55)], 0.2), "D_alguem_saiu", peak_db=-8)
+finish(place([(0.00, chip(C5, 0.07), 0.45), (0.06, chip(E5, 0.07), 0.45), (0.12, chip(G5, 0.07), 0.45),
+              (0.18, chip(C6, 0.07), 0.45), (0.24, chip(E6, 0.07), 0.45), (0.30, chip(G6, 0.35, decay=6), 0.5)], 0.7),
+       "D_iniciar_transmissao", peak_db=-8)
+finish(place([(0.00, chip(E5, 0.1), 0.5), (0.1, chip(C5, 0.25, decay=8), 0.5)], 0.4), "D_pausar_transmissao", peak_db=-8)
+finish(place([(0.00, chip(C6, 0.05, decay=30), 0.45), (0.05, chip(G6, 0.08, decay=25), 0.45)], 0.16),
+       "D_espectador_entrou", peak_db=-12)
+finish(place([(0.00, chip(G6, 0.05, decay=30), 0.45), (0.05, chip(C6, 0.08, decay=25), 0.45)], 0.16),
+       "D_espectador_saiu", peak_db=-12)
+
+# ---------- E: "Kalimba" (lâminas dedilhadas) ----------
+finish(place([(0.00, kalimba(D5, 0.7), 0.65), (0.09, kalimba(A5, 0.9, decay=5), 0.7)], 1.0), "E_entrar_sala")
+finish(place([(0.00, kalimba(A5, 0.7), 0.7), (0.10, kalimba(D5, 0.9, decay=5), 0.65)], 1.0), "E_sair_sala")
+finish(place([(0.00, kalimba(B5, 0.5, decay=9), 0.7)], 0.55), "E_alguem_entrou")
+finish(place([(0.00, kalimba(E5, 0.5, decay=9), 0.7)], 0.55), "E_alguem_saiu")
+finish(place([(0.00, kalimba(D5, 0.5, decay=9), 0.55), (0.07, kalimba(E5, 0.5, decay=9), 0.55),
+              (0.14, kalimba(A5, 0.5, decay=9), 0.6), (0.21, kalimba(D5 * 2, 1.0, decay=4), 0.65)], 1.3),
+       "E_iniciar_transmissao")
+finish(place([(0.00, kalimba(A5, 0.5, decay=9), 0.6), (0.11, kalimba(E5, 0.8, decay=6), 0.6)], 0.9),
+       "E_pausar_transmissao")
+finish(place([(0.00, kalimba(E6, 0.35, decay=13), 0.6)], 0.4), "E_espectador_entrou", peak_db=-7)
+finish(place([(0.00, kalimba(B5, 0.35, decay=13), 0.6)], 0.4), "E_espectador_saiu", peak_db=-7)
+
+# ---------- F: "Espacial" (synth etéreo com glissandos) ----------
+finish(place([(0.00, space(C5, G5, 0.9), 0.7)], 1.0), "F_entrar_sala")
+finish(place([(0.00, space(G5, C5, 0.9), 0.7)], 1.0), "F_sair_sala")
+finish(place([(0.00, space(E5, A5, 0.5, decay=7, attack=0.015), 0.7)], 0.55), "F_alguem_entrou")
+finish(place([(0.00, space(A5, E5, 0.5, decay=7, attack=0.015), 0.7)], 0.55), "F_alguem_saiu")
+finish(place([(0.00, space(C5, C5, 0.5, decay=6, attack=0.02), 0.45), (0.12, space(G5, G5, 0.5, decay=6, attack=0.02), 0.45),
+              (0.24, space(C6 * 0.9, C6, 1.2, decay=3), 0.6)], 1.5), "F_iniciar_transmissao")
+finish(place([(0.00, space(G5, D5, 0.8, decay=4.5), 0.7)], 0.9), "F_pausar_transmissao")
+finish(place([(0.00, space(G6 * 0.9, G6, 0.3, decay=12, attack=0.01), 0.5)], 0.35), "F_espectador_entrou", peak_db=-8)
+finish(place([(0.00, space(G6, G6 * 0.9, 0.3, decay=12, attack=0.01), 0.5)], 0.35), "F_espectador_saiu", peak_db=-8)
+
+# ---------- G: "Discreto" (toques curtos e baixos) ----------
+finish(place([(0.00, tick(G5), 0.6), (0.08, tick(C6), 0.6)], 0.2), "G_entrar_sala", peak_db=-8)
+finish(place([(0.00, tick(C6), 0.6), (0.08, tick(G5), 0.6)], 0.2), "G_sair_sala", peak_db=-8)
+finish(place([(0.00, tick(A5), 0.6)], 0.12), "G_alguem_entrou", peak_db=-9)
+finish(place([(0.00, tick(E5), 0.6)], 0.12), "G_alguem_saiu", peak_db=-9)
+finish(place([(0.00, tick(C6), 0.6), (0.07, tick(E6), 0.6), (0.14, tick(G6, dur=0.15, decay=25), 0.6)], 0.3),
+       "G_iniciar_transmissao", peak_db=-8)
+finish(place([(0.00, tick(E6), 0.6), (0.08, tick(C6, dur=0.15, decay=25), 0.6)], 0.25), "G_pausar_transmissao", peak_db=-8)
+finish(place([(0.00, tick(E6, dur=0.06, decay=60), 0.6)], 0.08), "G_espectador_entrou", peak_db=-11)
+finish(place([(0.00, tick(C6, dur=0.06, decay=60), 0.6)], 0.08), "G_espectador_saiu", peak_db=-11)

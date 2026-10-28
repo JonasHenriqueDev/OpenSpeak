@@ -1,7 +1,8 @@
 #pragma once
 // Efeitos sonoros de canal e transmissão: entrar/sair do canal, alguém entrar/sair,
 // streams iniciados/pausados no canal atual e espectadores entrando/saindo das
-// minhas transmissões e das que estou assistindo (inclusive eu mesmo). Dois temas: "suave" (padrão) e "bolha".
+// minhas transmissões e das que estou assistindo (inclusive eu mesmo). Temas em
+// scripts/gen_sounds.py ("suave" é o padrão).
 // O estado é comparado a cada mudança do ConnectionHandler, então funciona igual
 // no servidor, na tailnet e na sala web.
 
@@ -27,6 +28,7 @@ public:
     Q_INVOKABLE void preview(const QString &theme, const QString &event);
 
 private:
+    void preload();
     void scheduleRefresh();
     void refresh();
     void play(const QString &event);

@@ -25,6 +25,11 @@ const STRINGS = {
   'app.sounds.theme': 'Estilo',
   'app.sounds.suave': 'Suave',
   'app.sounds.bolha': 'Bolha',
+  'app.sounds.cristal': 'Cristal',
+  'app.sounds.retro': 'Retrô',
+  'app.sounds.kalimba': 'Kalimba',
+  'app.sounds.espacial': 'Espacial',
+  'app.sounds.discreto': 'Discreto',
   'app.sounds.volume': 'Volume dos efeitos',
 
   'error.viewer_limit_reached': 'Limite de espectadores atingido',

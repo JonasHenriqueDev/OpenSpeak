@@ -11,6 +11,25 @@
 
 namespace openspeak {
 
+namespace {
+// Temas gerados por scripts/gen_sounds.py; o primeiro é o padrão.
+const QStringList &themes()
+{
+    static const QStringList list{QStringLiteral("suave"), QStringLiteral("bolha"), QStringLiteral("cristal"),
+                                  QStringLiteral("retro"), QStringLiteral("kalimba"), QStringLiteral("espacial"),
+                                  QStringLiteral("discreto")};
+    return list;
+}
+const QStringList &events()
+{
+    static const QStringList list{QStringLiteral("entrar_sala"), QStringLiteral("sair_sala"),
+                                  QStringLiteral("alguem_entrou"), QStringLiteral("alguem_saiu"),
+                                  QStringLiteral("iniciar_transmissao"), QStringLiteral("pausar_transmissao"),
+                                  QStringLiteral("espectador_entrou"), QStringLiteral("espectador_saiu")};
+    return list;
+}
+} // namespace
+
 SoundEffects::SoundEffects(ConnectionHandler *handler, ScreenshareManager *screenshare, Settings *settings,
                            QObject *parent)
     : QObject(parent), m_handler(handler), m_screenshare(screenshare), m_settings(settings)
@@ -22,11 +41,15 @@ SoundEffects::SoundEffects(ConnectionHandler *handler, ScreenshareManager *scree
     connect(handler, &ConnectionHandler::streamRemoved, this, &SoundEffects::scheduleRefresh);
     if (screenshare)
         connect(screenshare, &ScreenshareManager::itemsChanged, this, &SoundEffects::scheduleRefresh);
-    // Carrega antes: o primeiro play() não espera a leitura do arquivo.
-    for (const char *theme : {"suave", "bolha"})
-        for (const char *event : {"entrar_sala", "sair_sala", "alguem_entrou", "alguem_saiu",
-                                  "iniciar_transmissao", "pausar_transmissao", "espectador_entrou", "espectador_saiu"})
-            effect(QLatin1String(theme), QLatin1String(event));
+    // Carrega o tema escolhido antes: o primeiro play() não espera a leitura do arquivo.
+    preload();
+    connect(settings, &Settings::changed, this, &SoundEffects::preload);
+}
+
+void SoundEffects::preload()
+{
+    for (const QString &event : events())
+        effect(m_settings->soundTheme(), event);
 }
 
 void SoundEffects::preview(const QString &theme, const QString &event)
@@ -145,13 +168,8 @@ void SoundEffects::play(const QString &event)
 
 QSoundEffect *SoundEffects::effect(const QString &theme, const QString &event)
 {
-    static const QStringList themes{QStringLiteral("suave"), QStringLiteral("bolha")};
-    static const QStringList events{QStringLiteral("entrar_sala"), QStringLiteral("sair_sala"),
-                                    QStringLiteral("alguem_entrou"), QStringLiteral("alguem_saiu"),
-                                    QStringLiteral("iniciar_transmissao"), QStringLiteral("pausar_transmissao"),
-                                    QStringLiteral("espectador_entrou"), QStringLiteral("espectador_saiu")};
-    const QString t = themes.contains(theme) ? theme : themes.first();
-    if (!events.contains(event))
+    const QString t = themes().contains(theme) ? theme : themes().first();
+    if (!events().contains(event))
         return nullptr;
     const QString key = t + QLatin1Char('/') + event;
     QSoundEffect *&fx = m_effects[key];

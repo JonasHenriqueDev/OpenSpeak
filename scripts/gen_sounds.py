@@ -12,7 +12,7 @@ SR = 48000
 ROOT = Path(__file__).resolve().parent.parent
 DESTS = [ROOT / "public" / "sounds", ROOT / "native" / "client" / "assets" / "sounds"]
 THEMES = {"A": "suave", "B": "bolha", "C": "cristal", "D": "retro", "E": "kalimba", "F": "espacial",
-          "G": "discreto"}
+          "G": "discreto", "H": "nostalgia"}
 
 
 def env(n, attack=0.004, decay=6.0):
@@ -263,3 +263,39 @@ finish(place([(0.00, tick(C6), 0.6), (0.07, tick(E6), 0.6), (0.14, tick(G6, dur=
 finish(place([(0.00, tick(E6), 0.6), (0.08, tick(C6, dur=0.15, decay=25), 0.6)], 0.25), "G_pausar_transmissao", peak_db=-8)
 finish(place([(0.00, tick(E6, dur=0.06, decay=60), 0.6)], 0.08), "G_espectador_entrou", peak_db=-11)
 finish(place([(0.00, tick(C6, dur=0.06, decay=60), 0.6)], 0.08), "G_espectador_saiu", peak_db=-11)
+
+
+# ---------- H: "Nostalgia" (paródia do Discord) ----------
+# Remix próprio com o mesmo clima dos avisos do Discord: tons quase senoidais, redondos,
+# com um "bloop" de pitch no ataque, subindo para entrar e descendo para sair.
+# Sintetizado do zero aqui; nenhum arquivo original é usado nem sampleado.
+
+def bloop(f, dur, decay=9.0, bend=0.82, bend_time=0.035, body=0.18):
+    """Tom redondo que 'cai' no lugar: começa abaixo da nota e sobe rápido até ela."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    k = 1 - np.exp(-t / bend_time)
+    fr = f * (bend + (1 - bend) * k)
+    ph = 2 * np.pi * np.cumsum(fr) / SR
+    s = np.sin(ph) + 0.12 * np.sin(2 * ph) + body * np.sin(0.5 * ph) * np.exp(-t * decay * 2)
+    return s * env(n, 0.003, decay)
+
+
+N_D5, N_FS5, N_A5, N_D6 = 587.33, 739.99, 880.0, 1174.66
+finish(place([(0.00, bloop(N_D5, 0.35, decay=10), 0.75), (0.085, bloop(N_A5, 0.5, decay=7), 0.85)], 0.65),
+       "H_entrar_sala")
+finish(place([(0.00, bloop(N_A5, 0.35, decay=10, bend=1.12), 0.85), (0.085, bloop(N_D5, 0.5, decay=7, bend=1.12), 0.75)], 0.65),
+       "H_sair_sala")
+finish(place([(0.00, bloop(N_FS5, 0.22, decay=14), 0.7), (0.06, bloop(N_D6, 0.35, decay=10), 0.75)], 0.45),
+       "H_alguem_entrou")
+finish(place([(0.00, bloop(N_D6, 0.22, decay=14, bend=1.12), 0.75), (0.06, bloop(N_FS5, 0.35, decay=10, bend=1.12), 0.7)], 0.45),
+       "H_alguem_saiu")
+finish(place([(0.00, bloop(N_D5, 0.25, decay=12), 0.6), (0.075, bloop(N_FS5, 0.25, decay=12), 0.62),
+              (0.15, bloop(N_A5, 0.25, decay=12), 0.65), (0.225, bloop(N_D6, 0.7, decay=5), 0.75)], 1.0),
+       "H_iniciar_transmissao")
+finish(place([(0.00, bloop(N_A5, 0.25, decay=12, bend=1.1), 0.7), (0.09, bloop(N_D5, 0.5, decay=7, bend=1.1), 0.7)], 0.65),
+       "H_pausar_transmissao")
+finish(place([(0.00, bloop(N_A5 * 2, 0.15, decay=22, body=0), 0.6), (0.05, bloop(N_D6 * 2, 0.2, decay=18, body=0), 0.55)], 0.3),
+       "H_espectador_entrou", peak_db=-8)
+finish(place([(0.00, bloop(N_D6 * 2, 0.15, decay=22, bend=1.1, body=0), 0.55), (0.05, bloop(N_A5 * 2, 0.2, decay=18, bend=1.1, body=0), 0.6)], 0.3),
+       "H_espectador_saiu", peak_db=-8)

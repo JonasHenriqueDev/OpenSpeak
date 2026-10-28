@@ -17,7 +17,7 @@ const QStringList &themes()
 {
     static const QStringList list{QStringLiteral("suave"), QStringLiteral("bolha"), QStringLiteral("cristal"),
                                   QStringLiteral("retro"), QStringLiteral("kalimba"), QStringLiteral("espacial"),
-                                  QStringLiteral("discreto")};
+                                  QStringLiteral("discreto"), QStringLiteral("nostalgia")};
     return list;
 }
 const QStringList &events()

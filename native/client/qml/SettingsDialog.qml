@@ -55,7 +55,7 @@ Popup {
         { id: "about", label: I18n.t("app.prefs.section.about"), icon: "info" }
     ]
     // Mesma ordem de SoundEffects.cpp / scripts/gen_sounds.py.
-    readonly property var soundThemes: ["suave", "bolha", "cristal", "retro", "kalimba", "espacial", "discreto"]
+    readonly property var soundThemes: ["suave", "bolha", "cristal", "retro", "kalimba", "espacial", "discreto", "nostalgia"]
     readonly property var pages: ({
         appearance: appearancePage, sounds: soundsPage, watching: watchingPage,
         system: systemPage, updates: updatesPage, about: aboutPage

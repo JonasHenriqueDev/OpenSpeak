@@ -91,7 +91,7 @@ public:
     /// Efeitos sonoros de canal e transmissão (desligar = mudo).
     bool soundEffects() const { return value("soundEffects", true).toBool(); }
     void setSoundEffects(bool v) { set("soundEffects", v); }
-    /// Tema dos efeitos: "suave" (padrão), "bolha", "cristal", "retro", "kalimba", "espacial" ou "discreto".
+    /// Tema dos efeitos: "suave" (padrão), "bolha", "cristal", "retro", "kalimba", "espacial", "discreto" ou "nostalgia".
     QString soundTheme() const { return value("soundTheme", QStringLiteral("suave")).toString(); }
     void setSoundTheme(const QString &v) { set("soundTheme", v); }
     /// Volume dos efeitos, 0 a 100.

@@ -30,6 +30,7 @@ const STRINGS = {
   'app.sounds.kalimba': 'Kalimba',
   'app.sounds.espacial': 'Espacial',
   'app.sounds.discreto': 'Discreto',
+  'app.sounds.nostalgia': 'Nostalgia (paródia do Discord)',
   'app.sounds.volume': 'Volume dos efeitos',
 
   'error.viewer_limit_reached': 'Limite de espectadores atingido',

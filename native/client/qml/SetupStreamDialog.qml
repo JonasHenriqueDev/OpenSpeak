@@ -274,7 +274,7 @@ Dialog {
                             visible: card.selected
                             anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: 8
                             width: 22; height: 22; radius: 11; color: Theme.accent
-                            Icon { anchors.centerIn: parent; name: "check"; size: 14; color: "#09131c" }
+                            Icon { anchors.centerIn: parent; name: "check"; size: 14; color: Theme.onAccent }
                         }
                         MouseArea {
                             id: cardMouse
@@ -583,7 +583,7 @@ Dialog {
                 }
                 contentItem: Label {
                     text: liveButton.text
-                    color: liveButton.enabled ? "#09131c" : Theme.textFaint
+                    color: liveButton.enabled ? Theme.onAccent : Theme.textFaint
                     font.weight: Font.DemiBold
                     horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
                 }

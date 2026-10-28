@@ -37,6 +37,8 @@ class Settings : public QObject {
     Q_PROPERTY(int soundVolume READ soundVolume WRITE setSoundVolume NOTIFY changed)
     Q_PROPERTY(bool volumeBoost READ volumeBoost WRITE setVolumeBoost NOTIFY changed)
     Q_PROPERTY(bool fullscreenTaskbar READ fullscreenTaskbar WRITE setFullscreenTaskbar NOTIFY changed)
+    Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY changed)
+    Q_PROPERTY(QString accentColor READ accentColor WRITE setAccentColor NOTIFY changed)
 public:
     explicit Settings(const QString &profile, bool debug, QObject *parent = nullptr);
 
@@ -101,6 +103,12 @@ public:
     /// Controle de volume dos streams assistidos vai até 500% (ganho no áudio).
     bool volumeBoost() const { return value("volumeBoost", false).toBool(); }
     void setVolumeBoost(bool v) { set("volumeBoost", v); }
+    /// Tema de cores da interface (ids em qml/Theme.qml); padrão "meia-noite".
+    QString theme() const { return value("theme", QStringLiteral("meia-noite")).toString(); }
+    void setTheme(const QString &v) { set("theme", v); }
+    /// Cor de destaque (ids em qml/Theme.qml); vazio = a do tema.
+    QString accentColor() const { return value("accentColor").toString(); }
+    void setAccentColor(const QString &v) { set("accentColor", v); }
     /// Em tela cheia, a barra de tarefas que se oculta automaticamente aparece ao passar o mouse.
     bool fullscreenTaskbar() const { return value("fullscreenTaskbar", true).toBool(); }
     void setFullscreenTaskbar(bool v) { set("fullscreenTaskbar", v); }

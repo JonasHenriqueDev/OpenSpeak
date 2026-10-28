@@ -13,6 +13,15 @@ ApplicationWindow {
     visible: !StartHidden
     title: Server.connected ? "OpenSpeak — " + Server.serverName : "OpenSpeak"
     color: Theme.background
+    // Controles do FluentWinUI3 (caixas, sliders, foco) seguem a cor de destaque do tema.
+    palette.accent: Theme.accent
+    Binding { target: Theme; property: "name"; value: Settings.theme }
+    Binding { target: Theme; property: "accentName"; value: Settings.accentColor }
+    Binding { target: Application.styleHints; property: "colorScheme"; value: Theme.light ? Qt.Light : Qt.Dark }
+    Connections {
+        target: Theme
+        function onAccentChanged() { NativeWindow.setLinkColor(Theme.accent) }
+    }
     // Sem moldura, mas com WS_SYSMENU/WS_MINIMIZEBOX: sem eles o Windows ignora o
     // clique no ícone da barra de tarefas e não minimiza o app.
     flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowSystemMenuHint | Qt.WindowMinimizeButtonHint
@@ -229,6 +238,8 @@ ApplicationWindow {
                     onPressedChanged: if (!pressed) Sounds.preview(Settings.soundTheme, "alguem_entrou")
                 }
             }
+            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.appearance"); font.weight: Font.DemiBold }
+            AppearanceSettings { Layout.fillWidth: true }
             Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.watching"); font.weight: Font.DemiBold }
             CheckBox {
                 objectName: "volumeBoost"

@@ -18,7 +18,7 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         gradient: Gradient {
-            GradientStop { position: 0; color: "#18213a" }
+            GradientStop { position: 0; color: Theme.glow }
             GradientStop { position: 0.7; color: Theme.background }
         }
     }

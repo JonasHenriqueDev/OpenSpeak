@@ -273,17 +273,6 @@ ApplicationWindow {
             }
             Label { Layout.fillWidth: true; Layout.leftMargin: 24; wrapMode: Text.WordWrap; color: Theme.textDim
                 text: I18n.t("app.prefs.start_minimized.hint") }
-            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.changelog"); font.weight: Font.DemiBold }
-            RowLayout {
-                Layout.fillWidth: true
-                Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
-                    text: I18n.t("app.prefs.changelog.version", { version: Updater.version }) }
-                Button {
-                    objectName: "openChangelog"
-                    text: I18n.t("app.prefs.changelog.open")
-                    onClicked: changelogDialog.open()
-                }
-            }
             Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.about"); font.weight: Font.DemiBold }
             RowLayout {
                 Layout.fillWidth: true
@@ -321,7 +310,7 @@ ApplicationWindow {
                 width: changelogScroll.availableWidth
                 wrapMode: Text.WordWrap
                 textFormat: Text.MarkdownText
-                text: Changelog
+                text: changelogDialog.visible ? Changelog : "" // ver licensesDialog: cor dos links
                 onLinkActivated: link => Qt.openUrlExternally(link)
             }
         }
@@ -401,7 +390,8 @@ ApplicationWindow {
                     textFormat: Text.MarkdownText
                     color: Theme.textDim
                     // Só a seção da versão atual (até o próximo "# OpenSpeak").
-                    text: Changelog.split(/\r?\n(?=# )/)[0]
+                    // Montado ao abrir (cor dos links: ver licensesDialog).
+                    text: !updatesDialog.visible ? "" : Changelog.split(/\r?\n(?=# )/)[0]
                     onLinkActivated: link => Qt.openUrlExternally(link)
                 }
             }
@@ -433,7 +423,7 @@ ApplicationWindow {
                 Tray.showMessage("OpenSpeak", text)
             Qt.callLater(() => toasts.show({
                 key: "updated", kind: "info", icon: "download", timeout: 15000, text: text,
-                actions: [{ label: I18n.t("app.updated.open"), primary: true, run: function() { changelogDialog.open() } }]
+                actions: [{ label: I18n.t("app.updated.open"), primary: true, run: function() { updatesDialog.open() } }]
             }))
         }
         Tray.texts = {

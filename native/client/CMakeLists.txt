@@ -43,7 +43,7 @@ qt_add_resources(OpenSpeak app_icon PREFIX "/" FILES assets/openspeak.ico)
 # Efeitos sonoros (gerados por scripts/gen_sounds.py), servidos em qrc:/sounds/<tema>/<evento>.wav.
 file(GLOB OPENSPEAK_SOUNDS RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/sounds/*/*.wav")
 qt_add_resources(OpenSpeak app_sounds PREFIX "/" BASE assets FILES ${OPENSPEAK_SOUNDS})
-# Novidades da versão (Preferências › Novidades), em qrc:/changelog.md.
+# Novidades da versão (Atualizações › Novidades), em qrc:/changelog.md.
 set_source_files_properties(../CHANGELOG.md PROPERTIES QT_RESOURCE_ALIAS changelog.md)
 qt_add_resources(OpenSpeak app_changelog PREFIX "/" FILES ../CHANGELOG.md)
 # Licenças de terceiros (Preferências › Licenças e créditos), em qrc:/licenses.md.

@@ -191,13 +191,14 @@ select.input { padding-right: 4px; }
 .tree-channel.current > .channel-row .icon { color: var(--accent); }
 .channel-live { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: var(--live); }
 .channel-live .icon { width: 14px; height: 14px; color: var(--live) !important; }
-.client-row { padding-left: 26px; color: var(--text); }
+/* destaque de hover recuado junto com o nome, com folga igual dos dois lados */
+.client-row { height: 26px; margin: 1px 2px 1px 18px; padding-left: 8px; color: var(--text); }
 .client-row:hover { background: var(--panel-2); }
 .client-row.me { font-weight: 600; }
 .talk-dot { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--online); flex: none; }
 .contact-star { color: var(--gold); }
 .contact-star .icon { width: 13px; height: 13px; }
-.stream-row { padding-left: 44px; height: 24px; font-size: 12.5px; color: var(--text-dim); }
+.stream-row { margin: 1px 2px 1px 36px; padding-left: 8px; height: 24px; font-size: 12.5px; color: var(--text-dim); }
 .stream-row .icon { width: 14px; height: 14px; }
 .stream-row.clickable { cursor: pointer; }
 .stream-row.clickable:hover { background: var(--panel-2); color: var(--text); }

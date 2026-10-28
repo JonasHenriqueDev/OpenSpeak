@@ -229,28 +229,10 @@ ApplicationWindow {
 
     }
     // Delegate resizing to Windows so edge drags retain native behavior.
-    Repeater {
-        model: [Qt.LeftEdge, Qt.RightEdge, Qt.TopEdge, Qt.BottomEdge,
-                Qt.TopEdge | Qt.LeftEdge, Qt.TopEdge | Qt.RightEdge,
-                Qt.BottomEdge | Qt.LeftEdge, Qt.BottomEdge | Qt.RightEdge]
-        delegate: MouseArea {
-            required property int modelData
-            readonly property bool edgeLeft: !!(modelData & Qt.LeftEdge)
-            readonly property bool edgeRight: !!(modelData & Qt.RightEdge)
-            readonly property bool edgeTop: !!(modelData & Qt.TopEdge)
-            readonly property bool edgeBottom: !!(modelData & Qt.BottomEdge)
-            parent: window.contentItem
-            z: 1000
-            visible: window.visibility !== Window.Maximized && window.visibility !== Window.FullScreen
-            x: edgeRight ? parent.width - width : 0
-            y: edgeTop ? -window.header.height : edgeBottom ? parent.height - height : 0
-            width: edgeLeft || edgeRight ? 5 : parent.width
-            height: edgeTop || edgeBottom ? 5 : parent.height
-            cursorShape: (edgeLeft || edgeRight) && (edgeTop || edgeBottom)
-                         ? (edgeLeft === edgeTop ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor)
-                         : edgeLeft || edgeRight ? Qt.SizeHorCursor : Qt.SizeVerCursor
-            onPressed: window.startSystemResize(modelData)
-        }
+    ResizeHandles {
+        parent: window.contentItem
+        window: window
+        topOffset: -window.header.height
     }
 
     Loader {

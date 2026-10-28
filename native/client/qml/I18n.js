@@ -283,7 +283,7 @@ const STRINGS = {
   'app.about.credits': [
     '## Créditos',
     '**OpenSpeak** — criado por Jonas Santos ([JonasHenriqueDev](https://github.com/JonasHenriqueDev/OpenSpeak)).',
-    'O motor de transmissão e a interface se inspiram no TeamSpeak 6, que não é afiliado a este projeto. Os efeitos sonoros são sintetizados pelo próprio OpenSpeak; o tema Nostalgia é uma paródia com o clima dos sons do Discord, feita do zero, sem usar os arquivos originais e sem afiliação com o Discord.',
+    'O motor de transmissão e a interface se inspiram no TeamSpeak 6, que não é afiliado a este projeto. Os efeitos sonoros são sintetizados pelo próprio OpenSpeak, exceto o tema Nostalgia, que usa gravações com o clima dos sons do Discord, transpostas um tom acima, sem afiliação com o Discord.',
     '## Licença',
     'Copyright © Jonas Santos. Distribuído sob a [GNU Affero General Public License v3.0 ou posterior](https://www.gnu.org/licenses/agpl-3.0.html), sem garantias. O código-fonte completo está no [repositório do projeto](https://github.com/JonasHenriqueDev/OpenSpeak).',
     '',

@@ -211,7 +211,9 @@ int main(int argc, char *argv[])
                 auto *startup = findVisualItem(window->contentItem(), QStringLiteral("startupScreen"));
                 valid = valid && startup && startup->isVisible() && startup->width() >= 800;
             } else if (panel == "updates" || panel == "preferences" || panel == "changelog" || panel == "licenses") {
-                auto *dialog = window->findChild<QObject *>(panel + QStringLiteral("Dialog"));
+                // Licenças e créditos é uma página das Preferências.
+                auto *dialog = window->findChild<QObject *>(panel == "licenses" ? QStringLiteral("preferencesDialog")
+                                                                                 : panel + QStringLiteral("Dialog"));
                 valid = valid && dialog && dialog->property("visible").toBool()
                     && dialog->property("width").toDouble() >= 400
                     && dialog->property("height").toDouble() < window->height();
@@ -219,7 +221,8 @@ int main(int argc, char *argv[])
                     valid = valid && engine.rootContext()->contextProperty(QStringLiteral("Changelog")).toString()
                                          .startsWith(QStringLiteral("# OpenSpeak "));
                 if (panel == "licenses")
-                    valid = valid && engine.rootContext()->contextProperty(QStringLiteral("ThirdPartyLicenses")).toString()
+                    valid = valid && dialog && dialog->property("page").toString() == QStringLiteral("about")
+                            && engine.rootContext()->contextProperty(QStringLiteral("ThirdPartyLicenses")).toString()
                                          .contains(QStringLiteral("libdatachannel"));
             } else if (panel != "view-menu") {
                 auto *grid = findVisualItem(window->contentItem(), QStringLiteral("sourceGrid"));

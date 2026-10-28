@@ -73,6 +73,7 @@ qt_add_qml_module(OpenSpeak
         qml/VolumeSlider.qml
         qml/AppSlider.qml
         qml/AppearanceSettings.qml
+        qml/SettingsDialog.qml
         qml/I18n.js
 )
 

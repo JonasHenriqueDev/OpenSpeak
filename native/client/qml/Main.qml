@@ -185,124 +185,10 @@ ApplicationWindow {
         function onSettingsRequested() { window.showFromTray(); preferencesDialog.open() }
         function onQuitRequested() { window.quitApp() }
     }
-    Dialog {
+    SettingsDialog {
         id: preferencesDialog
         objectName: "preferencesDialog"
-        title: I18n.t("app.prefs.title")
-        anchors.centerIn: parent
-        width: Math.min(480, window.width - 40)
-        height: Math.min(implicitHeight, parent.height - 40)
-        modal: true
-        standardButtons: Dialog.Close
-        // Rola quando a janela é baixa demais para todas as seções.
-        contentItem: ScrollView {
-            id: preferencesScroll
-            contentWidth: availableWidth
-            ColumnLayout {
-            width: preferencesScroll.availableWidth
-            spacing: 10
-            Label { text: I18n.t("app.prefs.section.sounds"); font.weight: Font.DemiBold }
-            CheckBox {
-                objectName: "soundEffects"
-                text: I18n.t("app.prefs.sounds")
-                checked: Settings.soundEffects
-                onToggled: Settings.soundEffects = checked
-            }
-            RowLayout {
-                objectName: "soundTheme"
-                Layout.leftMargin: 24
-                spacing: 12
-                enabled: Settings.soundEffects
-                RadioButton {
-                    text: I18n.t("app.prefs.sounds.suave")
-                    checked: Settings.soundTheme !== "bolha"
-                    onClicked: { Settings.soundTheme = "suave"; Sounds.preview("suave", "entrar_sala") }
-                }
-                RadioButton {
-                    text: I18n.t("app.prefs.sounds.bolha")
-                    checked: Settings.soundTheme === "bolha"
-                    onClicked: { Settings.soundTheme = "bolha"; Sounds.preview("bolha", "entrar_sala") }
-                }
-            }
-            RowLayout {
-                Layout.leftMargin: 24
-                Layout.fillWidth: true
-                enabled: Settings.soundEffects
-                Label { text: I18n.t("app.prefs.sounds.volume"); color: Theme.textDim }
-                AppSlider {
-                    objectName: "soundVolume"
-                    Layout.fillWidth: true
-                    from: 0; to: 100; step: 5
-                    value: Settings.soundVolume
-                    onMoved: Settings.soundVolume = value
-                    onPressedChanged: if (!pressed) Sounds.preview(Settings.soundTheme, "alguem_entrou")
-                }
-            }
-            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.appearance"); font.weight: Font.DemiBold }
-            AppearanceSettings { Layout.fillWidth: true }
-            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.watching"); font.weight: Font.DemiBold }
-            CheckBox {
-                objectName: "volumeBoost"
-                text: I18n.t("app.prefs.volume_boost")
-                checked: Settings.volumeBoost
-                onToggled: Settings.volumeBoost = checked
-            }
-            Label { Layout.fillWidth: true; Layout.leftMargin: 24; wrapMode: Text.WordWrap; color: Theme.textDim
-                text: I18n.t("app.prefs.volume_boost.hint") }
-            CheckBox {
-                objectName: "fullscreenTaskbar"
-                text: I18n.t("app.prefs.fullscreen_taskbar")
-                checked: Settings.fullscreenTaskbar
-                onToggled: Settings.fullscreenTaskbar = checked
-            }
-            Label { Layout.fillWidth: true; Layout.leftMargin: 24; wrapMode: Text.WordWrap; color: Theme.textDim
-                text: I18n.t("app.prefs.fullscreen_taskbar.hint") }
-            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.tray"); font.weight: Font.DemiBold }
-            CheckBox {
-                objectName: "minimizeToTray"
-                text: I18n.t("app.prefs.minimize_to_tray")
-                enabled: Tray.available
-                checked: Settings.minimizeToTray
-                onToggled: Settings.minimizeToTray = checked
-            }
-            Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
-                text: Tray.available ? I18n.t("app.prefs.minimize_to_tray.hint") : I18n.t("app.prefs.tray_unavailable") }
-            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.startup"); font.weight: Font.DemiBold }
-            CheckBox {
-                objectName: "launchAtStartup"
-                text: I18n.t("app.prefs.launch_at_startup")
-                checked: Settings.launchAtStartup
-                onToggled: Settings.launchAtStartup = checked
-            }
-            CheckBox {
-                objectName: "startMinimized"
-                Layout.leftMargin: 24
-                text: I18n.t("app.prefs.start_minimized")
-                enabled: Settings.launchAtStartup && Tray.available
-                checked: Settings.startMinimized
-                onToggled: Settings.startMinimized = checked
-            }
-            Label { Layout.fillWidth: true; Layout.leftMargin: 24; wrapMode: Text.WordWrap; color: Theme.textDim
-                text: I18n.t("app.prefs.start_minimized.hint") }
-            Label { Layout.topMargin: 6; text: I18n.t("app.prefs.section.about"); font.weight: Font.DemiBold }
-            RowLayout {
-                Layout.fillWidth: true
-                Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: Theme.textDim
-                    text: I18n.t("app.prefs.about.text") }
-                Button {
-                    objectName: "openLicenses"
-                    text: I18n.t("app.prefs.about.open")
-                    onClicked: licensesDialog.open()
-                }
-            }
-            Button {
-                Layout.topMargin: 6
-                text: I18n.t("app.prefs.quit")
-                flat: true
-                onClicked: window.quitApp()
-            }
-            }
-        }
+        onQuitRequested: window.quitApp()
     }
     Dialog {
         id: changelogDialog
@@ -321,33 +207,8 @@ ApplicationWindow {
                 width: changelogScroll.availableWidth
                 wrapMode: Text.WordWrap
                 textFormat: Text.MarkdownText
-                text: changelogDialog.visible ? Changelog : "" // ver licensesDialog: cor dos links
+                text: changelogDialog.visible ? Changelog : "" // montado ao abrir: o Markdown fixa a cor dos links no parse
                 onLinkActivated: link => Qt.openUrlExternally(link)
-            }
-        }
-    }
-    Dialog {
-        id: licensesDialog
-        objectName: "licensesDialog"
-        title: I18n.t("app.about.title")
-        anchors.centerIn: parent
-        width: Math.min(680, window.width - 40)
-        height: Math.min(600, parent.height - 40)
-        modal: true
-        standardButtons: Dialog.Close
-        contentItem: ScrollView {
-            id: licensesScroll
-            contentWidth: availableWidth
-            clip: true
-            Label {
-                width: licensesScroll.availableWidth
-                wrapMode: Text.WordWrap
-                textFormat: Text.MarkdownText
-                // Créditos + THIRD_PARTY_LICENSES.md (título rebaixado ao nível das seções).
-                // Montado ao abrir: o Markdown fixa a cor dos links (paleta do app) no parse.
-                text: !licensesDialog.visible ? "" : I18n.t("app.about.credits") + ThirdPartyLicenses.replace(/^# /, "## ")
-                      .replace("](LICENSE)", "](https://github.com/JonasHenriqueDev/OpenSpeak/blob/main/LICENSE)")
-                onLinkActivated: link => { if (/^https?:/.test(link)) Qt.openUrlExternally(link) }
             }
         }
     }
@@ -401,7 +262,7 @@ ApplicationWindow {
                     textFormat: Text.MarkdownText
                     color: Theme.textDim
                     // Só a seção da versão atual (até o próximo "# OpenSpeak").
-                    // Montado ao abrir (cor dos links: ver licensesDialog).
+                    // Montado ao abrir: o Markdown fixa a cor dos links (paleta do app) no parse.
                     text: !updatesDialog.visible ? "" : Changelog.split(/\r?\n(?=# )/)[0]
                     onLinkActivated: link => Qt.openUrlExternally(link)
                 }
@@ -427,7 +288,7 @@ ApplicationWindow {
         if (DebugOpen === "updates") Qt.callLater(() => updatesDialog.open())
         if (DebugOpen === "preferences") Qt.callLater(() => preferencesDialog.open())
         if (DebugOpen === "changelog") Qt.callLater(() => changelogDialog.open())
-        if (DebugOpen === "licenses") Qt.callLater(() => licensesDialog.open())
+        if (DebugOpen === "licenses") Qt.callLater(() => preferencesDialog.openAt("about"))
         if (JustUpdated) {
             const text = I18n.t("app.updated", { version: Updater.version })
             if (StartHidden)

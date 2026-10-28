@@ -270,7 +270,6 @@ void ScreenshareManager::configureEncoder(OwnStream &own)
     ec.fps = own.config.fps;
     ec.bitrate = own.config.bitrate;
     ec.screenContent = own.config.type != StreamType::Camera;
-    ec.preferredEncoder = m_settings->preferredEncoder();
     own.encoder->setConfig(ec);
 }
 
@@ -284,8 +283,7 @@ void ScreenshareManager::startMedia(OwnStream &own)
     ec.maxHeight = own.config.height;
     ec.fps = own.config.fps;
     ec.bitrate = own.config.bitrate;
-    ec.screenContent = own.config.type != StreamType::Camera;
-    ec.preferredEncoder = m_settings->preferredEncoder();
+    ec.screenContent = own.config.type != StreamType::Camera; // encoder sempre automático
     own.encoder->start(ec, [p](const EncodedVideoFrame &frame) {
         std::lock_guard lock(p->sinkMutex);
         for (SessionOutbound *s : std::as_const(p->sinks))

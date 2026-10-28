@@ -17,7 +17,6 @@ const STRINGS = {
   'app.you': 'você',
   'app.cancel': 'Cancelar',
   'app.close': 'Fechar',
-  'app.settings': 'Configurações',
   'app.codec': 'Codec de vídeo preferido',
   'app.codec.auto': 'Automático',
 
@@ -216,8 +215,6 @@ const STRINGS = {
   'video.viewers.banned.empty': 'Nenhum usuário bloqueado',
   'video.viewers.join_request': 'Pedidos para entrar',
   'video.viewers.join_request.empty': 'Nenhum pedido pendente',
-  'app.encoder': 'Codificador de vídeo',
-  'app.encoder.auto': 'Automático',
 
   'app.server.mode.sfu': 'Servidor com relay (SFU): as transmissões vão pelo servidor, e o seu upload não cresce com cada espectador. P2P também está disponível no diálogo de transmissão.',
   'app.server.mode.p2p': 'Este servidor só oferece P2P: o vídeo vai direto do seu PC para cada espectador.',

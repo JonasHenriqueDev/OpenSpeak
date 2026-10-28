@@ -15,7 +15,6 @@ class Settings : public QObject {
     Q_PROPERTY(QString serverUrl READ serverUrl WRITE setServerUrl NOTIFY changed)
     Q_PROPERTY(QString serverPassword READ serverPassword WRITE setServerPassword NOTIFY changed)
     Q_PROPERTY(QString uid READ uid CONSTANT)
-    Q_PROPERTY(QString preferredEncoder READ preferredEncoder WRITE setPreferredEncoder NOTIFY changed)
     Q_PROPERTY(bool showOwnStreams READ showOwnStreams WRITE setShowOwnStreams NOTIFY changed)
     Q_PROPERTY(bool showInactiveStreams READ showInactiveStreams WRITE setShowInactiveStreams NOTIFY changed)
     Q_PROPERTY(bool advancedMode READ advancedMode WRITE setAdvancedMode NOTIFY changed)
@@ -50,8 +49,6 @@ public:
     QString serverPassword() const { return value("serverPassword").toString(); }
     void setServerPassword(const QString &v) { set("serverPassword", v); }
     QString uid() const { return m_uid; }
-    QString preferredEncoder() const { return value("preferredEncoder").toString(); }
-    void setPreferredEncoder(const QString &v) { set("preferredEncoder", v); }
     bool showOwnStreams() const { return value("showOwnStreams", true).toBool(); }
     void setShowOwnStreams(bool v) { set("showOwnStreams", v); }
     bool showInactiveStreams() const { return value("showInactiveStreams", true).toBool(); }

@@ -69,36 +69,6 @@ Rectangle {
                     text: Server.clientName(Server.ownClid)
                     color: Theme.text
                 }
-                ToolButton {
-                    padding: 3
-                    id: settingsButton
-                    contentItem: Item {}
-        Icon { anchors.centerIn: parent; name: "settings"; color: Theme.textDim }
-                    ToolTip.visible: hovered
-                    ToolTip.text: I18n.t("app.settings")
-                    onClicked: settingsMenu.open()
-                    Menu {
-                        id: settingsMenu
-                        y: settingsButton.height
-                        MenuItem { text: I18n.t("app.encoder") + ":"; enabled: false }
-                        MenuItem {
-                            text: I18n.t("app.encoder.auto")
-                            checkable: true
-                            checked: Settings.preferredEncoder === ""
-                            onTriggered: Settings.preferredEncoder = ""
-                        }
-                        Repeater {
-                            model: Screenshare.encoders
-                            delegate: MenuItem {
-                                required property string modelData
-                                text: modelData
-                                checkable: true
-                                checked: Settings.preferredEncoder === modelData
-                                onTriggered: Settings.preferredEncoder = modelData
-                            }
-                        }
-                    }
-                }
                 Button {
                     flat: true
                     text: I18n.t("app.disconnect")

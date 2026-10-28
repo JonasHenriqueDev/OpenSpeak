@@ -200,10 +200,10 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 enabled: Settings.soundEffects
                 Label { text: I18n.t("app.prefs.sounds.volume"); color: Theme.textDim }
-                Slider {
+                AppSlider {
                     objectName: "soundVolume"
                     Layout.fillWidth: true
-                    from: 0; to: 100; stepSize: 5
+                    from: 0; to: 100; step: 5
                     value: Settings.soundVolume
                     onMoved: Settings.soundVolume = value
                     onPressedChanged: if (!pressed) Sounds.preview(Settings.soundTheme, "alguem_entrou")

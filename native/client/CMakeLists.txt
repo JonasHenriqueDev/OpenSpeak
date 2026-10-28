@@ -68,6 +68,7 @@ qt_add_qml_module(OpenSpeak
         qml/Icon.qml
         qml/ViewerCount.qml
         qml/VolumeSlider.qml
+        qml/AppSlider.qml
         qml/I18n.js
 )
 

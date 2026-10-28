@@ -4,7 +4,7 @@ import QtQuick.Controls
 // Slider de volume (1 = 100%). Aceita roda do mouse e setas do teclado, e tem uma
 // "trava" em 100%: para passar disso é preciso arrastar um pouco além ou insistir
 // alguns cliques na roda/seta. volumeEdited() sai só de ações do usuário.
-Slider {
+AppSlider {
     id: control
 
     signal volumeEdited(real volume)
@@ -17,7 +17,7 @@ Slider {
     readonly property int detentClicks: 3
     property int pushes: 0
 
-    stepSize: 0.05
+    step: 0.05
     wheelEnabled: false
     ToolTip.visible: hovered || pressed
     ToolTip.text: Math.round(value * 100) + "%"
@@ -30,7 +30,7 @@ Slider {
 
     function nudge(steps) {
         if (steps === 0) return
-        let v = value + steps * stepSize
+        let v = value + steps * step
         if (hasBoost && steps > 0 && value <= detent + 0.001 && v > detent) {
             if (value < detent - 0.001) {
                 pushes = 0

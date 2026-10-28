@@ -501,10 +501,10 @@ Dialog {
                     Label { text: I18n.t("video.bitrate"); color: Theme.textDim }
                     RowLayout {
                         Layout.fillWidth: true
-                        Slider {
+                        AppSlider {
                             id: bitrateSlider
                             Layout.fillWidth: true
-                            from: 250; to: 20000; stepSize: 250
+                            from: 250; to: 20000; step: 250
                             value: (dialog.cfg.bitrate || 3000000) / 1000
                             onMoved: dialog.patch({ bitrate: value * 1000 })
                         }

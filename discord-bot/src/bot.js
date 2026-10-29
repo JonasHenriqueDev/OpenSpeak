@@ -252,10 +252,7 @@ class LiveBot {
     const embed = new EmbedBuilder()
       .setColor(ended ? 0x5c6370 : s.paused ? 0xe5a50a : 0xe5484d)
       .setTitle(ended ? `⚫ ${s.owner || 'Alguém'} encerrou a transmissão` : `🔴 ${s.owner || 'Alguém'} está ao vivo no OpenSpeak`)
-      .addFields(
-        { name: 'Transmitindo', value: appLabel(s), inline: true },
-        { name: 'Canal', value: s.channel || '—', inline: true },
-      );
+      .addFields({ name: 'Transmitindo', value: appLabel(s), inline: true });
     if (s.name) embed.setDescription(s.name);
     if (ended) {
       embed.addFields({ name: 'Duração', value: formatDuration(Date.now() - s.started), inline: true });

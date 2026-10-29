@@ -17,11 +17,27 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QScopeGuard>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
 
 using namespace openspeak;
 
 class TestSfuEndToEnd : public QObject {
     Q_OBJECT
+
+    /// GET /api/live (o que o bot do Discord lê): dados do stream `id`.
+    static QJsonObject liveMedia(quint16 port, const QString &id)
+    {
+        QNetworkAccessManager network;
+        std::unique_ptr<QNetworkReply> reply(network.get(QNetworkRequest(QUrl(QStringLiteral("http://127.0.0.1:%1/api/live").arg(port)))));
+        QSignalSpy done(reply.get(), &QNetworkReply::finished);
+        if (!done.wait(5000))
+            return {};
+        for (const auto &value : QJsonDocument::fromJson(reply->readAll()).object().value("streams").toArray())
+            if (value.toObject().value("id").toString() == id)
+                return value.toObject().value("media").toObject();
+        return {};
+    }
 
     static QVariantMap item(const ScreenshareManager &m, const QString &id)
     {
@@ -143,12 +159,21 @@ private slots:
         qInfo() << "envio:" << out.value("video").toMap().value("sentPackets") << "pacotes  recebimento (B):"
                 << in.value("video").toMap().value("receivedPackets") << "pacotes," << in.value("video").toMap().value("decoder").toString();
 
+        // Bot do Discord: total de dados do stream (transmissor -> servidor -> espectadores).
+        const QJsonObject media = liveMedia(host.port(), id);
+        QVERIFY(media.value("sentBytes").toDouble() > 0);
+        QVERIFY(media.value("receivedBytes").toDouble() > 0);
+
         // Kick de um espectador não afeta o outro.
         ma.removeViewer(id, c.ownClid(), false);
         QTRY_COMPARE_WITH_TIMEOUT(item(mc, id).value("errorKey").toString(), QStringLiteral("video.join.error.kicked"), 3000);
         const int beforeKick = framesB;
         QTRY_VERIFY_WITH_TIMEOUT(framesB >= beforeKick + 15, 10000);
         QCOMPARE(item(mb, id).value("status").toString(), QStringLiteral("playing"));
+        // O total só cresce: o que foi entregue a quem saiu continua contando.
+        const QJsonObject afterKick = liveMedia(host.port(), id);
+        QVERIFY(afterKick.value("sentBytes").toDouble() > media.value("sentBytes").toDouble());
+        QVERIFY(afterKick.value("receivedBytes").toDouble() > media.value("receivedBytes").toDouble());
 
         // Fim do stream.
         ma.stopStream(id);

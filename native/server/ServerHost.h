@@ -94,6 +94,12 @@ private:
     QHash<QString, double> m_mediaBytes; // sessão -> bytes na amostra anterior
     qint64 m_mediaSampledAt = 0;
     double m_mediaMbps = 0;
+    // Total por stream do relay, para o bot (fim da transmissão): o que o transmissor
+    // enviou ao servidor e o que o servidor entregou aos espectadores (inclusive os que já saíram).
+    struct MediaTotals {
+        double sent = 0, received = 0;
+    };
+    QHash<QString, MediaTotals> m_streamMedia;
     // Webhook do bot do Discord (OPENSPEAK_LIVE_WEBHOOK): POST do liveSnapshot() quando muda.
     QUrl m_liveWebhook;
     bool m_liveEnabled = false;

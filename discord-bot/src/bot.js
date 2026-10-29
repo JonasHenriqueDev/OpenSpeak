@@ -15,7 +15,7 @@ import {
 } from 'discord.js';
 import {
   NOTICES, appLabel, applySettings, checkConfig, diff, formatDuration, parseLive, parseStats, planVoiceUpdates,
-  presenceText, serverText, statsVars, streamKey, voiceStatusText, watchersText,
+  mediaText, presenceText, serverText, statsVars, streamKey, voiceStatusText, watchersText,
 } from './live.js';
 import { startWebhook } from './webhook.js';
 
@@ -256,6 +256,9 @@ class LiveBot {
     if (s.name) embed.setDescription(s.name);
     if (ended) {
       embed.addFields({ name: 'Duração', value: formatDuration(Date.now() - s.started), inline: true });
+      // Só no SFU: no P2P a mídia não passa pelo servidor, que não sabe quanto foi.
+      const media = mediaText(s.media);
+      if (media) embed.addFields({ name: 'Dados', value: media, inline: true });
       embed.addFields({ name: 'Assistiram', value: watchersText(watchers) });
     }
     else if (s.paused) embed.addFields({ name: 'Situação', value: 'Pausada', inline: true });

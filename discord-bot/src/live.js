@@ -48,9 +48,38 @@ export function parseLive(body) {
       viewers: Number(s.viewers) || 0,
       // Servidor antigo não manda: ninguém listado.
       viewerNames: Array.isArray(s.viewerNames) ? s.viewerNames.map(String).filter(n => n.trim()) : [],
+      media: parseMedia(s.media),
       started: Number(s.started) || 0,
     }))
     .sort((a, b) => a.started - b.started);
+}
+
+/**
+ * Dados da transmissão, só quando ela passa pelo relay (SFU) do servidor nativo:
+ * `sent` = o que o transmissor enviou, `received` = o que os espectadores receberam.
+ * `null` no P2P (a mídia não passa pelo servidor) ou em servidor antigo.
+ */
+function parseMedia(media) {
+  const sent = Number(media?.sentBytes), received = Number(media?.receivedBytes);
+  return Number.isFinite(sent) && Number.isFinite(received) ? { sent, received } : null;
+}
+
+export function formatBytes(bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = Math.max(0, bytes);
+  let unit = 0;
+  while (value >= 1000 && unit < units.length - 1) {
+    value /= 1000;
+    unit++;
+  }
+  const digits = unit === 0 || value >= 100 ? 0 : 1;
+  return `${value.toLocaleString('pt-BR', { maximumFractionDigits: digits })} ${units[unit]}`;
+}
+
+/** Campo "Dados" da mensagem de fim (vazio = não mostrar: transmissão P2P). */
+export function mediaText(media) {
+  if (!media) return '';
+  return `↑ ${formatBytes(media.sent)} enviados · ↓ ${formatBytes(media.received)} recebidos`;
 }
 
 export const EMBED_FIELD_MAX = 1024; // limite do Discord

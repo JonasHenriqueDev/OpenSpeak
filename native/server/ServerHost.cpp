@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QSaveFile>
+#include <QSet>
 #include <QHttpServerRequest>
 #include <QHttpServerResponder>
 #include <QHttpServerResponse>
@@ -79,6 +80,7 @@ ServerHost::ServerHost(Options options, QObject *parent)
 
     // Bot do Discord: transmissões ao vivo marcadas para anunciar (só leitura).
     m_http.route(QStringLiteral("/api/live"), QHttpServerRequest::Method::Get, [this] {
+        sampleMediaRate(); // totais de dados por stream atualizados na hora
         QHttpServerResponse response(liveSnapshot());
         QHttpHeaders headers = response.headers();
         headers.append(QHttpHeaders::WellKnownHeader::CacheControl, "no-store");
@@ -184,6 +186,16 @@ QJsonObject ServerHost::liveSnapshot() const
         auto stats = live.value("stats").toObject();
         stats["mbps"] = std::round(m_mediaMbps * 10) / 10;
         live["stats"] = stats;
+        // Dados de cada stream que passa pelo relay (no P2P a mídia não passa por aqui).
+        QJsonArray streams;
+        for (const auto &value : live.value("streams").toArray()) {
+            auto stream = value.toObject();
+            const auto media = m_streamMedia.constFind(stream.value("id").toString());
+            if (media != m_streamMedia.cend())
+                stream["media"] = QJsonObject{{"sentBytes", std::round(media->sent)}, {"receivedBytes", std::round(media->received)}};
+            streams.append(stream);
+        }
+        live["streams"] = streams;
     }
     return live;
 }
@@ -195,15 +207,24 @@ void ServerHost::sampleMediaRate()
     // Os contadores são por sessão e somem quando ela acaba: soma só o que cada
     // sessão andou desde a amostra anterior (sessão nova conta desde zero).
     QHash<QString, double> bytes;
+    QSet<QString> live;
     double delta = 0;
     for (const auto &value : m_relay->monitoringSessions()) {
         const auto session = value.toObject();
-        const QString key = session.value("streamId").toString() + u'/' + QString::number(session.value("clid").toInt())
-            + u'/' + session.value("role").toString();
+        const QString streamId = session.value("streamId").toString();
+        const bool publisher = session.value("role").toString() == QLatin1String("publisher");
+        const QString key = streamId + u'/' + QString::number(session.value("clid").toInt()) + u'/' + session.value("role").toString();
         const double total = session.value("mediaRxBytes").toDouble() + session.value("mediaTxBytes").toDouble();
         bytes.insert(key, total);
-        delta += std::max(0.0, total - m_mediaBytes.value(key, 0));
+        const double moved = std::max(0.0, total - m_mediaBytes.value(key, 0));
+        delta += moved;
+        MediaTotals &media = m_streamMedia[streamId];
+        (publisher ? media.sent : media.received) += moved;
+        live.insert(streamId);
     }
+    // Stream sem sessão no relay (acabou ou é P2P) não precisa mais do total.
+    for (auto it = m_streamMedia.begin(); it != m_streamMedia.end();)
+        it = live.contains(it.key()) ? std::next(it) : m_streamMedia.erase(it);
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (m_mediaSampledAt)
         m_mediaMbps = delta * 8 / 1e6 / (std::max<qint64>(now - m_mediaSampledAt, 1) / 1000.0);
@@ -221,6 +242,14 @@ void ServerHost::sendLiveWebhook()
     if (stats.value("mbps").isDouble())
         stats["mbps"] = std::round(stats.value("mbps").toDouble());
     rounded["stats"] = stats;
+    // Os totais de dados crescem o tempo todo: sozinhos não justificam um POST.
+    QJsonArray streams;
+    for (const auto &value : rounded.value("streams").toArray()) {
+        auto stream = value.toObject();
+        stream.remove(QStringLiteral("media"));
+        streams.append(stream);
+    }
+    rounded["streams"] = streams;
     const QByteArray key = QJsonDocument(rounded).toJson(QJsonDocument::Compact);
     if (key == m_lastLive)
         return; // só a contagem de algo que o bot não mostra, ou nada mudou

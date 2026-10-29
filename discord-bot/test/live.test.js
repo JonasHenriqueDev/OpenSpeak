@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   appLabel, applySettings, checkConfig, diff, fill, formatDuration, parseLive, parseStats, planVoiceUpdates, presenceText, serverText,
-  statsVars, streamKey, voiceStatusText, VOICE_STATUS_MAX, watchersText, EMBED_FIELD_MAX,
+  statsVars, streamKey, voiceStatusText, VOICE_STATUS_MAX, watchersText, EMBED_FIELD_MAX, formatBytes, mediaText,
 } from '../src/live.js';
 
 const cs = { id: 's1', name: 'Ranked', owner: 'Jonas', channel: 'Jogos', app: 'Counter-Strike 2', type: 3, viewers: 2, started: 1000 };
@@ -23,6 +23,18 @@ test('parseLive valida, normaliza e ordena por início', () => {
   const list = parseLive({ streams: [{ ...tela }, { ...cs }, { name: 'sem id' }] });
   assert.deepEqual(list.map(s => s.id), ['s1', 's2']);
   assert.throws(() => parseLive({}));
+});
+
+test('dados da transmissão: só quando o servidor mede (SFU)', () => {
+  const [sfu] = parseLive({ streams: [{ ...cs, media: { sentBytes: 1_234_567_890, receivedBytes: 3_500_000 } }] });
+  assert.deepEqual(sfu.media, { sent: 1_234_567_890, received: 3_500_000 });
+  assert.equal(mediaText(sfu.media), '↑ 1,2 GB enviados · ↓ 3,5 MB recebidos');
+  assert.equal(parseLive({ streams: [{ ...cs }] })[0].media, null); // P2P ou servidor antigo
+  assert.equal(parseLive({ streams: [{ ...cs, media: null }] })[0].media, null);
+  assert.equal(mediaText(null), '');
+  assert.equal(formatBytes(0), '0 B');
+  assert.equal(formatBytes(999), '999 B');
+  assert.equal(formatBytes(150_000_000), '150 MB');
 });
 
 test('quem assistiu: apelidos do /api/live, sem repetir e dentro do limite do Discord', () => {

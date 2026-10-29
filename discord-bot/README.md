@@ -131,7 +131,7 @@ editá-las mesmo depois de reiniciar).
     "enabled": false,
     "channelId": "",                                // canal de texto; vazio = escolher com /openspeak canal
     "mention": "",                                  // ex.: "@here" ou "<@&ID_DO_CARGO>"
-    "onEnd": "edit"                                 // edit (marca como encerrada, com a duração e quem assistiu), delete ou keep
+    "onEnd": "edit"                                 // edit (marca como encerrada, com a duração, quem assistiu e, no SFU, os dados), delete ou keep
   },
   "presence": {
     "enabled": false,

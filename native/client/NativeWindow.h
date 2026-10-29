@@ -17,7 +17,8 @@ public:
 
     /// Em tela cheia sem borda o Windows trata a janela como "app em tela cheia" e
     /// não mostra a barra de tarefas oculta automaticamente ao passar o mouse.
-    /// Com a borda de 1 px (WS_BORDER) ela volta a aparecer.
+    /// Com a borda de 1 px (WS_BORDER) ela volta a aparecer; a borda é pintada de
+    /// preto pelo app (o Windows a desenha clara conforme o tema e o foco).
     Q_INVOKABLE void setTaskbarInFullScreen(QWindow *window, bool enabled);
 
     /// Janela sem moldura não tem o Aero Snap: ao fim de um arrasto (startSystemMove)
@@ -31,7 +32,9 @@ public:
     bool nativeEventFilter(const QByteArray &eventType, void *message, qintptr *result) override;
 
 private:
+    void installFilter();
     QList<QPointer<QWindow>> m_snapWindows;
+    QList<QPointer<QWindow>> m_borderWindows; // tela cheia com a borda de 1 px pintada de preto
     bool m_filterInstalled = false;
     bool m_sizing = false; // o laço modal atual é de redimensionar, não de mover
 };

@@ -1,3 +1,10 @@
+# OpenSpeak 1.0.20 — tela cheia no monitor certo
+
+- A **tela cheia** abre no monitor onde está a janela do OpenSpeak, mesmo
+  depois de mover a janela para outro monitor.
+- Corrigido: a borda fina em volta da **tela cheia** podia aparecer clara;
+  agora fica sempre preta.
+
 # OpenSpeak 1.0.19 — sons do Nostalgia e ajustes de interface
 
 - O tema de sons **Nostalgia** ganhou sons novos, mais próximos do clima dos

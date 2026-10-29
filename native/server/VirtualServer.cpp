@@ -157,13 +157,19 @@ QJsonObject VirtualServer::liveSnapshot() const
             continue;
         const auto owner = m_clients.find(s.ownerClid);
         const auto channel = m_channels.find(s.cid);
+        // Apelidos de quem assiste (os mesmos que a sala mostra), para o bot listar no fim.
+        QJsonArray viewerNames;
+        for (const int clid : s.viewers)
+            if (const auto viewer = m_clients.find(clid); viewer != m_clients.end())
+                viewerNames.append(viewer->second.nickname);
         streams.append(QJsonObject{
             {"id", id}, {"name", s.name},
             {"owner", owner != m_clients.end() ? owner->second.nickname : QString()},
             {"channel", channel != m_channels.end() ? channel->second.name : QString()},
             {"app", s.app}, {"type", s.type}, {"access", s.access}, {"mode", s.mode},
             {"paused", s.paused || (owner != m_clients.end() && owner->second.suspended)},
-            {"audio", s.audio}, {"viewers", int(s.viewers.size())}, {"started", double(s.created)},
+            {"audio", s.audio}, {"viewers", int(s.viewers.size())}, {"viewerNames", viewerNames},
+            {"started", double(s.created)},
             {"quality", QJsonObject{{"width", s.quality.width}, {"height", s.quality.height}, {"fps", s.quality.fps}}},
         });
     }

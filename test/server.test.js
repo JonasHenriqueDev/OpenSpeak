@@ -200,6 +200,12 @@ test('bot do Discord: liveSnapshot só lista streams com announce, com quem e qu
   assert.equal(live.streams[0].thumbnail, undefined);
   // Contagens contam também streams sem anúncio, mas sem dizer de quem.
   assert.deepEqual(live.stats, { clients: 2, streams: 2, viewers: 0, mbps: null });
+  assert.deepEqual(live.streams[0].viewerNames, []);
+
+  // Quem assiste aparece pelo apelido (o bot lista no fim da transmissão).
+  server.handle(other, 'joinstreamrequest', { streamIdentifier: shown });
+  server.handle(host, 'respondjoinstreamrequest', { streamIdentifier: shown, clid: other, accept: true });
+  assert.deepEqual(server.liveSnapshot().streams[0].viewerNames, ['other']);
 
   server.handle(host, 'updatestream', { streamIdentifier: shown, announce: false });
   assert.equal(server.liveSnapshot().streams.length, 0);

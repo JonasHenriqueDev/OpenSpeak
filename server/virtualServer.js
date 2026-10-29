@@ -122,6 +122,8 @@ export class VirtualServer {
       app: s.app ?? '',
       type: s.type, access: s.access, mode: s.mode, paused: s.paused, audio: s.audio,
       viewers: s.viewers.size, started: s.created,
+      // Apelidos de quem assiste (os mesmos que a sala mostra), para o bot listar no fim.
+      viewerNames: [...s.viewers].map(clid => this.clients.get(clid)?.nickname).filter(n => n !== undefined),
       quality: { width: s.quality.width, height: s.quality.height, fps: s.quality.fps },
     }));
     // Só contagens agregadas. O servidor Node não carrega mídia (só P2P): sem Mbps.

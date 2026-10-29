@@ -15,7 +15,7 @@ import {
 } from 'discord.js';
 import {
   NOTICES, appLabel, applySettings, checkConfig, diff, formatDuration, parseLive, parseStats, planVoiceUpdates,
-  presenceText, serverText, statsVars, streamKey, voiceStatusText,
+  presenceText, serverText, statsVars, streamKey, voiceStatusText, watchersText,
 } from './live.js';
 import { startWebhook } from './webhook.js';
 
@@ -128,6 +128,7 @@ class LiveBot {
     this.state = loadState();
     const config = (this.config = applySettings(baseConfig, this.state.settings));
     this.known = new Map(); // chave -> stream (último visto)
+    this.watched = new Map(); // chave -> apelidos de quem assistiu em algum momento
     this.failures = 0;
     this.voiceText = '';
     // Status já escrito por canal de voz. Com canal fixo, a primeira escrita é
@@ -202,8 +203,12 @@ class LiveBot {
     const current = new Map(streams.map(s => [streamKey(s), s]));
 
     for (const s of started) log(`ao vivo: ${s.owner} — ${appLabel(s)} (${s.name})`);
+    this.trackWatchers(current);
     // Avisos já publicados terminam mesmo com o chat desligado ou em outro canal.
-    for (const key of stopped) await this.finish(key, this.known.get(key));
+    for (const key of stopped) {
+      await this.finish(key, this.known.get(key));
+      this.watched.delete(key);
+    }
     if (this.config.chat.enabled && this.config.chat.channelId) {
       for (const s of started) await this.announce(s);
       for (const [key, s] of current) {
@@ -222,9 +227,28 @@ class LiveBot {
     if (this.config.presence.enabled) this.updatePresence(streams, stats);
   }
 
+  /**
+   * Acumula quem assistiu: quem saiu antes do fim também entra na lista. Guardado
+   * junto do aviso publicado para sobreviver a um reinício do bot.
+   */
+  trackWatchers(current) {
+    let changed = false;
+    for (const [key, s] of current) {
+      const saved = this.state.messages[key];
+      const names = this.watched.get(key) ?? new Set(saved?.watchers);
+      for (const name of s.viewerNames) names.add(name);
+      this.watched.set(key, names);
+      if (saved && names.size !== (saved.watchers?.length ?? 0)) {
+        saved.watchers = [...names];
+        changed = true;
+      }
+    }
+    if (changed) saveState(this.state);
+  }
+
   // ----------------------------------------------------------------- chat
 
-  embedFor(s, ended = false) {
+  embedFor(s, ended = false, watchers = []) {
     const embed = new EmbedBuilder()
       .setColor(ended ? 0x5c6370 : s.paused ? 0xe5a50a : 0xe5484d)
       .setTitle(ended ? `⚫ ${s.owner || 'Alguém'} encerrou a transmissão` : `🔴 ${s.owner || 'Alguém'} está ao vivo no OpenSpeak`)
@@ -233,7 +257,10 @@ class LiveBot {
         { name: 'Canal', value: s.channel || '—', inline: true },
       );
     if (s.name) embed.setDescription(s.name);
-    if (ended) embed.addFields({ name: 'Duração', value: formatDuration(Date.now() - s.started), inline: true });
+    if (ended) {
+      embed.addFields({ name: 'Duração', value: formatDuration(Date.now() - s.started), inline: true });
+      embed.addFields({ name: 'Assistiram', value: watchersText(watchers) });
+    }
     else if (s.paused) embed.addFields({ name: 'Situação', value: 'Pausada', inline: true });
     if (!ended) embed.setURL(this.config.openspeakUrl);
     if (s.started) embed.setTimestamp(new Date(s.started));
@@ -288,7 +315,10 @@ class LiveBot {
     try {
       const msg = await this.message(key);
       if (msg && this.config.chat.onEnd === 'delete') await msg.delete();
-      else if (msg && this.config.chat.onEnd === 'edit' && s) await msg.edit({ content: null, embeds: [this.embedFor(s, true)] });
+      else if (msg && this.config.chat.onEnd === 'edit' && s) {
+        const watchers = [...(saved.watchers ?? []), ...(this.watched.get(key) ?? [])];
+        await msg.edit({ content: null, embeds: [this.embedFor(s, true, watchers)] });
+      }
     } catch (err) {
       if (err?.code !== 10008) log('chat: falha ao encerrar aviso:', explain(err)); // 10008 = mensagem já apagada
     }

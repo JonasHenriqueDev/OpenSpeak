@@ -46,9 +46,19 @@ export function parseLive(body) {
       type: Number(s.type) || 0,
       paused: !!s.paused,
       viewers: Number(s.viewers) || 0,
+      // Servidor antigo não manda: ninguém listado.
+      viewerNames: Array.isArray(s.viewerNames) ? s.viewerNames.map(String).filter(n => n.trim()) : [],
       started: Number(s.started) || 0,
     }))
     .sort((a, b) => a.started - b.started);
+}
+
+export const EMBED_FIELD_MAX = 1024; // limite do Discord
+
+/** Quem assistiu (acumulado ao longo da transmissão), para a mensagem de fim. */
+export function watchersText(names) {
+  const list = [...new Set(names)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return list.length ? clip(list.join(', '), EMBED_FIELD_MAX) : 'Ninguém';
 }
 
 /**

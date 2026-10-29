@@ -154,6 +154,13 @@ private slots:
         QCOMPARE(stats.value("streams").toInt(), 2);
         QCOMPARE(stats.value("viewers").toInt(), 0);
         QVERIFY(stats.value("mbps").isNull());
+        QCOMPARE(s.value("viewerNames").toArray(), QJsonArray{});
+
+        // Quem assiste aparece pelo apelido (o bot lista no fim da transmissão).
+        server->handle(other, "joinstreamrequest", {{"streamIdentifier", shown}});
+        server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", shown}, {"clid", other}, {"accept", true}});
+        QCOMPARE(server->liveSnapshot().value("streams").toArray().first().toObject().value("viewerNames").toArray(),
+                 QJsonArray{QStringLiteral("other")});
 
         server->handle(host, "updatestream", {{"streamIdentifier", shown}, {"announce", false}});
         QCOMPARE(server->liveSnapshot().value("streams").toArray().size(), 0);

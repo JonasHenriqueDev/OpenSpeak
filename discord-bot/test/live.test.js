@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   appLabel, applySettings, checkConfig, diff, fill, formatDuration, parseLive, parseStats, planVoiceUpdates, presenceText, serverText,
-  statsVars, streamKey, voiceStatusText, VOICE_STATUS_MAX,
+  statsVars, streamKey, voiceStatusText, VOICE_STATUS_MAX, watchersText, EMBED_FIELD_MAX,
 } from '../src/live.js';
 
 const cs = { id: 's1', name: 'Ranked', owner: 'Jonas', channel: 'Jogos', app: 'Counter-Strike 2', type: 3, viewers: 2, started: 1000 };
@@ -23,6 +23,15 @@ test('parseLive valida, normaliza e ordena por início', () => {
   const list = parseLive({ streams: [{ ...tela }, { ...cs }, { name: 'sem id' }] });
   assert.deepEqual(list.map(s => s.id), ['s1', 's2']);
   assert.throws(() => parseLive({}));
+});
+
+test('quem assistiu: apelidos do /api/live, sem repetir e dentro do limite do Discord', () => {
+  assert.deepEqual(parseLive({ streams: [{ ...cs, viewerNames: ['Bia', ' ', 'Caio'] }] })[0].viewerNames, ['Bia', 'Caio']);
+  assert.deepEqual(parseLive({ streams: [{ ...cs }] })[0].viewerNames, []); // servidor antigo
+  assert.equal(watchersText(['Caio', 'Bia', 'Caio']), 'Bia, Caio');
+  assert.equal(watchersText([]), 'Ninguém');
+  const many = Array.from({ length: 300 }, (_, i) => `Pessoa${i}`);
+  assert.equal(watchersText(many).length, EMBED_FIELD_MAX);
 });
 
 test('diff detecta começo e fim; id reaproveitado após reinício do servidor é outro stream', () => {

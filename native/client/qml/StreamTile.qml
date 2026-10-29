@@ -100,6 +100,14 @@ Rectangle {
     function openFullscreen() {
         if (!tile.playing)
             return
+        // Abre no monitor onde está a janela do app agora: a janela de tela cheia
+        // guarda a posição da vez anterior, e o Windows usa o monitor dessa posição.
+        const appScreen = tile.Window.window ? tile.Window.window.screen : null
+        if (appScreen) {
+            fullscreenWindow.screen = appScreen
+            fullscreenWindow.x = appScreen.virtualX
+            fullscreenWindow.y = appScreen.virtualY
+        }
         NativeWindow.setTaskbarInFullScreen(fullscreenWindow, Settings.fullscreenTaskbar)
         fullscreenWindow.showFullScreen()
         attach(fullscreenVideo.videoSink)

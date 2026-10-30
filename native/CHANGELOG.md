@@ -1,3 +1,9 @@
+# OpenSpeak 1.0.21 — tela cheia no monitor certo desde a primeira vez
+
+- Corrigido: a **tela cheia** podia abrir no monitor principal na primeira vez
+  que era aberta; agora abre no monitor onde está a janela do OpenSpeak já de
+  primeira.
+
 # OpenSpeak 1.0.20 — tela cheia no monitor certo
 
 - A **tela cheia** abre no monitor onde está a janela do OpenSpeak, mesmo

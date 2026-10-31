@@ -29,7 +29,8 @@ Popup {
     Connections {
         target: Server
         function onProfileMediaReady(clid, tag, media) {
-            if (root.opened && clid === root.person.clid) {
+            // visible, não opened: com a mídia em cache a resposta chega ainda dentro do openFor.
+            if (root.visible && clid === root.person.clid) {
                 root.media = media
                 Qt.callLater(root.place)
             }

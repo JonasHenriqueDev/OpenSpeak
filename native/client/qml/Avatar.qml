@@ -56,8 +56,7 @@ Item {
         anchors.fill: parent
         source: root.animatedSource
         fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        cache: false
+        asynchronous: true // com cache: o data: URL não volta ao início, e sem ele o GIF toca uma vez só
         layer.enabled: true
         layer.effect: MultiEffect {
             maskEnabled: true

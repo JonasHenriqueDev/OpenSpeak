@@ -26,8 +26,7 @@ Item {
         AnimatedImage {
             source: root.source
             fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            cache: false
+            asynchronous: true // com cache: o data: URL não volta ao início, e sem ele o GIF toca uma vez só
         }
     }
 }

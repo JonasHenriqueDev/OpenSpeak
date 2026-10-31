@@ -323,7 +323,7 @@ Popup {
                     showStatus(I18n.t("app.profile.color.invalid"), true)
                     return
                 }
-                Server.updateProfile({ description: descriptionField.text, color: pickedColor })
+                Server.updateProfile({ displayName: displayNameField.text, description: descriptionField.text, color: pickedColor })
             }
             Connections {
                 target: Server
@@ -361,18 +361,22 @@ Popup {
                 spacing: 14
                 Avatar {
                     source: profileContent.profile.avatar || ""
-                    name: profileContent.profile.nickname || ""
+                    name: profileContent.profile.displayName || profileContent.profile.nickname || ""
                     size: 64
                 }
                 ColumnLayout {
                     spacing: 2
                     Label {
-                        text: profileContent.profile.nickname || ""
+                        text: displayNameField.text.trim() || profileContent.profile.nickname || ""
                         color: profileContent.pickedColor.length === 7 ? profileContent.pickedColor : Theme.text
                         font.pixelSize: 16
                         font.weight: Font.DemiBold
                     }
-                    Label { text: I18n.t("app.profile.nickname"); color: Theme.textDim; font.pixelSize: 12 }
+                    Label {
+                        text: I18n.t("app.profile.nickname") + ": " + (profileContent.profile.nickname || "")
+                        color: Theme.textDim
+                        font.pixelSize: 12
+                    }
                 }
             }
 
@@ -421,6 +425,25 @@ Popup {
                     text: I18n.t("app.profile.photo.remove")
                     onClicked: Server.updateProfile({ avatar: "" })
                 }
+            }
+
+            SectionHeader { visible: profileContent.available && profileContent.claimed; text: I18n.t("app.profile.display_name") }
+            TextField {
+                id: displayNameField
+                objectName: "profileDisplayName"
+                visible: profileContent.available && profileContent.claimed
+                Layout.fillWidth: true
+                maximumLength: 32
+                text: profileContent.profile.displayName || ""
+                placeholderText: profileContent.profile.nickname || ""
+            }
+            Label {
+                Layout.fillWidth: true
+                visible: displayNameField.visible
+                wrapMode: Text.WordWrap
+                text: I18n.t("app.profile.display_name.hint")
+                color: Theme.textDim
+                font.pixelSize: 12
             }
 
             SectionHeader { visible: profileContent.available && profileContent.claimed; text: I18n.t("app.profile.color") }

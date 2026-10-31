@@ -216,7 +216,7 @@ void ConnectionHandler::moveTo(int cid)
 QString ConnectionHandler::clientName(int clid) const
 {
     const auto it = m_clients.find(clid);
-    return it != m_clients.end() ? it->nickname : QStringLiteral("#%1").arg(clid);
+    return it != m_clients.end() ? it->shownName() : QStringLiteral("#%1").arg(clid);
 }
 
 QString ConnectionHandler::clientIdentity(int clid) const
@@ -310,7 +310,7 @@ QVariantList ConnectionHandler::tree() const
             if (c.cid == ch.cid)
                 clients.append(c);
         std::sort(clients.begin(), clients.end(), [](const auto &a, const auto &b) {
-            return a.nickname.localeAwareCompare(b.nickname) < 0;
+            return a.shownName().localeAwareCompare(b.shownName()) < 0;
         });
         QVariantList clientList;
         int streamCount = 0;
@@ -320,7 +320,7 @@ QVariantList ConnectionHandler::tree() const
                 if (s.ownerClid == c.clid)
                     streams.append(streamToVariant(s));
             streamCount += streams.size();
-            clientList.append(QVariantMap{{"clid", c.clid}, {"nickname", c.nickname}, {"uid", c.uid}, {"identity", c.identity},
+            clientList.append(QVariantMap{{"clid", c.clid}, {"nickname", c.nickname}, {"name", c.shownName()}, {"uid", c.uid}, {"identity", c.identity},
                                           {"me", c.clid == m_ownClid}, {"streams", streams}, {"pingMs", c.pingMs},
                                           {"avatar", c.avatar}, {"description", c.description}, {"color", c.color}});
         }

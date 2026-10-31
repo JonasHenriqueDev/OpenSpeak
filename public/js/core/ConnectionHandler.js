@@ -82,7 +82,8 @@ export class ConnectionHandler extends EventEmitter {
   }
 
   clientName(clid) {
-    return this.clients.get(clid)?.nickname ?? `#${clid}`;
+    const client = this.clients.get(clid);
+    return client ? client.displayName || client.nickname : `#${clid}`;
   }
 
   #bind() {

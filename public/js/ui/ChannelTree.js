@@ -30,7 +30,7 @@ export class ChannelTree {
           ? h('span.tag', { title: t(hd.hasStreamingSFU ? 'app.server.mode.sfu' : 'app.server.mode.p2p') }, hd.hasStreamingSFU ? 'SFU' : 'P2P')
           : null),
       channels.map(ch => {
-        const clients = [...hd.clients.values()].filter(c => c.cid === ch.cid).sort((a, b) => a.nickname.localeCompare(b.nickname));
+        const clients = [...hd.clients.values()].filter(c => c.cid === ch.cid).sort((a, b) => hd.clientName(a.clid).localeCompare(hd.clientName(b.clid)));
         const streams = hd.streamsInChannel(ch.cid);
         return h('div.tree-channel', { class: { current: ch.cid === ownCid } },
           h('div.tree-row.channel-row', {
@@ -51,7 +51,10 @@ export class ChannelTree {
         on: { contextmenu: ev => { if (!isMe) { ev.preventDefault(); this.#openMenu(ev, client); } } },
       },
         client.avatar ? h('img.client-avatar', { src: client.avatar, alt: '' }) : h('span.talk-dot'),
-        h('span.ellipsis', { title: client.description || null, style: client.color ? { color: client.color } : null }, client.nickname),
+        h('span.ellipsis', {
+          title: [client.displayName ? `@${client.nickname}` : '', client.description].filter(Boolean).join('\n') || null,
+          style: client.color ? { color: client.color } : null,
+        }, this.handler.clientName(client.clid)),
         isMe ? h('span.muted', `(${t('app.you')})`) : null,
         isContact ? h('span.contact-star', { title: t('app.contacts') }, icon('star')) : null,
         h('span.client-ping', { title: 'Ping desta pessoa até o servidor (RTT)' },

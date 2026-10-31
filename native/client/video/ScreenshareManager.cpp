@@ -591,7 +591,7 @@ QVariantMap ScreenshareManager::viewers(const QString &id) const
         QString identity;
         for (const ClientInfo &c : m_handler->clients())
             if (c.uid == uid) {
-                name = c.nickname;
+                name = c.shownName();
                 identity = c.identity;
             }
         banned.append(QVariantMap{{"uid", uid}, {"nickname", name}, {"identity", identity}});

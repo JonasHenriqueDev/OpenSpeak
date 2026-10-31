@@ -98,7 +98,8 @@ Rectangle {
                                 // Identidade real (Tailscale) fica discreta: só no hover/menu.
                                 ToolTip.visible: hovered && ToolTip.text.length > 0
                                 ToolTip.delay: 500
-                                ToolTip.text: [client.modelData.description,
+                                ToolTip.text: [client.modelData.name !== client.modelData.nickname ? "@" + client.modelData.nickname : "",
+                                               client.modelData.description,
                                                client.modelData.identity ? I18n.t("app.identity") + ": " + client.modelData.identity : ""]
                                               .filter(line => line).join("\n")
                                 contentItem: RowLayout {
@@ -110,11 +111,11 @@ Rectangle {
                                     Avatar {
                                         visible: !!client.modelData.avatar
                                         source: client.modelData.avatar
-                                        name: client.modelData.nickname
+                                        name: client.modelData.name
                                         size: 18
                                     }
                                     Label {
-                                        text: client.modelData.nickname
+                                        text: client.modelData.name
                                         color: client.modelData.color || Theme.text
                                         font.weight: client.modelData.me ? Font.DemiBold : Font.Normal
                                         elide: Text.ElideRight

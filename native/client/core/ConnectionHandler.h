@@ -31,6 +31,9 @@ struct ClientInfo {
     QString color;
     QString description;
     QString avatar; // data URL
+
+    /// Nome que a sala mostra: o de exibição do perfil ou o apelido.
+    QString shownName() const { return displayName.isEmpty() ? nickname : displayName; }
 };
 
 struct StreamQuality {

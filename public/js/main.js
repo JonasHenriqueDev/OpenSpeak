@@ -258,7 +258,7 @@ class App {
     const ch = own ? this.handler.channels.get(own.cid) : null;
     if (this.handler.reconnecting) { this.statusBar.textContent = 'Reconectando…'; return; }
     replaceChildren(this.statusBar,
-      h('span.online-dot'), own?.nickname ?? '', ch ? h('span.muted', ` — ${ch.name}`) : null,
+      h('span.online-dot'), own ? this.handler.clientName(own.clid) : '', ch ? h('span.muted', ` — ${ch.name}`) : null,
       h('span.server-ping', { title: 'Seu ping até o servidor (RTT)' },
         Number.isFinite(this.handler.serverPingMs) && this.handler.serverPingMs >= 0 ? `Ping: ${Math.round(this.handler.serverPingMs)} ms` : 'Ping: —'));
   }
@@ -417,6 +417,7 @@ class App {
   }
 
   #profileFields(own, saveFields) {
+    const displayName = h('input.input', { maxLength: 32, value: own?.displayName ?? '', placeholder: own?.nickname ?? '' });
     const description = h('textarea.input', { rows: 3, maxLength: 190, value: own?.description ?? '' });
     const color = h('input.profile-color', { type: 'color', value: own?.color || '#ffffff' });
     let colorPicked = !!own?.color;
@@ -432,13 +433,14 @@ class App {
         h('div.profile-photo',
           own?.avatar ? h('img.client-avatar', { src: own.avatar, alt: '' }) : null,
           photo,
-          h('button.btn.ghost.small', { type: 'button', on: { click: () => photo.click() } }, t('app.profile.photo')),
+          h('button.btn.ghost.small', { type: 'button', on: { click: () => photo.click() } }, t('app.profile.photo.choose')),
           own?.avatar ? h('button.btn.ghost.small', { type: 'button', on: { click: () => saveFields({ avatar: '' }) } }, t('app.profile.photo.remove')) : null)),
+      h('label.field', h('span.field-label', t('app.profile.display_name')), displayName),
       h('div.field', h('span.field-label', t('app.profile.color')),
         h('div.profile-photo', color,
           h('button.btn.ghost.small', { type: 'button', on: { click: () => { colorPicked = false; saveFields({ color: '' }); } } }, t('app.profile.color.default')))),
       h('label.field', h('span.field-label', t('app.profile.description')), description),
-      h('button.btn.primary', { type: 'button', on: { click: () => saveFields({ description: description.value, color: colorPicked ? color.value : '' }) } }, t('app.profile.save')),
+      h('button.btn.primary', { type: 'button', on: { click: () => saveFields({ displayName: displayName.value, description: description.value, color: colorPicked ? color.value : '' }) } }, t('app.profile.save')),
     ];
   }
 

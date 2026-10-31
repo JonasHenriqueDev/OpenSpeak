@@ -86,7 +86,7 @@ export class ViewersPanel {
         banned.length ? banned.map(uid => {
           const known = [...this.handler.clients.values()].find(c => c.uid === uid);
           return h('div.viewer-row',
-            icon('ban'), h('span.ellipsis', known?.nickname ?? uid.slice(0, 10)),
+            icon('ban'), h('span.ellipsis', (known ? this.handler.clientName(known.clid) : uid.slice(0, 10))),
             h('span.spacer'),
             h('button.btn.ghost.small', { on: { click: () => guard(m.unban(id, uid)) } }, t('video.viewers.action.unban')));
         }) : h('p.muted', t('video.viewers.banned.empty'))),

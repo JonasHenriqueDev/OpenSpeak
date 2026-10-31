@@ -54,7 +54,7 @@ export class SetupStreamDialog {
       : { config: { ...settings.get('lastStreamingConfig') }, quality: { ...settings.get('lastStreamingQuality') } };
     this.config = base.config;
     this.quality = base.quality;
-    if (!this.config.name) this.config.name = `Stream de ${own?.nickname ?? ''}`.trim();
+    if (!this.config.name) this.config.name = `Stream de ${own ? handler.clientName(own.clid) : ''}`.trim();
     if (!handler.hasStreamingSFU) this.config.mode = StreamMode.P2P;
     this.sourceTab = this.config.type === StreamType.CAMERA ? 'camera' : this.config.type === StreamType.WINDOW ? 'window' : 'screen';
     this.preview = null; // SharedVideoSource ainda não publicada

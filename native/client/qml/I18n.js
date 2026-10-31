@@ -249,6 +249,8 @@ const STRINGS = {
   'app.profile.photo.choose': 'Escolher foto',
   'app.profile.photo.remove': 'Remover foto',
   'app.profile.photo.invalid': 'Não foi possível abrir essa imagem.',
+  'app.profile.display_name': 'Nome de exibição',
+  'app.profile.display_name.hint': 'Aparece na chamada no lugar do apelido. Em branco, usa o apelido.',
   'app.profile.description': 'Descrição',
   'app.profile.color': 'Cor do apelido',
   'app.profile.color.default': 'Padrão',

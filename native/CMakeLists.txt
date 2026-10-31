@@ -20,6 +20,9 @@ endif()
 find_package(Qt6 6.8 REQUIRED COMPONENTS Core Network WebSockets HttpServer)
 qt_standard_project_setup(REQUIRES 6.8)
 
+# Cabeçalhos do Qt pré-compilados: são eles que tomam a maior parte de cada .cpp.
+set(OPENSPEAK_PCH <QByteArray> <QHash> <QJsonArray> <QJsonDocument> <QJsonObject> <QList> <QMap> <QObject> <QString> <QTimer> <QVariant>)
+
 # ---------------------------------------------------------------- libdatachannel
 # No escopo raiz para que cliente, servidor e testes enxerguem os alvos importados.
 # O cliente exige; o servidor só a usa no relay SFU (sem ela, compila só P2P).
@@ -71,11 +74,13 @@ add_library(openspeak_server_core STATIC
     server/ProfileStore.cpp server/ProfileStore.h)
 target_link_libraries(openspeak_server_core PUBLIC openspeak_common Qt6::Core)
 target_include_directories(openspeak_server_core PUBLIC server)
+target_precompile_headers(openspeak_server_core PRIVATE ${OPENSPEAK_PCH})
 
 # Transporte (HTTP/WebSocket) + relay de mídia opcional.
 add_library(openspeak_server_host STATIC server/ServerHost.cpp server/ServerHost.h
     server/DiscordAuth.cpp server/DiscordAuth.h)
 target_link_libraries(openspeak_server_host PUBLIC openspeak_server_core Qt6::Network Qt6::WebSockets Qt6::HttpServer)
+target_precompile_headers(openspeak_server_host PRIVATE ${OPENSPEAK_PCH})
 if(OPENSPEAK_BUILD_SFU)
     target_sources(openspeak_server_host PRIVATE
         server/SfuForwarder.cpp server/SfuForwarder.h
@@ -128,7 +133,8 @@ if(OPENSPEAK_BUILD_TESTS)
     if(OPENSPEAK_BUILD_CLIENT)
         add_subdirectory(tests/client)
         add_test(NAME tst_windowthumbnail COMMAND tst_windowthumbnail)
-        set_tests_properties(tst_windowthumbnail PROPERTIES TIMEOUT 15)
+        # Janela real na tela: não pode disputar o foco com os testes em paralelo.
+        set_tests_properties(tst_windowthumbnail PROPERTIES TIMEOUT 15 RUN_SERIAL TRUE)
         foreach(panel setup source view-menu updates preferences profile avatar-crop profile-card changelog licenses startup login login-advanced)
             add_test(NAME ui_${panel} COMMAND OpenSpeak --ui-smoke-test --profile ui-smoke-${panel} --open ${panel})
             set_tests_properties(ui_${panel} PROPERTIES TIMEOUT 15 ENVIRONMENT "QT_FORCE_STDERR_LOGGING=1")

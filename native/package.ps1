@@ -3,10 +3,12 @@
 #   .\package.ps1                # só a edição lite (instalador), compila Release antes
 #   .\package.ps1 -Full          # também a edição completa
 #   .\package.ps1 -Portable      # também ZIP e exe portáteis das edições geradas
+#   .\package.ps1 -AllTests      # roda a suíte completa em vez de só os testes afetados
 #   .\package.ps1 -SkipBuild
 param(
     [string]$Version = '1.0.27',
     [switch]$SkipBuild,
+    [switch]$AllTests,
     [switch]$Full,
     [switch]$Portable,
     [string]$QtDir = 'C:\Qt\6.11.3\msvc2022_64'
@@ -16,7 +18,7 @@ $here = $PSScriptRoot
 $release = Join-Path $here 'build\Release'
 
 if (-not $SkipBuild) {
-    & (Join-Path $here 'build.ps1') -Version $Version
+    & (Join-Path $here 'build.ps1') -Version $Version -AllTests:$AllTests
     if ($LASTEXITCODE) { Write-Error 'build/testes falharam'; exit 1 }
 }
 

@@ -20,6 +20,7 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QIcon>
 #include <QLocalServer>
@@ -205,8 +206,13 @@ int main(int argc, char *argv[])
         auto *window = qobject_cast<QQuickWindow *>(engine.rootObjects().value(0));
         if (!window) return 1;
         window->resize(900, 560);
-        QTimer::singleShot(4500, &app, [&app, &engine, window, panel = parser.value(openOpt)] {
-            bool valid = !window->grabWindow().isNull();
+        // Valida até dar certo em duas leituras seguidas; em vez de esperar o prazo inteiro, sai assim que estabiliza.
+        auto *smokePoll = new QTimer(&app);
+        smokePoll->setInterval(100);
+        QElapsedTimer smokeClock;
+        smokeClock.start();
+        QObject::connect(smokePoll, &QTimer::timeout, &app, [&app, &engine, window, smokePoll, smokeClock, stable = 0, panel = parser.value(openOpt)]() mutable {
+            bool valid = true;
             if (panel.startsWith("login")) {
                 auto *connectButton = findVisualItem(window->contentItem(), QStringLiteral("serverConnectButton"));
                 auto *advanced = findVisualItem(window->contentItem(), QStringLiteral("advancedOptions"));
@@ -258,9 +264,15 @@ int main(int argc, char *argv[])
                 auto *menu = window->findChild<QObject *>(QStringLiteral("viewMenu"));
                 valid = valid && menu && menu->property("visible").toBool() && menu->property("width").toDouble() >= 250;
             }
+            valid = valid && !window->grabWindow().isNull();
+            stable = valid ? stable + 1 : 0;
+            if (stable < 2 && !smokeClock.hasExpired(4500))
+                return;
+            smokePoll->stop();
             if (!valid) qCritical("UI smoke test failed: preview grid, FPS controls, or menu do not fit.");
             app.exit(valid ? 0 : 1);
         });
+        smokePoll->start();
     }
 
     if (parser.isSet(autoStreamOpt) && settings.debug()) {

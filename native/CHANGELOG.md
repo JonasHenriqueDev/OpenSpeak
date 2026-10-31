@@ -1,3 +1,11 @@
+# OpenSpeak 1.0.27 — troca de fonte para a tela inteira
+
+- Corrigido o erro **"Failed to duplicate IDXGIOutput1"** ao trocar a transmissão de
+  uma janela para a tela inteira. As miniaturas do seletor também passam a funcionar
+  durante a transmissão.
+- Um **alt-tab** não joga mais a transmissão de janela para a captura com borda
+  amarela: agora ela espera 3 segundos de tela preta antes de mudar.
+
 # OpenSpeak 1.0.26 — GIF em loop, cursor na tela inteira e ícone na barra de tarefas
 
 - A **foto e o banner em GIF** agora ficam em loop, em vez de parar depois da

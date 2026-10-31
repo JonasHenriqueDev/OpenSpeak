@@ -1,3 +1,12 @@
+# OpenSpeak 1.0.30 — previews livres e ícone transparente
+
+- **Previews livres:** arraste um preview para qualquer lugar da área de streams e
+  redimensione pelos cantos, no app e na versão web. O botão **Automático** volta
+  tudo para a grade.
+- Com o **tamanho dos previews** reduzido, eles ficam juntos e alinhados, em vez de
+  espalhados pela área.
+- O **ícone** agora tem os olhos coloridos e fundo transparente.
+
 # OpenSpeak 1.0.29 — preview no picture-in-picture
 
 - O **preview maior** agora some da grade enquanto o picture-in-picture está aberto,

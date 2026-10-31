@@ -78,10 +78,14 @@ Rectangle {
             if (streams.get(i).streamIdentifier === focusId) focusIndex = i
         const r = StreamLayout.compute(streams.count, focusIndex, stage.width, stage.height, gap, offset)
         const map = {}
+        // A grade inteira encolhe em torno do centro: encolher cada preview dentro
+        // da própria célula deixaria os previews espalhados e separados.
         const scale = previewScale / 100
+        const left = stage.width * (1 - scale) / 2
+        const top = stage.height * (1 - scale) / 2
         for (const t of r.tiles)
             map[streams.get(t.index).streamIdentifier] = {
-                x: t.x + t.w * (1 - scale) / 2, y: t.y + t.h * (1 - scale) / 2, w: t.w * scale, h: t.h * scale
+                x: left + t.x * scale, y: top + t.y * scale, w: t.w * scale, h: t.h * scale
             }
         rects = map
         perPage = r.perPage

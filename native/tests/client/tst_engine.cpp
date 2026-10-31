@@ -2,6 +2,7 @@
 // layout e filtro de SDP. Mesmos cenários de test/stats.test.js e test/layout.test.js.
 
 #include "AudioCapture.h"
+#include "ConnectionHandler.h"
 #include "AudioCodec.h"
 #include "Settings.h"
 #include "Layout.h"
@@ -12,7 +13,9 @@
 #include "SourceThumbnails.h"
 
 #include <QImage>
+#include <QPainter>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QWindow>
 #include <windows.h>
@@ -34,6 +37,27 @@ class TestEngine : public QObject {
     }
 
 private slots:
+    // Metade esquerda vermelha, direita azul: o recorte da direita não pode trazer vermelho.
+    void avatarUsesTheAdjustedCrop()
+    {
+        QTemporaryDir dir;
+        const QString path = dir.filePath("foto.png");
+        QImage image(400, 200, QImage::Format_RGB32);
+        image.fill(Qt::red);
+        QPainter(&image).fillRect(200, 0, 200, 200, Qt::blue);
+        QVERIFY(image.save(path));
+
+        ConnectionHandler handler;
+        const QString avatar = handler.avatarFromFile(QUrl::fromLocalFile(path), 0.5, 0, 0.5);
+        QVERIFY(avatar.startsWith("data:image/jpeg;base64,"));
+        const QImage cropped = QImage::fromData(QByteArray::fromBase64(avatar.section(',', 1).toLatin1()));
+        QCOMPARE(cropped.size(), QSize(128, 128));
+        const QColor center = cropped.pixelColor(64, 64), corner = cropped.pixelColor(4, 4);
+        QVERIFY(center.blue() > 200 && center.red() < 60);
+        QVERIFY(corner.blue() > 200 && corner.red() < 60);
+        QVERIFY(handler.avatarFromFile(QUrl::fromLocalFile(dir.filePath("nada.png")), 0, 0, 1).isEmpty());
+    }
+
     void picksDiscordProcessTreeRoot()
     {
         // Raiz (pai é o Update.exe, fora da lista) com filhos, como o Discord real.

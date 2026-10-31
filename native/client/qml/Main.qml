@@ -205,7 +205,7 @@ ApplicationWindow {
         NativeWindow.setLinkColor(Theme.accent)
         if (DebugOpen === "updates") Qt.callLater(() => preferencesDialog.openAt("updates"))
         if (DebugOpen === "preferences") Qt.callLater(() => preferencesDialog.open())
-        if (DebugOpen === "profile") Qt.callLater(() => preferencesDialog.openAt("profile"))
+        if (DebugOpen === "profile" || DebugOpen === "avatar-crop") Qt.callLater(() => preferencesDialog.openAt("profile"))
         if (DebugOpen === "changelog") Qt.callLater(() => { preferencesDialog.allChangelog = true; preferencesDialog.openAt("updates") })
         if (DebugOpen === "licenses") Qt.callLater(() => preferencesDialog.openAt("about"))
         if (JustUpdated) {

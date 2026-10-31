@@ -6,6 +6,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace openspeak {
@@ -242,16 +243,18 @@ void ConnectionHandler::updateProfile(const QVariantMap &fields)
     });
 }
 
-QString ConnectionHandler::avatarFromFile(const QUrl &file) const
+QString ConnectionHandler::avatarFromFile(const QUrl &file, double x, double y, double side) const
 {
     QImageReader reader(file.toLocalFile());
     reader.setAutoTransform(true);
     const QImage image = reader.read();
     if (image.isNull())
         return {};
-    // Quadrado central de 128 px: cabe com folga no limite do servidor (MaxAvatarBytes).
-    const int side = std::min(image.width(), image.height());
-    const QImage square = image.copy((image.width() - side) / 2, (image.height() - side) / 2, side, side)
+    // Quadrado de 128 px: cabe com folga no limite do servidor (MaxAvatarBytes).
+    const int pixels = std::clamp(int(std::lround(side * image.width())), 1, std::min(image.width(), image.height()));
+    const int left = std::clamp(int(std::lround(x * image.width())), 0, image.width() - pixels);
+    const int top = std::clamp(int(std::lround(y * image.height())), 0, image.height() - pixels);
+    const QImage square = image.copy(left, top, pixels, pixels)
                               .scaled(128, 128, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
                               .convertToFormat(QImage::Format_RGB888);
     QByteArray jpeg;

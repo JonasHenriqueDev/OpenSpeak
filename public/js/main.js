@@ -12,6 +12,7 @@ import { SetupStreamDialog } from './ui/SetupStreamDialog.js';
 import { ViewersPanel } from './ui/ViewersPanel.js';
 import { StatsPanel } from './ui/StatsPanel.js';
 import { Toasts } from './ui/Toasts.js';
+import { adjustAvatar } from './ui/avatarCrop.js';
 import { SoundEffects, SOUND_THEMES, previewSound, previewRandomSound } from './ui/sounds.js';
 import { isTailnetServer, isTailnetAddress, privateEntryUrl } from './core/tailnet.js';
 import { detectTailnetAddress } from './core/detectTailnet.js';
@@ -58,6 +59,17 @@ function saveProfilePassword(url, nickname, password) {
   settings.set('profilePasswords', { ...settings.get('profilePasswords'), [profilePasswordKey(url, nickname)]: password });
 }
 
+/** Campo de senha com botão para mostrar o que foi digitado. */
+function revealable(input) {
+  const toggle = h('button.icon-btn', { type: 'button', title: t('app.password.show'), on: { click: () => {
+    const hidden = input.type === 'password';
+    input.type = hidden ? 'text' : 'password';
+    toggle.title = t(hidden ? 'app.password.hide' : 'app.password.show');
+    toggle.replaceChildren(icon(hidden ? 'eyeOff' : 'eye'));
+  } } }, icon('eye'));
+  return h('span.password-field', input, toggle);
+}
+
 function defaultServerUrl() {
   if (deployment.serverUrl) return deployment.serverUrl;
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -82,7 +94,7 @@ function renderLogin(message = '') {
   const password = h('input.input', { type: 'password', value: settings.get('serverPassword'), placeholder: 'Deixe vazio se o servidor não tiver senha', autocomplete: 'current-password' });
   // Só aparece quando o apelido é um perfil e a senha lembrada não serviu.
   const profilePassword = h('input.input', { type: 'password', autocomplete: 'current-password' });
-  const profilePasswordField = h('label.field', { hidden: true }, h('span.field-label', t('app.profile.password')), profilePassword);
+  const profilePasswordField = h('label.field', { hidden: true }, h('span.field-label', t('app.profile.password')), revealable(profilePassword));
   const tailnetIp = h('input.input', { value: settings.get('tailnetIp') || '', placeholder: '100.x.x.x deste PC', required: !!deployment.cloudSignaling });
   const ipHint = h('small.muted', 'Tentando detectar o IP Tailscale…');
   let detecting = false;
@@ -141,7 +153,7 @@ function renderLogin(message = '') {
   deployment.tailscaleOnly ? h('p.login-status', deployment.cloudSignaling ? 'Tailscale obrigatório na mesma tailnet. O Vercel negocia as conexões; vídeo e áudio usam a rede P2P.' : 'Tailscale obrigatório: conecte este PC à mesma tailnet do servidor. A sessão abre no endereço privado da rede.') : null,
   h('label.field', h('span.field-label', t('app.nickname')), nick),
   deployment.cloudSignaling ? null : serverField,
-  deployment.cloudSignaling ? null : h('label.field', h('span.field-label', 'Senha do servidor'), password),
+  deployment.cloudSignaling ? null : h('label.field', h('span.field-label', 'Senha do servidor'), revealable(password)),
   profilePasswordField,
   deployment.cloudSignaling ? h('label.field', h('span.field-label', 'IP Tailscale deste PC'), tailnetIp, ipHint) : null,
   deployment.cloudSignaling ? h('button.btn.ghost', { type: 'button', on: { click: detectIp } }, 'Detectar IP automaticamente') : null,
@@ -169,15 +181,6 @@ async function startSession(url, nickname) {
   new SoundEffects(handler, settings, manager);
   window.addEventListener('pagehide', () => handler.disconnect(), { once: true });
   new App(handler, manager).mount();
-}
-
-// Quadrado central de 128 px: cabe com folga no limite do servidor (MAX_AVATAR_BYTES).
-async function avatarFromFile(file) {
-  const image = await createImageBitmap(file);
-  const side = Math.min(image.width, image.height);
-  const canvas = h('canvas', { width: 128, height: 128 });
-  canvas.getContext('2d').drawImage(image, (image.width - side) / 2, (image.height - side) / 2, side, side, 0, 0, 128, 128);
-  return canvas.toDataURL('image/jpeg', 0.8);
 }
 
 class App {
@@ -408,8 +411,8 @@ class App {
     this.#popover(anchor, [
       h('h4', t('app.profile')),
       !hd.hasProfiles ? h('p.muted', t('app.profile.unavailable')) : [
-        own?.hasProfile ? current : h('p.muted', t('app.profile.password.hint')),
-        next,
+        own?.hasProfile ? revealable(current) : h('p.muted', t('app.profile.password.hint')),
+        revealable(next),
         h('button.btn', { type: 'button', on: { click: setPassword } }, t(own?.hasProfile ? 'app.profile.password.change' : 'app.profile.password.set')),
         own?.hasProfile ? profileFields : null,
       ],
@@ -425,7 +428,10 @@ class App {
     const photo = h('input', { type: 'file', accept: 'image/*', hidden: true, on: {
       change: async ev => {
         const [file] = ev.target.files;
-        if (file) await saveFields({ avatar: await avatarFromFile(file) }).catch(showError);
+        ev.target.value = ''; // escolher o mesmo arquivo de novo também reabre o ajuste
+        if (!file) return;
+        const avatar = await adjustAvatar(file).catch(showError);
+        if (avatar) await saveFields({ avatar });
       },
     } });
     return [

@@ -48,11 +48,13 @@ export class ChannelTree {
     return h('div.tree-client',
       h('div.tree-row.client-row', {
         class: { me: isMe },
-        on: { contextmenu: ev => { if (!isMe) { ev.preventDefault(); this.#openMenu(ev, client); } } },
+        on: {
+          click: ev => { ev.stopPropagation(); this.#openCard(ev, client); },
+          contextmenu: ev => { if (!isMe) { ev.preventDefault(); this.#openMenu(ev, client); } },
+        },
       },
         client.avatar ? h('img.client-avatar', { src: client.avatar, alt: '' }) : h('span.talk-dot'),
         h('span.ellipsis', {
-          title: [client.displayName ? `@${client.nickname}` : '', client.description].filter(Boolean).join('\n') || null,
           style: client.color ? { color: client.color } : null,
         }, this.handler.clientName(client.clid)),
         isMe ? h('span.muted', `(${t('app.you')})`) : null,
@@ -78,6 +80,30 @@ export class ChannelTree {
       h('button', { on: { click: () => { this.contacts.toggle(client.uid); this.render(); } } },
         icon('star'), t(isContact ? 'app.contacts.remove' : 'app.contacts.add')));
     document.body.append(this.menu);
+  }
+
+  /** Card de perfil ao clicar em alguém na lista, como no Discord. */
+  #openCard(ev, client) {
+    this.#closeMenu();
+    const name = this.handler.clientName(client.clid);
+    const isMe = client.clid === this.handler.ownClid;
+    const row = ev.currentTarget.getBoundingClientRect();
+    this.menu = h('div.popover.profile-card', { on: { click: e => e.stopPropagation() } },
+      client.avatar ? h('img.profile-card-avatar', { src: client.avatar, alt: '' }) : h('div.avatar', name.trim().slice(0, 1).toUpperCase()),
+      h('strong.profile-card-name', { style: client.color ? { color: client.color } : null }, name, isMe ? ` (${t('app.you')})` : ''),
+      client.displayName ? h('div.muted', `@${client.nickname}`) : null,
+      client.description ? h('section.profile-card-about',
+        h('h4', t('app.profile.description')), h('p', client.description)) : null,
+      isMe ? null : h('button.btn', { type: 'button', on: { click: () => {
+        this.contacts.toggle(client.uid);
+        this.#closeMenu();
+        this.render();
+      } } }, icon('star'), t(this.contacts.has(client.uid) ? 'app.contacts.remove' : 'app.contacts.add')));
+    document.body.append(this.menu);
+    Object.assign(this.menu.style, {
+      left: `${Math.min(row.right + 6, window.innerWidth - this.menu.offsetWidth - 8)}px`,
+      top: `${Math.max(8, Math.min(row.top, window.innerHeight - this.menu.offsetHeight - 8))}px`,
+    });
   }
 
   #closeMenu() {

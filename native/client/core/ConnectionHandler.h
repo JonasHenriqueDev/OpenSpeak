@@ -104,8 +104,9 @@ public:
     Q_INVOKABLE void setProfilePassword(const QString &password, const QString &currentPassword = {});
     /// Grava campos do perfil; o resultado vem em profileResult("profile", ...).
     Q_INVOKABLE void updateProfile(const QVariantMap &fields);
-    /// Foto escolhida pelo usuário como data URL pronta para o perfil; vazia se não abrir.
-    Q_INVOKABLE QString avatarFromFile(const QUrl &file) const;
+    /// Recorte quadrado da foto como data URL pronta para o perfil; vazia se não abrir.
+    /// x e side são frações da largura da imagem; y, da altura (vêm do AvatarCropDialog).
+    Q_INVOKABLE QString avatarFromFile(const QUrl &file, double x, double y, double side) const;
 
     bool isConnected() const { return m_loggedIn; }
     QString serverName() const { return m_serverName; }

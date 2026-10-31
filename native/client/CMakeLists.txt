@@ -58,6 +58,9 @@ qt_add_qml_module(OpenSpeak
     QML_FILES
         qml/Main.qml
         qml/Avatar.qml
+        qml/AvatarCropDialog.qml
+        qml/PasswordField.qml
+        qml/ProfileCard.qml
         qml/LoginView.qml
         qml/MainView.qml
         qml/ChannelTree.qml

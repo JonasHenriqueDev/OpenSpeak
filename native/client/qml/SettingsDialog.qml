@@ -339,8 +339,14 @@ Popup {
             FileDialog {
                 id: photoDialog
                 nameFilters: ["Imagens (*.png *.jpg *.jpeg *.webp *.bmp)"]
-                onAccepted: {
-                    const avatar = Server.avatarFromFile(selectedFile)
+                onAccepted: photoCrop.openFor(selectedFile)
+            }
+            AvatarCropDialog {
+                id: photoCrop
+                Component.onCompleted: if (DebugOpen === "avatar-crop") openFor("qrc:/assets/openspeak.ico")
+                onFailed: profileContent.showStatus(I18n.t("app.profile.photo.invalid"), true)
+                onCropped: (file, x, y, side) => {
+                    const avatar = Server.avatarFromFile(file, x, y, side)
                     if (avatar)
                         Server.updateProfile({ avatar: avatar })
                     else
@@ -389,20 +395,18 @@ Popup {
                 color: Theme.textDim
                 font.pixelSize: 12
             }
-            TextField {
+            PasswordField {
                 id: currentPassword
                 objectName: "profileCurrentPassword"
                 visible: profileContent.available && profileContent.claimed
                 Layout.fillWidth: true
-                echoMode: TextInput.Password
                 placeholderText: I18n.t("app.profile.password.current")
             }
-            TextField {
+            PasswordField {
                 id: newPassword
                 objectName: "profileNewPassword"
                 visible: profileContent.available
                 Layout.fillWidth: true
-                echoMode: TextInput.Password
                 maximumLength: 128
                 placeholderText: I18n.t("app.profile.password.new")
             }

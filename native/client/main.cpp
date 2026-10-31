@@ -207,6 +207,13 @@ int main(int argc, char *argv[])
                 auto *address = findVisualItem(window->contentItem(), QStringLiteral("changeServerButton"));
                 valid = valid && connectButton && connectButton->isVisible() && address && address->isVisible()
                     && advanced && advanced->isVisible() == (panel == "login-advanced");
+            } else if (panel == "profile-card") {
+                auto *name = findVisualItem(window->contentItem(), QStringLiteral("profileCardName"));
+                valid = valid && name && name->isVisible() && name->width() > 100;
+            } else if (panel == "avatar-crop") {
+                auto *view = findVisualItem(window->contentItem(), QStringLiteral("avatarCropView"));
+                auto *save = findVisualItem(window->contentItem(), QStringLiteral("avatarCropSave"));
+                valid = valid && view && view->isVisible() && view->width() == 280 && save && save->isEnabled();
             } else if (panel == "startup") {
                 auto *startup = findVisualItem(window->contentItem(), QStringLiteral("startupScreen"));
                 valid = valid && startup && startup->isVisible() && startup->width() >= 800;

@@ -98,23 +98,21 @@ Rectangle {
                     onAccepted: root.enterServer()
                 }
                 Label { text: "Senha do servidor"; color: Theme.textDim }
-                TextField {
+                PasswordField {
                     id: passwordField
                     objectName: "serverPassword"
                     Layout.fillWidth: true
                     text: Settings.serverPassword
-                    echoMode: TextInput.Password
                     placeholderText: "Deixe vazio se o servidor não tiver senha"
                     onAccepted: root.enterServer()
                 }
                 // Só aparece quando o apelido é um perfil e a senha lembrada não serviu.
                 Label { visible: Server.profilePasswordRequired; text: I18n.t("app.profile.password"); color: Theme.textDim }
-                TextField {
+                PasswordField {
                     id: profilePasswordField
                     objectName: "profilePassword"
                     visible: Server.profilePasswordRequired
                     Layout.fillWidth: true
-                    echoMode: TextInput.Password
                     onVisibleChanged: if (visible) forceActiveFocus()
                     onAccepted: root.enterServer()
                 }

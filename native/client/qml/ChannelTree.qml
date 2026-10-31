@@ -11,6 +11,12 @@ Rectangle {
 
     function typeIcon(t) { return t === 1 ? "camera" : t === 3 ? "window" : "screen" }
 
+    ProfileCard { id: profileCard }
+    Component.onCompleted: {
+        if (DebugOpen === "profile-card")
+            Qt.callLater(() => profileCard.openFor({ name: "Teste", nickname: "teste", description: "Descrição", uid: "u" }, root))
+    }
+
     Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.border }
 
     ScrollView {
@@ -94,14 +100,7 @@ Rectangle {
                                 leftInset: 18; rightInset: 2; topInset: 1; bottomInset: 1
                                 leftPadding: 26; rightPadding: 10
                                 background: RowHighlight { control: clientRow }
-                                onClicked: if (!client.modelData.me) contextMenu.popup()
-                                // Identidade real (Tailscale) fica discreta: só no hover/menu.
-                                ToolTip.visible: hovered && ToolTip.text.length > 0
-                                ToolTip.delay: 500
-                                ToolTip.text: [client.modelData.name !== client.modelData.nickname ? "@" + client.modelData.nickname : "",
-                                               client.modelData.description,
-                                               client.modelData.identity ? I18n.t("app.identity") + ": " + client.modelData.identity : ""]
-                                              .filter(line => line).join("\n")
+                                onClicked: profileCard.openFor(client.modelData, clientRow)
                                 contentItem: RowLayout {
                                     spacing: 7
                                     Rectangle {
@@ -134,19 +133,6 @@ Rectangle {
                                         ToolTip.visible: pingHover.hovered
                                         ToolTip.text: client.modelData.pingMs >= 0 ? "Ping desta pessoa até o servidor (RTT)" : "Ping não disponível neste modo ou aguardando medição"
                                         HoverHandler { id: pingHover }
-                                    }
-                                }
-                                Menu {
-                                    id: contextMenu
-                                    MenuItem {
-                                        visible: !!client.modelData.identity
-                                        height: visible ? implicitHeight : 0
-                                        enabled: false
-                                        text: client.modelData.identity
-                                    }
-                                    MenuItem {
-                                        text: Settings.contacts.indexOf(client.modelData.uid) >= 0 ? I18n.t("app.contacts.remove") : I18n.t("app.contacts.add")
-                                        onTriggered: Settings.toggleContact(client.modelData.uid)
                                     }
                                 }
                             }

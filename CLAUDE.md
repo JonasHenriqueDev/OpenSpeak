@@ -15,6 +15,8 @@ Command names deliberately match TeamSpeak 6 (`setupstream`, `joinstreamrequest`
 
 The native server additionally implements SFU mode (`STREAM_SFU`): `native/server/Sfu*.cpp` (ingest, forwarder, egress, relay, and a WebSocket viewer fallback `SfuWsViewer`). The web server only announces `STREAM_P2P`.
 
+Profiles (capability `PROFILES`, not on the Vercel room): a nickname becomes a profile when it gets a password (`setprofilepassword`); `login` then requires `profilePassword`, and `updateprofile` edits display name, color, description and avatar, which go out in `publicClient`. Stored in a JSON file shared by `server/profileStore.js` and `native/server/ProfileStore.cpp` (`OPENSPEAK_PROFILES_FILE`).
+
 ## Commands
 
 Web/Node:
@@ -24,7 +26,7 @@ npm start                               # http://localhost:9988 ; ?profile=a&deb
 npm test                                # node --test "test/*.test.js"
 node --test test/server.test.js         # single test file
 ```
-Env: `PORT`, `HOST`, `OPENSPEAK_NAME`, `OPENSPEAK_ICE` (JSON iceServers), `OPENSPEAK_CERT`/`OPENSPEAK_KEY` (HTTPS, needed off-localhost for capture).
+Env: `PORT`, `HOST`, `OPENSPEAK_NAME`, `OPENSPEAK_PROFILES_FILE`, `OPENSPEAK_ICE` (JSON iceServers), `OPENSPEAK_CERT`/`OPENSPEAK_KEY` (HTTPS, needed off-localhost for capture).
 
 Native (Windows, PowerShell; toolchain paths are hardcoded defaults in the scripts: VS 2026, Qt `C:\Qt\6.11.3\msvc2022_64`, vcpkg `D:\Dev\vcpkg`, triplet `x64-windows-static-md`, deps in `native/vcpkg_installed`):
 ```bash

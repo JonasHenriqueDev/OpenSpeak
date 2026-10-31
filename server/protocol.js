@@ -28,11 +28,17 @@ export const ReturnCode = Object.freeze({
   ALREADY_JOINED: 'already_joined',
   NO_PENDING_REQUEST: 'no_pending_request',
   PAYLOAD_TOO_LARGE: 'payload_too_large',
+  PROFILE_PASSWORD: 'profile_password',
+  PROFILE_LOCKED: 'profile_locked',
+  PROFILE_REQUIRED: 'profile_required',
 });
 
 // Extensões anunciadas em capabilityExtensions (igual ao TS: STREAM_P2P / STREAM_SFU).
 export const CAPABILITIES = Object.freeze(['STREAM_P2P']);
+// Só com um ProfileStore (a sala web do Vercel não guarda perfis).
+export const CAP_PROFILES = 'PROFILES';
 
 export const MAX_STREAMS_PER_CLIENT = 3;
 export const MAX_THUMBNAIL_BYTES = 256 * 1024;
 export const MAX_SIGNALING_BYTES = 64 * 1024;
+export const MAX_AVATAR_BYTES = 64 * 1024;

@@ -5,6 +5,7 @@
 //                    [--rtc-port 10000] [--public-ip <ip>] [--no-sfu]
 //   OPENSPEAK_PASSWORD=<senha> exige a senha no login (servidor privado);
 //   OPENSPEAK_PASSWORD_FILE=<arquivo> lê a senha dele a cada login (o monitor troca a senha ali).
+//   OPENSPEAK_PROFILES_FILE=<arquivo> guarda os perfis (padrão: profiles.json na pasta de dados do usuário).
 //   OPENSPEAK_ICE='[{"urls":"stun:..."}]' define os iceServers anunciados
 //   (e usados pelo próprio relay para descobrir o endereço público).
 
@@ -13,6 +14,7 @@
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QJsonDocument>
+#include <QStandardPaths>
 
 using namespace openspeak;
 
@@ -88,6 +90,9 @@ int main(int argc, char *argv[])
     // Pela variável de ambiente, não por argumento: a linha de comando aparece no `ps`.
     options.password = qEnvironmentVariable("OPENSPEAK_PASSWORD");
     options.passwordFile = qEnvironmentVariable("OPENSPEAK_PASSWORD_FILE");
+    options.profilesFile = qEnvironmentVariable("OPENSPEAK_PROFILES_FILE");
+    if (options.profilesFile.isEmpty())
+        options.profilesFile = QDir(QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)).filePath(QStringLiteral("profiles.json"));
     if (!ServerHost::sfuAvailable() && (parser.isSet(rtcPortOpt) || parser.isSet(publicIpOpt)))
         qWarning("compilado sem o relay SFU: --rtc-port/--public-ip ignorados");
 
@@ -104,6 +109,7 @@ int main(int argc, char *argv[])
     else
         qInfo().noquote() << (options.password.isEmpty() ? QStringLiteral("[openspeak] servidor aberto (sem OPENSPEAK_PASSWORD)")
                                                          : QStringLiteral("[openspeak] servidor privado: login exige senha"));
+    qInfo().noquote() << QStringLiteral("[openspeak] perfis em %1").arg(options.profilesFile);
     if (host.sfuEnabled())
         qInfo().noquote() << QStringLiteral("[openspeak] relay SFU: UDP %1%2")
                                  .arg(options.rtcPort ? QString::number(options.rtcPort) : QStringLiteral("(portas efêmeras)"),

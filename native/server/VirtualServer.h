@@ -4,6 +4,7 @@
 // aplica privacidade/limites e repassa `streamsignaling` entre os pares.
 // No modo SFU a mídia é do StreamRelay injetado (clid 0 na sinalização).
 
+#include "ProfileStore.h"
 #include "Protocol.h"
 #include "StreamRelay.h"
 
@@ -67,6 +68,10 @@ public:
     void setRelay(StreamRelay *relay);
     /// Senha exigida no `login` (vazia = servidor aberto).
     void setPassword(const QString &password) { m_password = password; }
+    /// Arquivo JSON dos perfis (vazio = só na memória).
+    void setProfilesFile(const QString &file) { m_profiles.setFile(file); }
+    /// Relógio dos bloqueios por tentativas erradas (testes).
+    void setProfileClock(std::function<qint64()> now) { m_profiles = ProfileStore(std::move(now)); }
 
 private:
     struct Client {
@@ -80,6 +85,7 @@ private:
         qint64 pingUpdatedAt = 0;
         QString resumeToken; // só para quem entrou com `resumable`
         bool suspended = false;
+        QString profile; // chave do perfil, se o cliente provou a senha
     };
     struct Channel {
         int cid = 0;
@@ -127,6 +133,8 @@ private:
     QJsonObject cmdHeartbeat(Client &, const QJsonObject &);
     QJsonObject cmdClientMove(Client &, const QJsonObject &);
     QJsonObject cmdClientUpdate(Client &, const QJsonObject &);
+    QJsonObject cmdSetProfilePassword(Client &, const QJsonObject &);
+    QJsonObject cmdUpdateProfile(Client &, const QJsonObject &);
     QJsonObject cmdSetupStream(Client &, const QJsonObject &);
     QJsonObject cmdUpdateStream(Client &, const QJsonObject &);
     QJsonObject cmdStopStream(Client &, const QJsonObject &);
@@ -153,6 +161,9 @@ private:
     void onRelaySignal(const QString &id, int clid, const QJsonObject &payload);
     void onRelayFailed(const QString &id, int clid);
 
+    void checkProfilePassword(const QString &key, const QJsonValue &password);
+    /// Nome que a sala mostra: o de exibição do perfil ou o apelido.
+    QString shownName(const Client &c) const;
     QJsonObject publicClient(const Client &c) const;
     QJsonObject publicStream(const Stream &s) const;
     void notify(int clid, const QString &cmd, const QJsonObject &args);
@@ -164,6 +175,7 @@ private:
     StreamRelay *m_relay = nullptr;
     QString m_name;
     QString m_password;
+    ProfileStore m_profiles;
     QJsonArray m_iceServers;
     std::map<int, Client> m_clients;
     std::map<int, Channel> m_channels;

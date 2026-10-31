@@ -40,6 +40,7 @@ ServerHost::ServerHost(Options options, QObject *parent)
       m_discord(m_options.discordClientId, m_options.discordClientSecret)
 {
     m_server.setPassword(currentPassword());
+    m_server.setProfilesFile(m_options.profilesFile);
 #ifdef OPENSPEAK_HAS_SFU
     if (m_options.sfu) {
         SfuRelay::Options relay;

@@ -107,6 +107,8 @@ const QHash<QString, VirtualServer::Handler> &VirtualServer::handlers()
         {QStringLiteral("heartbeat"), &VirtualServer::cmdHeartbeat},
         {QStringLiteral("clientmove"), &VirtualServer::cmdClientMove},
         {QStringLiteral("clientupdate"), &VirtualServer::cmdClientUpdate},
+        {QStringLiteral("setprofilepassword"), &VirtualServer::cmdSetProfilePassword},
+        {QStringLiteral("updateprofile"), &VirtualServer::cmdUpdateProfile},
         {QStringLiteral("setupstream"), &VirtualServer::cmdSetupStream},
         {QStringLiteral("updatestream"), &VirtualServer::cmdUpdateStream},
         {QStringLiteral("stopstream"), &VirtualServer::cmdStopStream},
@@ -161,10 +163,10 @@ QJsonObject VirtualServer::liveSnapshot() const
         QJsonArray viewerNames;
         for (const int clid : s.viewers)
             if (const auto viewer = m_clients.find(clid); viewer != m_clients.end())
-                viewerNames.append(viewer->second.nickname);
+                viewerNames.append(shownName(viewer->second));
         streams.append(QJsonObject{
             {"id", id}, {"name", s.name},
-            {"owner", owner != m_clients.end() ? owner->second.nickname : QString()},
+            {"owner", owner != m_clients.end() ? shownName(owner->second) : QString()},
             {"channel", channel != m_channels.end() ? channel->second.name : QString()},
             {"app", s.app}, {"type", s.type}, {"access", s.access}, {"mode", s.mode},
             {"paused", s.paused || (owner != m_clients.end() && owner->second.suspended)},
@@ -272,7 +274,12 @@ QJsonObject VirtualServer::cmdLogin(Client &client, const QJsonObject &args)
         fail(rc::InvalidArgs, QStringLiteral("nickname e uid são obrigatórios"));
     if (!m_password.isEmpty() && !samePassword(args.value("password").toString(), m_password))
         fail(rc::AccessDenied, QStringLiteral("Senha do servidor incorreta."));
-    client.nickname = nickname;
+    const ProfileStore::Profile *profile = m_profiles.find(nickname);
+    if (profile) {
+        checkProfilePassword(ProfileStore::key(nickname), args.value("profilePassword"));
+        client.profile = ProfileStore::key(nickname);
+    }
+    client.nickname = profile ? profile->nickname : nickname;
     client.uid = uid;
     client.cid = m_defaultChannel;
     client.loggedIn = true;
@@ -297,7 +304,7 @@ QJsonObject VirtualServer::cmdHeartbeat(Client &, const QJsonObject &) { return 
 QJsonObject VirtualServer::view(const Client &client) const
 {
     QJsonArray channels, clients, streams;
-    QJsonArray caps{CapStreamP2P};
+    QJsonArray caps{CapStreamP2P, CapProfiles};
     if (m_relay)
         caps.append(CapStreamSFU);
     for (const auto &[cid, ch] : m_channels)
@@ -337,9 +344,64 @@ QJsonObject VirtualServer::cmdClientUpdate(Client &client, const QJsonObject &ar
         const QString nickname = cleanString(args.value("nickname"), 32);
         if (nickname.isEmpty())
             fail(rc::InvalidArgs);
+        // O apelido é a identidade do perfil: nem o dono troca, nem outro assume.
+        if (!client.profile.isEmpty())
+            fail(rc::PermissionDenied, QStringLiteral("o apelido de um perfil não muda"));
+        if (m_profiles.find(nickname))
+            fail(rc::ProfilePassword);
         client.nickname = nickname;
     }
     broadcast(QStringLiteral("notifyclientupdated"), {{"client", publicClient(client)}});
+    return {};
+}
+
+QJsonObject VirtualServer::cmdSetProfilePassword(Client &client, const QJsonObject &args)
+{
+    const QString password = args.value("password").toString();
+    if (password.size() < 4 || password.size() > 128)
+        fail(rc::InvalidArgs, QStringLiteral("a senha deve ter de 4 a 128 caracteres"));
+    if (!client.profile.isEmpty()) {
+        checkProfilePassword(client.profile, args.value("currentPassword"));
+        m_profiles.setPassword(client.profile, password);
+        return {};
+    }
+    if (m_profiles.find(client.nickname))
+        fail(rc::ProfilePassword);
+    client.profile = m_profiles.claim(client.nickname, password);
+    broadcast(QStringLiteral("notifyclientupdated"), {{"client", publicClient(client)}});
+    return {};
+}
+
+QJsonObject VirtualServer::cmdUpdateProfile(Client &client, const QJsonObject &args)
+{
+    if (client.profile.isEmpty())
+        fail(rc::ProfileRequired);
+    ProfileStore::Profile profile = *m_profiles.find(client.nickname);
+    if (args.contains("displayName"))
+        profile.displayName = cleanString(args.value("displayName"), 32);
+    if (args.contains("description"))
+        profile.description = cleanString(args.value("description"), 190);
+    if (args.contains("color")) {
+        static const QRegularExpression hexColor(QStringLiteral("^#[0-9a-fA-F]{6}$"));
+        const QString color = args.value("color").toString();
+        if (!color.isEmpty() && !hexColor.match(color).hasMatch())
+            fail(rc::InvalidArgs);
+        profile.color = color;
+    }
+    if (args.contains("avatar")) {
+        static const QRegularExpression dataImage(QStringLiteral("^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$"));
+        const QString avatar = args.value("avatar").toString();
+        if (!avatar.isEmpty() && !dataImage.match(avatar).hasMatch())
+            fail(rc::InvalidArgs);
+        if (avatar.size() > MaxAvatarBytes)
+            fail(rc::PayloadTooLarge);
+        profile.avatar = avatar;
+    }
+    m_profiles.update(client.profile, profile);
+    // O mesmo perfil pode estar em mais de um dispositivo.
+    for (const auto &[id, c] : m_clients)
+        if (c.loggedIn && c.profile == client.profile)
+            broadcast(QStringLiteral("notifyclientupdated"), {{"client", publicClient(c)}});
     return {};
 }
 
@@ -361,7 +423,7 @@ QJsonObject VirtualServer::cmdSetupStream(Client &client, const QJsonObject &arg
     s.cid = client.cid;
     s.mode = mode;
     s.created = nowMs();
-    s.name = QStringLiteral("Stream de %1").arg(client.nickname);
+    s.name = QStringLiteral("Stream de %1").arg(shownName(client));
     applyConfig(s, args);
     const QString id = s.id;
     m_streams[id] = std::move(s);
@@ -455,7 +517,7 @@ QJsonObject VirtualServer::cmdJoinStreamRequest(Client &client, const QJsonObjec
     }
     s.pending[client.clid] = PendingRequest{codecs, nowMs(), websocket};
     notify(s.ownerClid, QStringLiteral("notifyjoinstreamrequest"),
-           {{"streamIdentifier", s.id}, {"clid", client.clid}, {"nickname", client.nickname},
+           {{"streamIdentifier", s.id}, {"clid", client.clid}, {"nickname", shownName(client)},
             {"uid", client.uid}, {"codecs", codecs}});
     return {{"pending", true}};
 }
@@ -688,12 +750,36 @@ void VirtualServer::broadcastPresence(const Client &c)
             broadcast(QStringLiteral("notifystreamupdated"), {{"stream", publicStream(s)}});
 }
 
+void VirtualServer::checkProfilePassword(const QString &key, const QJsonValue &password)
+{
+    const QString given = password.toString();
+    if (given.isEmpty())
+        fail(rc::ProfilePassword, QStringLiteral("Este apelido é um perfil: informe a senha."));
+    const auto result = m_profiles.verify(key, given);
+    if (result == ProfileStore::Verify::Locked)
+        fail(rc::ProfileLocked, QStringLiteral("Muitas tentativas. Aguarde um minuto."));
+    if (result != ProfileStore::Verify::Ok)
+        fail(rc::ProfilePassword, QStringLiteral("Senha do perfil incorreta."));
+}
+
+QString VirtualServer::shownName(const Client &c) const
+{
+    const ProfileStore::Profile *profile = c.profile.isEmpty() ? nullptr : m_profiles.find(c.nickname);
+    return profile && !profile->displayName.isEmpty() ? profile->displayName : c.nickname;
+}
+
 QJsonObject VirtualServer::publicClient(const Client &c) const
 {
+    const ProfileStore::Profile *profile = c.profile.isEmpty() ? nullptr : m_profiles.find(c.nickname);
     return {{"clid", c.clid}, {"nickname", c.nickname}, {"uid", c.uid}, {"cid", c.cid},
             {"inputMuted", false}, {"outputMuted", false}, {"away", c.suspended},
             {"pingMs", c.pingMs < 0 ? QJsonValue(QJsonValue::Null) : QJsonValue(double(c.pingMs))},
-            {"pingUpdatedAt", double(c.pingUpdatedAt)}};
+            {"pingUpdatedAt", double(c.pingUpdatedAt)},
+            {"hasProfile", profile != nullptr},
+            {"displayName", profile ? profile->displayName : QString()},
+            {"color", profile ? profile->color : QString()},
+            {"description", profile ? profile->description : QString()},
+            {"avatar", profile ? profile->avatar : QString()}};
 }
 
 QJsonObject VirtualServer::publicStream(const Stream &s) const

@@ -7,8 +7,9 @@
 
 import {
   StreamAccess, StreamMode, StreamType, LeaveReason, ReturnCode, CAPABILITIES,
-  MAX_STREAMS_PER_CLIENT, MAX_THUMBNAIL_BYTES, MAX_SIGNALING_BYTES,
+  CAP_PROFILES, MAX_STREAMS_PER_CLIENT, MAX_THUMBNAIL_BYTES, MAX_SIGNALING_BYTES, MAX_AVATAR_BYTES,
 } from './protocol.js';
+import { profileKey } from './profileStore.js';
 
 class CommandError extends Error {
   constructor(code, message = code) {
@@ -47,9 +48,11 @@ export class VirtualServer {
    * @param {object[]} [options.iceServers]
    * @param {() => void} [options.onLiveChanged] algo do liveSnapshot() pode ter mudado (webhook do bot)
    * @param {{name:string, description:string}[]} [options.channels] canais (padrão: só o "Geral")
+   * @param {import('./profileStore.js').ProfileStore|null} [options.profiles] perfis (sem ele, servidor sem PROFILES)
    */
-  constructor({ send, name = 'OpenSpeak', iceServers = [], idPrefix = '', onLiveChanged = null, channels = DEFAULT_CHANNELS }) {
+  constructor({ send, name = 'OpenSpeak', iceServers = [], idPrefix = '', onLiveChanged = null, channels = DEFAULT_CHANNELS, profiles = null }) {
     this.send = send;
+    this.profiles = profiles;
     this.onLiveChanged = onLiveChanged;
     this.name = name;
     this.iceServers = iceServers;
@@ -103,7 +106,7 @@ export class VirtualServer {
 
   view(clid) {
     if (!this.clients.get(clid)?.loggedIn) fail(ReturnCode.NOT_LOGGED_IN);
-    return { clid, server: { name: this.name, capabilityExtensions: [...CAPABILITIES] },
+    return { clid, server: { name: this.name, capabilityExtensions: this.#capabilities() },
       iceServers: this.iceServers, channels: [...this.channels.values()],
       clients: [...this.clients.values()].filter(c => c.loggedIn).map(c => this.#publicClient(c)),
       streams: [...this.streams.values()].map(s => this.#publicStream(s)) };
@@ -117,13 +120,13 @@ export class VirtualServer {
     const streams = [...this.streams.values()].filter(s => s.announce !== false).map(s => ({
       id: s.streamIdentifier,
       name: s.name,
-      owner: this.clients.get(s.ownerClid)?.nickname ?? '',
+      owner: this.#shownName(this.clients.get(s.ownerClid)),
       channel: this.channels.get(s.cid)?.name ?? '',
       app: s.app ?? '',
       type: s.type, access: s.access, mode: s.mode, paused: s.paused, audio: s.audio,
       viewers: s.viewers.size, started: s.created,
       // Apelidos de quem assiste (os mesmos que a sala mostra), para o bot listar no fim.
-      viewerNames: [...s.viewers].map(clid => this.clients.get(clid)?.nickname).filter(n => n !== undefined),
+      viewerNames: [...s.viewers].filter(clid => this.clients.has(clid)).map(clid => this.#shownName(this.clients.get(clid))),
       quality: { width: s.quality.width, height: s.quality.height, fps: s.quality.fps },
     }));
     // Só contagens agregadas. O servidor Node não carrega mídia (só P2P): sem Mbps.
@@ -166,14 +169,19 @@ export class VirtualServer {
       const nickname = cleanString(args.nickname, 32);
       const uid = cleanString(args.uid, 64);
       if (!nickname || !uid) fail(ReturnCode.INVALID_ARGS, 'nickname e uid são obrigatórios');
-      client.nickname = nickname;
+      const profile = this.profiles?.get(nickname);
+      if (profile) {
+        this.#checkProfilePassword(profileKey(nickname), args.profilePassword);
+        client.profile = profileKey(nickname);
+      }
+      client.nickname = profile?.nickname ?? nickname;
       client.uid = uid;
       client.cid = this.defaultChannel;
       client.loggedIn = true;
       this.#broadcast({ cmd: 'notifycliententerview', args: { client: this.#publicClient(client) } }, client.clid);
       return {
         clid: client.clid,
-        server: { name: this.name, capabilityExtensions: [...CAPABILITIES] },
+        server: { name: this.name, capabilityExtensions: this.#capabilities() },
         iceServers: this.iceServers,
         channels: [...this.channels.values()],
         clients: [...this.clients.values()].filter(c => c.loggedIn).map(c => this.#publicClient(c)),
@@ -197,11 +205,53 @@ export class VirtualServer {
       if ('nickname' in args) {
         const nickname = cleanString(args.nickname, 32);
         if (!nickname) fail(ReturnCode.INVALID_ARGS);
+        // O apelido é a identidade do perfil: nem o dono troca, nem outro assume.
+        if (client.profile) fail(ReturnCode.PERMISSION_DENIED, 'o apelido de um perfil não muda');
+        if (this.profiles?.get(nickname)) fail(ReturnCode.PROFILE_PASSWORD);
         client.nickname = nickname;
       }
       if ('inputMuted' in args) client.inputMuted = !!args.inputMuted;
       if ('outputMuted' in args) client.outputMuted = !!args.outputMuted;
       this.#broadcast({ cmd: 'notifyclientupdated', args: { client: this.#publicClient(client) } });
+      return {};
+    },
+
+    setprofilepassword(client, args) {
+      if (!this.profiles) fail(ReturnCode.MODE_NOT_SUPPORTED);
+      const password = typeof args.password === 'string' ? args.password : '';
+      if (password.length < 4 || password.length > 128) fail(ReturnCode.INVALID_ARGS, 'a senha deve ter de 4 a 128 caracteres');
+      if (client.profile) {
+        this.#checkProfilePassword(client.profile, args.currentPassword);
+        this.profiles.setPassword(client.profile, password);
+        return {};
+      }
+      if (this.profiles.get(client.nickname)) fail(ReturnCode.PROFILE_PASSWORD);
+      client.profile = this.profiles.claim(client.nickname, password);
+      this.#broadcast({ cmd: 'notifyclientupdated', args: { client: this.#publicClient(client) } });
+      return {};
+    },
+
+    updateprofile(client, args) {
+      if (!this.profiles) fail(ReturnCode.MODE_NOT_SUPPORTED);
+      if (!client.profile) fail(ReturnCode.PROFILE_REQUIRED);
+      const fields = {};
+      if ('displayName' in args) fields.displayName = cleanString(args.displayName, 32);
+      if ('description' in args) fields.description = cleanString(args.description, 190);
+      if ('color' in args) {
+        if (args.color !== '' && !/^#[0-9a-fA-F]{6}$/.test(args.color)) fail(ReturnCode.INVALID_ARGS);
+        fields.color = args.color;
+      }
+      if ('avatar' in args) {
+        if (args.avatar !== '' && !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(args.avatar)) fail(ReturnCode.INVALID_ARGS);
+        if (args.avatar.length > MAX_AVATAR_BYTES) fail(ReturnCode.PAYLOAD_TOO_LARGE);
+        fields.avatar = args.avatar;
+      }
+      this.profiles.update(client.profile, fields);
+      // O mesmo perfil pode estar em mais de um dispositivo.
+      for (const c of this.clients.values()) {
+        if (c.loggedIn && c.profile === client.profile)
+          this.#broadcast({ cmd: 'notifyclientupdated', args: { client: this.#publicClient(c) } });
+      }
       return {};
     },
 
@@ -222,7 +272,7 @@ export class VirtualServer {
         pending: new Map(), // clid -> { codecs, since }
         banned: new Set(), // uids
         ...this.#sanitizeStreamConfig(args, {
-          name: `Stream de ${client.nickname}`, type: StreamType.SCREEN, access: StreamAccess.PUBLIC,
+          name: `Stream de ${this.#shownName(client)}`, type: StreamType.SCREEN, access: StreamAccess.PUBLIC,
           bitrate: 3_000_000, viewerLimit: 0, audio: false, announce: true, app: '', quality: { width: 1280, height: 720, fps: 30 },
         }),
       };
@@ -286,7 +336,7 @@ export class VirtualServer {
         type: 'notify', cmd: 'notifyjoinstreamrequest',
         args: {
           streamIdentifier: stream.streamIdentifier,
-          clid: client.clid, nickname: client.nickname, uid: client.uid, codecs,
+          clid: client.clid, nickname: this.#shownName(client), uid: client.uid, codecs,
         },
       });
       return { pending: true };
@@ -372,6 +422,26 @@ export class VirtualServer {
 
   // ------------------------------------------------------------- auxiliares
 
+  #capabilities() {
+    return this.profiles ? [...CAPABILITIES, CAP_PROFILES] : [...CAPABILITIES];
+  }
+
+  #checkProfilePassword(key, password) {
+    if (typeof password !== 'string' || !password) fail(ReturnCode.PROFILE_PASSWORD, 'Este apelido é um perfil: informe a senha.');
+    const result = this.profiles.verify(key, password);
+    if (result === 'locked') fail(ReturnCode.PROFILE_LOCKED, 'Muitas tentativas. Aguarde um minuto.');
+    if (result !== 'ok') fail(ReturnCode.PROFILE_PASSWORD, 'Senha do perfil incorreta.');
+  }
+
+  #profileOf(client) {
+    return client?.profile ? this.profiles?.get(client.profile) ?? null : null;
+  }
+
+  /** Nome que a sala mostra: o de exibição do perfil ou o apelido. */
+  #shownName(client) {
+    return this.#profileOf(client)?.displayName || client?.nickname || '';
+  }
+
   #sanitizeStreamConfig(args, base) {
     const out = {};
     out.name = 'name' in args ? (cleanString(args.name, 64) || base.name) : base.name;
@@ -448,8 +518,11 @@ export class VirtualServer {
   }
 
   #publicClient(c) {
+    const profile = this.#profileOf(c);
     return { clid: c.clid, nickname: c.nickname, uid: c.uid, cid: c.cid, inputMuted: c.inputMuted, outputMuted: c.outputMuted,
-      pingMs: c.pingMs ?? null, pingUpdatedAt: c.pingUpdatedAt ?? 0 };
+      pingMs: c.pingMs ?? null, pingUpdatedAt: c.pingUpdatedAt ?? 0, hasProfile: !!profile,
+      displayName: profile?.displayName ?? '', color: profile?.color ?? '',
+      description: profile?.description ?? '', avatar: profile?.avatar ?? '' };
   }
 
   #publicStream(s) {

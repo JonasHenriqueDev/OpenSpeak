@@ -35,11 +35,15 @@ inline const QString PayloadTooLarge = QStringLiteral("payload_too_large");
 inline const QString Internal = QStringLiteral("internal_error");
 inline const QString SessionExpired = QStringLiteral("session_expired");
 inline const QString AccessDenied = QStringLiteral("access_denied");
+inline const QString ProfilePassword = QStringLiteral("profile_password");
+inline const QString ProfileLocked = QStringLiteral("profile_locked");
+inline const QString ProfileRequired = QStringLiteral("profile_required");
 } // namespace rc
 
 // Extensões anunciadas em capabilityExtensions (TS: STREAM_P2P / STREAM_SFU).
 inline const QString CapStreamP2P = QStringLiteral("STREAM_P2P");
 inline const QString CapStreamSFU = QStringLiteral("STREAM_SFU"); // só com relay de mídia (servidor nativo)
+inline const QString CapProfiles = QStringLiteral("PROFILES");    // perfis guardados no servidor
 
 /// clid reservado do servidor como par WebRTC nos streams SFU (`streamsignaling`/`peerClid`).
 constexpr int RelayClid = 0;
@@ -47,6 +51,7 @@ constexpr int RelayClid = 0;
 constexpr int MaxStreamsPerClient = 3;
 constexpr int MaxThumbnailBytes = 256 * 1024;
 constexpr int MaxSignalingBytes = 64 * 1024;
+constexpr int MaxAvatarBytes = 64 * 1024;
 /// Quanto uma sessão `resumable` espera a reconexão depois que a conexão cai.
 constexpr int SessionGraceMs = 90'000;
 

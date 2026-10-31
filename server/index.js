@@ -9,14 +9,17 @@
 //   OPENSPEAK_ICE        JSON com a lista de iceServers (padrão: STUN público)
 //   OPENSPEAK_LIVE_WEBHOOK         URL que recebe POST do /api/live quando muda (bot do Discord)
 //   OPENSPEAK_LIVE_WEBHOOK_SECRET  enviado no header X-OpenSpeak-Secret
+//   OPENSPEAK_PROFILES_FILE  JSON dos perfis (padrão: ~/.openspeak/profiles.json)
 
 import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { VirtualServer, CommandError } from './virtualServer.js';
+import { ProfileStore } from './profileStore.js';
 import { ReturnCode } from './protocol.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -118,6 +121,7 @@ const server = new VirtualServer({
   name: process.env.OPENSPEAK_NAME ?? 'OpenSpeak',
   iceServers: parseIceServers(),
   onLiveChanged: liveChanged,
+  profiles: new ProfileStore(process.env.OPENSPEAK_PROFILES_FILE ?? path.join(os.homedir(), '.openspeak', 'profiles.json')),
   send(clid, message) {
     const ws = sockets.get(clid);
     if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify(message));

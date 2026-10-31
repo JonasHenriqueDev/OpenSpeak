@@ -34,6 +34,7 @@ public:
         QString discordClientId, discordClientSecret; // login da atividade do Discord (opcional)
         QString password;     // exigida no login (vazia = servidor aberto)
         QString passwordFile; // se existir, vale no lugar de `password` (o monitor troca a senha nele)
+        QString profilesFile; // JSON dos perfis (vazio = só na memória)
     };
 
     explicit ServerHost(Options options, QObject *parent = nullptr);

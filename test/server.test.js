@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { VirtualServer } from '../server/virtualServer.js';
 import { StreamAccess, LeaveReason } from '../server/protocol.js';
+import { ProfileStore, hashPassword, checkPassword } from '../server/profileStore.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 function setup(options = {}) {
   const inbox = new Map();
@@ -230,4 +234,106 @@ test('webhook do bot: onLiveChanged dispara no ciclo de vida do stream, troca de
   assert.equal(calls, 4);
   server.disconnect(host);
   assert.ok(calls >= 5); // fim do stream e saída do usuário
+});
+
+function profileSetup(file = null, now = Date.now) {
+  return setup({ profiles: new ProfileStore(file, now) });
+}
+
+test('perfil: senha reclama o apelido e o login passa a exigi-la', () => {
+  const { server, login, notes } = profileSetup();
+  const jonas = login('Jonas');
+  const other = login('other');
+  assert.ok(server.view(jonas).server.capabilityExtensions.includes('PROFILES'));
+  assert.throws(() => server.handle(jonas, 'updateprofile', { color: '#ff0000' }), { code: 'profile_required' });
+  assert.throws(() => server.handle(jonas, 'setprofilepassword', { password: 'x' }), { code: 'invalid_args' });
+
+  server.handle(jonas, 'setprofilepassword', { password: 'segredo' });
+  assert.equal(notes(other, 'notifyclientupdated').at(-1).args.client.hasProfile, true);
+
+  server.disconnect(jonas);
+  const again = server.connect();
+  assert.throws(() => server.handle(again, 'login', { nickname: 'jonas', uid: 'u2' }), { code: 'profile_password' });
+  assert.throws(() => server.handle(again, 'login', { nickname: 'jonas', uid: 'u2', profilePassword: 'errada' }), { code: 'profile_password' });
+  server.handle(again, 'login', { nickname: 'jonas', uid: 'u2', profilePassword: 'segredo' });
+  // o apelido é o da reivindicação, sem variar a caixa
+  assert.equal(server.view(again).clients.find(c => c.clid === again).nickname, 'Jonas');
+});
+
+test('perfil: apelido não muda nem pode ser assumido por clientupdate', () => {
+  const { server, login } = profileSetup();
+  const jonas = login('Jonas');
+  const other = login('other');
+  server.handle(jonas, 'setprofilepassword', { password: 'segredo' });
+  assert.throws(() => server.handle(jonas, 'clientupdate', { nickname: 'novo' }), { code: 'permission_denied' });
+  assert.throws(() => server.handle(other, 'clientupdate', { nickname: 'JONAS' }), { code: 'profile_password' });
+});
+
+test('perfil: troca de senha exige a atual', () => {
+  const { server, login } = profileSetup();
+  const jonas = login('Jonas');
+  server.handle(jonas, 'setprofilepassword', { password: 'segredo' });
+  assert.throws(() => server.handle(jonas, 'setprofilepassword', { password: 'nova1' }), { code: 'profile_password' });
+  server.handle(jonas, 'setprofilepassword', { password: 'nova1', currentPassword: 'segredo' });
+  server.disconnect(jonas);
+  server.handle(server.connect(), 'login', { nickname: 'Jonas', uid: 'u', profilePassword: 'nova1' });
+});
+
+test('perfil: tentativas demais bloqueiam por um minuto', () => {
+  let now = 1000;
+  const { server, login } = profileSetup(null, () => now);
+  const jonas = login('Jonas');
+  server.handle(jonas, 'setprofilepassword', { password: 'segredo' });
+  const attempt = password => server.handle(server.connect(), 'login', { nickname: 'Jonas', uid: 'u', profilePassword: password });
+  for (let i = 0; i < 5; i++) assert.throws(() => attempt('errada'), { code: 'profile_password' });
+  assert.throws(() => attempt('segredo'), { code: 'profile_locked' });
+  now += 60_001;
+  attempt('segredo');
+});
+
+test('perfil: dados validados, públicos e no nome mostrado pela sala', () => {
+  const { server, login, notes } = profileSetup();
+  const jonas = login('Jonas');
+  const viewer = login('viewer');
+  server.handle(jonas, 'setprofilepassword', { password: 'segredo' });
+  assert.throws(() => server.handle(jonas, 'updateprofile', { color: 'red;x' }), { code: 'invalid_args' });
+  assert.throws(() => server.handle(jonas, 'updateprofile', { avatar: 'data:image/svg+xml;base64,AAAA' }), { code: 'invalid_args' });
+  assert.throws(() => server.handle(jonas, 'updateprofile', { avatar: `data:image/png;base64,${'A'.repeat(70_000)}` }), { code: 'payload_too_large' });
+  server.handle(jonas, 'updateprofile', { displayName: ' Jonas H ', color: '#12ab9F', description: 'oi', avatar: 'data:image/png;base64,AAAA' });
+  const { client } = notes(viewer, 'notifyclientupdated').at(-1).args;
+  assert.deepEqual([client.nickname, client.displayName, client.color, client.description, client.avatar],
+    ['Jonas', 'Jonas H', '#12ab9F', 'oi', 'data:image/png;base64,AAAA']);
+
+  const { streamIdentifier } = server.handle(jonas, 'setupstream', {});
+  assert.equal(server.streams.get(streamIdentifier).name, 'Stream de Jonas H');
+  assert.equal(server.liveSnapshot().streams[0].owner, 'Jonas H');
+  // o hash nunca sai do servidor
+  assert.equal(JSON.stringify(server.view(viewer)).includes('pbkdf2'), false);
+});
+
+test('perfil: sobrevive a reiniciar o servidor', () => {
+  const file = path.join(mkdtempSync(path.join(tmpdir(), 'openspeak-')), 'sub', 'profiles.json');
+  const first = profileSetup(file);
+  const jonas = first.login('Jonas');
+  first.server.handle(jonas, 'setprofilepassword', { password: 'segredo' });
+  first.server.handle(jonas, 'updateprofile', { color: '#112233' });
+
+  const second = profileSetup(file);
+  const clid = second.server.connect();
+  second.server.handle(clid, 'login', { nickname: 'Jonas', uid: 'u', profilePassword: 'segredo' });
+  assert.equal(second.server.view(clid).clients[0].color, '#112233');
+});
+
+test('perfil: sem ProfileStore o servidor não anuncia PROFILES', () => {
+  const { server, login } = setup();
+  const a = login('a');
+  assert.equal(server.view(a).server.capabilityExtensions.includes('PROFILES'), false);
+  assert.throws(() => server.handle(a, 'setprofilepassword', { password: 'segredo' }), { code: 'mode_not_supported' });
+});
+
+test('perfil: hash no formato compartilhado com o servidor nativo', () => {
+  const stored = hashPassword('senha', Buffer.from('0123456789abcdef'), 1000);
+  assert.equal(stored, 'pbkdf2-sha256$1000$MDEyMzQ1Njc4OWFiY2RlZg==$yNWjOB5+y96EHOKAn3xp3CM7YwtRLFxNMPHfhb8vN8c=');
+  assert.equal(checkPassword('senha', stored), true);
+  assert.equal(checkPassword('outra', stored), false);
 });

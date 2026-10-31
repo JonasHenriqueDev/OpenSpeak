@@ -2,6 +2,7 @@
 
 #include "VirtualServer.h"
 
+#include <QTemporaryDir>
 #include <QTest>
 
 using namespace openspeak;
@@ -81,6 +82,112 @@ private slots:
     }
 
     void cleanup() { server.reset(); } // antes dos relays falsos (locais a cada teste)
+
+    // ---- perfis (mesmos cenários de test/server.test.js)
+
+    void profileClaimRequiresPasswordOnLogin()
+    {
+        const int jonas = login("Jonas");
+        const int other = login("other");
+        QVERIFY(server->handle(jonas, "sync", {}).value("server").toObject().value("capabilityExtensions").toArray().contains(CapProfiles));
+        QCOMPARE(expectError(jonas, "updateprofile", {{"color", "#ff0000"}}), rc::ProfileRequired);
+        QCOMPARE(expectError(jonas, "setprofilepassword", {{"password", "x"}}), rc::InvalidArgs);
+
+        server->handle(jonas, "setprofilepassword", {{"password", "segredo"}});
+        QVERIFY(notes(other, "notifyclientupdated").last().value("client").toObject().value("hasProfile").toBool());
+
+        server->disconnect(jonas);
+        const int again = server->connect();
+        QCOMPARE(expectError(again, "login", {{"nickname", "jonas"}, {"uid", "u2"}}), rc::ProfilePassword);
+        QCOMPARE(expectError(again, "login", {{"nickname", "jonas"}, {"uid", "u2"}, {"profilePassword", "errada"}}), rc::ProfilePassword);
+        const QJsonObject view = server->handle(again, "login", {{"nickname", "jonas"}, {"uid", "u2"}, {"profilePassword", "segredo"}});
+        bool found = false;
+        for (const QJsonValue &c : view.value("clients").toArray())
+            found |= c.toObject().value("nickname").toString() == QLatin1String("Jonas");
+        QVERIFY(found); // o apelido é o da reivindicação, sem variar a caixa
+    }
+
+    void profileNicknameCannotChangeOrBeTaken()
+    {
+        const int jonas = login("Jonas");
+        const int other = login("other");
+        server->handle(jonas, "setprofilepassword", {{"password", "segredo"}});
+        QCOMPARE(expectError(jonas, "clientupdate", {{"nickname", "novo"}}), rc::PermissionDenied);
+        QCOMPARE(expectError(other, "clientupdate", {{"nickname", "JONAS"}}), rc::ProfilePassword);
+    }
+
+    void profilePasswordChangeNeedsCurrent()
+    {
+        const int jonas = login("Jonas");
+        server->handle(jonas, "setprofilepassword", {{"password", "segredo"}});
+        QCOMPARE(expectError(jonas, "setprofilepassword", {{"password", "nova1"}}), rc::ProfilePassword);
+        server->handle(jonas, "setprofilepassword", {{"password", "nova1"}, {"currentPassword", "segredo"}});
+        server->disconnect(jonas);
+        server->handle(server->connect(), "login", {{"nickname", "Jonas"}, {"uid", "u"}, {"profilePassword", "nova1"}});
+    }
+
+    void profileTooManyAttemptsLocks()
+    {
+        qint64 now = 1000;
+        server->setProfileClock([&now] { return now; });
+        const int jonas = login("Jonas");
+        server->handle(jonas, "setprofilepassword", {{"password", "segredo"}});
+        const auto attempt = [this](const QString &password) {
+            return expectError(server->connect(), "login", {{"nickname", "Jonas"}, {"uid", "u"}, {"profilePassword", password}});
+        };
+        for (int i = 0; i < 5; ++i)
+            QCOMPARE(attempt("errada"), rc::ProfilePassword);
+        QCOMPARE(attempt("segredo"), rc::ProfileLocked);
+        now += 60'001;
+        QCOMPARE(attempt("segredo"), QStringLiteral("<sem erro>"));
+    }
+
+    void profileDataIsValidatedAndShown()
+    {
+        const int jonas = login("Jonas");
+        const int viewer = login("viewer");
+        server->handle(jonas, "setprofilepassword", {{"password", "segredo"}});
+        QCOMPARE(expectError(jonas, "updateprofile", {{"color", "red;x"}}), rc::InvalidArgs);
+        QCOMPARE(expectError(jonas, "updateprofile", {{"avatar", "data:image/svg+xml;base64,AAAA"}}), rc::InvalidArgs);
+        QCOMPARE(expectError(jonas, "updateprofile", {{"avatar", "data:image/png;base64," + QString(70'000, 'A')}}), rc::PayloadTooLarge);
+        server->handle(jonas, "updateprofile", {{"displayName", " Jonas H "}, {"color", "#12ab9F"}, {"description", "oi"},
+                                                {"avatar", "data:image/png;base64,AAAA"}});
+        const QJsonObject client = notes(viewer, "notifyclientupdated").last().value("client").toObject();
+        QCOMPARE(client.value("nickname").toString(), QStringLiteral("Jonas"));
+        QCOMPARE(client.value("displayName").toString(), QStringLiteral("Jonas H"));
+        QCOMPARE(client.value("color").toString(), QStringLiteral("#12ab9F"));
+        QCOMPARE(client.value("description").toString(), QStringLiteral("oi"));
+        QCOMPARE(client.value("avatar").toString(), QStringLiteral("data:image/png;base64,AAAA"));
+
+        setup(jonas);
+        const QJsonObject stream = server->liveSnapshot().value("streams").toArray().first().toObject();
+        QCOMPARE(stream.value("owner").toString(), QStringLiteral("Jonas H"));
+        QCOMPARE(stream.value("name").toString(), QStringLiteral("Stream de Jonas H"));
+    }
+
+    void profileSurvivesRestart()
+    {
+        QTemporaryDir dir;
+        const QString file = dir.filePath("sub/profiles.json");
+        server->setProfilesFile(file);
+        const int jonas = login("Jonas");
+        server->handle(jonas, "setprofilepassword", {{"password", "segredo"}});
+        server->handle(jonas, "updateprofile", {{"color", "#112233"}});
+
+        server = std::make_unique<VirtualServer>([this](int clid, const QJsonObject &m) { inbox[clid].append(m); });
+        server->setProfilesFile(file);
+        const QJsonObject view = server->handle(server->connect(), "login", {{"nickname", "Jonas"}, {"uid", "u"}, {"profilePassword", "segredo"}});
+        QCOMPARE(view.value("clients").toArray().first().toObject().value("color").toString(), QStringLiteral("#112233"));
+    }
+
+    // Mesmo vetor de test/server.test.js: os dois servidores leem o arquivo um do outro.
+    void profileHashMatchesNodeServer()
+    {
+        const QString stored = ProfileStore::hashPassword("senha", "0123456789abcdef", 1000);
+        QCOMPARE(stored, QStringLiteral("pbkdf2-sha256$1000$MDEyMzQ1Njc4OWFiY2RlZg==$yNWjOB5+y96EHOKAn3xp3CM7YwtRLFxNMPHfhb8vN8c="));
+        QVERIFY(ProfileStore::checkPassword("senha", stored));
+        QVERIFY(!ProfileStore::checkPassword("outra", stored));
+    }
 
     // O padrão é só o "Geral"; os testes de troca de canal recriam o servidor com três.
     void useThreeChannels()
@@ -321,7 +428,7 @@ private slots:
         // Sem relay, só STREAM_P2P é anunciado.
         const int other = server->connect();
         const QJsonObject view = server->handle(other, "login", {{"nickname", "x"}, {"uid", "uid-x"}});
-        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), QJsonArray{CapStreamP2P});
+        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapProfiles}));
     }
 
     // ------------------------------------------------------------ modo SFU
@@ -332,7 +439,7 @@ private slots:
         server->setRelay(&relay);
         const int host = server->connect();
         const QJsonObject view = server->handle(host, "login", {{"nickname", "host"}, {"uid", "uid-host"}});
-        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapStreamSFU}));
+        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapProfiles, CapStreamSFU}));
 
         const QString sid = setup(host, {{"mode", int(StreamMode::SFU)}, {"bitrate", 2'000'000}});
         QCOMPARE(relay.calls, QStringList{QStringLiteral("open %1 %2 2000000").arg(sid).arg(host)});

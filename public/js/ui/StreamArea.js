@@ -4,7 +4,7 @@ import { h, replaceChildren } from './dom.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
 import { StreamTile } from './StreamTile.js';
-import { gridLayout, focusLayout, moveRect, resizeRect, resolveOverlaps, rectToFraction, rectFromFraction } from '../video/layout.js';
+import { gridLayout, focusLayout, moveRect, resizeRect, resolveOverlaps, packRects, rectToFraction, rectFromFraction } from '../video/layout.js';
 import { Severity } from '../core/protocol.js';
 
 const GAP = 8;
@@ -28,6 +28,8 @@ export class StreamArea {
     this.perPage = 0;
     // Previews ajustados à mão, em frações da área (ver rectToFraction).
     this.customRects = new Map();
+    // Já alinhados pelo botão: o próximo clique deixa todos do mesmo tamanho.
+    this.organized = false;
 
     this.stage = h('div.stream-stage');
     this.empty = h('div.stream-empty');
@@ -74,6 +76,7 @@ export class StreamArea {
         tile.destroy();
         this.tiles.delete(id);
         this.customRects.delete(id);
+        this.organized = false;
       }
     }
     if (this.focusId && !ids.has(this.focusId)) this.focusId = null;
@@ -82,6 +85,7 @@ export class StreamArea {
       let tile = this.tiles.get(id);
       if (!tile) {
         tile = new StreamTile(id, this.#tileActions());
+        this.organized = false;
         this.tiles.set(id, tile);
         this.stage.append(tile.el);
       }
@@ -155,11 +159,35 @@ export class StreamArea {
     const rects = resolveOverlaps(start.map((s, i) => (i === fixed ? rect : s.rect)), fixed, width, height, GAP);
     if (!rects) return;
     const firstChange = !this.customRects.size;
+    this.organized = false;
     start.forEach((s, i) => {
       this.customRects.set(s.id, rectToFraction(rects[i], width, height));
       this.tiles.get(s.id).setRect(rects[i]);
     });
     if (firstChange) this.#renderToolbar();
+  }
+
+  /** Sai do foco e alinha os previews sem mudar o tamanho; de novo, deixa todos iguais. */
+  #organize() {
+    if (this.organized && !this.focusId) this.customRects.clear();
+    this.organized = false;
+    this.focusId = null;
+    this.offset = 0;
+    this.render();
+    if (!this.customRects.size) return;
+    const { clientWidth: width, clientHeight: height } = this.stage;
+    const shown = [...this.tiles].filter(([, tile]) => !tile.el.hidden);
+    const rects = packRects(shown.map(([, tile]) => tile.rect), width, height, GAP);
+    if (!rects) {
+      this.customRects.clear();
+      this.render();
+      return;
+    }
+    shown.forEach(([id, tile], i) => {
+      this.customRects.set(id, rectToFraction(rects[i], width, height));
+      tile.setRect(rects[i]);
+    });
+    this.organized = true;
   }
 
   #page(dir) {
@@ -200,7 +228,7 @@ export class StreamArea {
         title: t('video.layout.auto.tooltip'),
         'aria-label': t('video.layout.auto'),
         disabled: !this.focusId && !this.customRects.size,
-        on: { click: () => { this.focusId = null; this.offset = 0; this.customRects.clear(); this.render(); } },
+        on: { click: () => this.#organize() },
       }, icon('grid')) : null,
       hidden.length ? h('button.btn.ghost', {
         on: { click: ev => this.actions.manageHidden(ev.currentTarget) },

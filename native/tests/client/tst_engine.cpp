@@ -264,6 +264,15 @@ private slots:
             for (int j = i + 1; j < settled.size(); ++j)
                 QVERIFY(!settled[i].intersects(settled[j]));
         QVERIFY(resolveOverlaps({QRectF(0, 0, 400, 225), QRectF(10, 10, 400, 225)}, 0, 400, 225).isEmpty());
+        // Organizar: mantém os tamanhos; só encolhe, na mesma proporção, se não couberem.
+        const auto packed = packRects({QRectF(700, 400, 200, 112.5), QRectF(20, 30, 480, 270), QRectF(600, 10, 320, 180)}, 1200, 700);
+        QCOMPARE(packed.size(), 3);
+        QCOMPARE(packed[0].width(), 200.0);
+        QCOMPARE(packed[1].width(), 480.0);
+        QVERIFY(packed[1].x() < packed[2].x() && !packed[1].intersects(packed[2]));
+        const auto shrunk = packRects({QRectF(0, 0, 800, 450), QRectF(0, 460, 400, 225)}, 800, 500);
+        QVERIFY(qAbs(shrunk[0].width() / shrunk[1].width() - 2) < 0.01);
+        QVERIFY(packRects({QRectF(0, 0, 400, 225), QRectF(0, 0, 400, 225)}, 200, 100).isEmpty());
         // Redimensionar: proporção e canto oposto fixos, dentro da área, com tamanho mínimo.
         const QRectF rect(300, 200, 320, 180);
         QCOMPARE(resizeRect(rect, false, false, 160, 0, 1000, 800), QRectF(300, 200, 480, 270));

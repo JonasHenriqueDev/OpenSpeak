@@ -201,3 +201,56 @@ export function resolveOverlaps(rects, fixed, width, height, gap = 8, minWidth =
   }
   return null;
 }
+
+/** Quem começa antes da metade do primeiro da faixa está na mesma linha: esquerda para a direita. */
+function readingOrder(rects) {
+  const byTop = rects.map((_, i) => i).sort((a, b) => rects[a].y - rects[b].y);
+  const order = [];
+  while (byTop.length) {
+    const first = rects[byTop[0]];
+    const band = byTop.filter(i => rects[i].y < first.y + first.h / 2);
+    band.forEach(i => byTop.splice(byTop.indexOf(i), 1));
+    order.push(...band.sort((a, b) => rects[a].x - rects[b].x));
+  }
+  return order;
+}
+
+/**
+ * Organiza os previews em fileiras alinhadas e centralizadas, mantendo o tamanho
+ * de cada um e a ordem de leitura atual. Só encolhe, todos na mesma proporção,
+ * se não couberem na área.
+ * @returns {{x:number,y:number,w:number,h:number}[]|null} null se não couberem
+ */
+export function packRects(rects, width, height, gap = 8, minWidth = MIN_CUSTOM_WIDTH) {
+  const order = readingOrder(rects);
+  for (let scale = 1, attempt = 0; attempt < 60; attempt++, scale *= 0.95) {
+    const rows = [];
+    for (const index of order) {
+      const r = rects[index];
+      const w = Math.max(minWidth, r.w * scale);
+      const h = r.h * w / r.w;
+      const row = rows.at(-1);
+      if (row && row.w + gap + w <= width) {
+        row.items.push({ index, w, h });
+        row.w += gap + w;
+        row.h = Math.max(row.h, h);
+      } else {
+        rows.push({ items: [{ index, w, h }], w, h });
+      }
+    }
+    const totalH = rows.reduce((sum, row) => sum + row.h, 0) + (rows.length - 1) * gap;
+    if (totalH > height || rows.some(row => row.w > width)) continue;
+    const out = [];
+    let y = (height - totalH) / 2;
+    for (const row of rows) {
+      let x = (width - row.w) / 2;
+      for (const item of row.items) {
+        out[item.index] = { x, y: y + (row.h - item.h) / 2, w: item.w, h: item.h };
+        x += item.w + gap;
+      }
+      y += row.h + gap;
+    }
+    return out;
+  }
+  return null;
+}

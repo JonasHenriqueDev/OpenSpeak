@@ -51,6 +51,28 @@ QRectF toRect(const QVariantMap &m)
     return QRectF(m.value("x").toDouble(), m.value("y").toDouble(), m.value("w").toDouble(), m.value("h").toDouble());
 }
 
+// Quem começa antes da metade do primeiro da faixa está na mesma linha: esquerda para a direita.
+QList<int> readingOrder(const QList<QRectF> &rects)
+{
+    QList<int> byTop;
+    for (int i = 0; i < rects.size(); ++i)
+        byTop.append(i);
+    std::stable_sort(byTop.begin(), byTop.end(), [&](int a, int b) { return rects[a].y() < rects[b].y(); });
+    QList<int> order;
+    while (!byTop.isEmpty()) {
+        const QRectF &first = rects[byTop.first()];
+        QList<int> band;
+        for (int i : byTop)
+            if (rects[i].y() < first.y() + first.height() / 2)
+                band.append(i);
+        for (int i : band)
+            byTop.removeOne(i);
+        std::stable_sort(band.begin(), band.end(), [&](int a, int b) { return rects[a].x() < rects[b].x(); });
+        order.append(band);
+    }
+    return order;
+}
+
 constexpr double Epsilon = 0.01;
 
 bool overlapping(const QRectF &a, const QRectF &b, double gap)
@@ -205,6 +227,50 @@ QList<QRectF> resolveOverlaps(QList<QRectF> rects, int fixed, double width, doub
     return {};
 }
 
+QList<QRectF> packRects(const QList<QRectF> &rects, double width, double height, double gap, double minWidth)
+{
+    struct Item { int index; double w, h; };
+    struct Row { QList<Item> items; double w = 0, h = 0; };
+    const QList<int> order = readingOrder(rects);
+    double scale = 1;
+    for (int attempt = 0; attempt < 60; ++attempt, scale *= 0.95) {
+        QList<Row> rows;
+        for (int index : order) {
+            const QRectF &r = rects[index];
+            const double w = std::max(minWidth, r.width() * scale);
+            const double h = r.height() * w / r.width();
+            if (!rows.isEmpty() && rows.last().w + gap + w <= width) {
+                Row &row = rows.last();
+                row.items.append({index, w, h});
+                row.w += gap + w;
+                row.h = std::max(row.h, h);
+            } else {
+                rows.append({{{index, w, h}}, w, h});
+            }
+        }
+        double totalH = (rows.size() - 1) * gap;
+        bool fits = true;
+        for (const Row &row : rows) {
+            totalH += row.h;
+            fits = fits && row.w <= width;
+        }
+        if (!fits || totalH > height)
+            continue;
+        QList<QRectF> out(rects.size());
+        double y = (height - totalH) / 2;
+        for (const Row &row : rows) {
+            double x = (width - row.w) / 2;
+            for (const Item &item : row.items) {
+                out[item.index] = QRectF(x, y + (row.h - item.h) / 2, item.w, item.h);
+                x += item.w + gap;
+            }
+            y += row.h + gap;
+        }
+        return out;
+    }
+    return {};
+}
+
 QRectF rectFromFraction(double fx, double fy, double fw, double aspect, double width, double height)
 {
     const double w = std::min({fw * width, width, height * aspect});
@@ -240,6 +306,17 @@ QVariantList StreamLayout::resolveOverlaps(const QVariantList &rects, int fixed,
         in.append(toRect(r.toMap()));
     QVariantList out;
     for (const QRectF &r : openspeak::resolveOverlaps(in, fixed, width, height, gap))
+        out.append(toMap(r));
+    return out;
+}
+
+QVariantList StreamLayout::packRects(const QVariantList &rects, double width, double height, double gap) const
+{
+    QList<QRectF> in;
+    for (const QVariant &r : rects)
+        in.append(toRect(r.toMap()));
+    QVariantList out;
+    for (const QRectF &r : openspeak::packRects(in, width, height, gap))
         out.append(toMap(r));
     return out;
 }

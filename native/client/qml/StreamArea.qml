@@ -24,6 +24,8 @@ Rectangle {
     readonly property bool hasCustomRects: Object.keys(customRects).length > 0
     // Como os previews estavam no início do arrasto.
     property var arrangeStart: []
+    // Já alinhados pelo botão: o próximo clique deixa todos do mesmo tamanho.
+    property bool organized: false
     readonly property int previewScale: Settings.previewScale
     onPreviewScaleChanged: {
         customRects = {}
@@ -56,8 +58,10 @@ Rectangle {
         const items = Screenshare.items
         const ids = items.map(it => it.streamIdentifier)
         for (let i = streams.count - 1; i >= 0; --i)
-            if (ids.indexOf(streams.get(i).streamIdentifier) < 0)
+            if (ids.indexOf(streams.get(i).streamIdentifier) < 0) {
                 streams.remove(i)
+                organized = false
+            }
         for (let i = 0; i < items.length; ++i) {
             const it = items[i]
             const row = { streamIdentifier: it.streamIdentifier }
@@ -68,6 +72,7 @@ Rectangle {
                 if (streams.get(j).streamIdentifier === it.streamIdentifier) { at = j; break }
             if (at < 0) {
                 streams.insert(i, row)
+                organized = false
                 continue
             }
             if (at !== i)
@@ -90,6 +95,7 @@ Rectangle {
     }
     // A conta parte sempre do início do arrasto: quem foi empurrado volta se o preview sair de cima.
     function arrangeTo(id, rect) {
+        organized = false
         const fixed = arrangeStart.findIndex(s => s.id === id)
         const resolved = StreamLayout.resolveOverlaps(arrangeStart.map((s, i) => i === fixed ? rect : s.rect),
                                                       fixed, stage.width, stage.height, gap)
@@ -105,10 +111,31 @@ Rectangle {
         rects = map
     }
     function autoArrange() {
+        if (organized && !focusId)
+            customRects = {}
+        organized = false
         focusId = ""
         offset = 0
-        customRects = {}
         relayout()
+        if (!hasCustomRects)
+            return
+        // Os previews ajustados à mão se alinham sem mudar de tamanho.
+        const ids = Object.keys(rects)
+        const packed = StreamLayout.packRects(ids.map(id => rects[id]), stage.width, stage.height, gap)
+        const custom = {}
+        const map = {}
+        ids.forEach((id, i) => {
+            if (!packed.length)
+                return
+            map[id] = packed[i]
+            custom[id] = StreamLayout.rectToFraction(packed[i], stage.width, stage.height)
+        })
+        customRects = custom
+        organized = packed.length > 0
+        if (organized)
+            rects = map
+        else
+            relayout()
     }
     function relayout() {
         let focusIndex = -1

@@ -92,7 +92,7 @@ const STRINGS = {
   'video.join_requests.tooltip': 'Usuários aguardando para entrar',
 
   'video.layout.auto': 'Organizar automaticamente',
-  'video.layout.auto.tooltip': 'Organiza automaticamente para maximizar a área de todos os streams',
+  'video.layout.auto.tooltip': 'Organiza os previews mantendo o tamanho de cada um; clique de novo para deixá-los iguais',
 
   'video.mode.p2p': 'P2P',
   'video.mode.p2p.info': 'Comunicação direta ponto a ponto. Seu endereço IP é trocado com os espectadores para estabelecer a conexão.',

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gridLayout, focusLayout, moveRect, resizeRect, resolveOverlaps, rectToFraction, rectFromFraction, MIN_TILE_HEIGHT, MIN_CUSTOM_WIDTH } from '../public/js/video/layout.js';
+import { gridLayout, focusLayout, moveRect, resizeRect, resolveOverlaps, packRects, rectToFraction, rectFromFraction, MIN_TILE_HEIGHT, MIN_CUSTOM_WIDTH } from '../public/js/video/layout.js';
 
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
@@ -96,6 +96,27 @@ test('sem sobreposição: empurra em cadeia e encolhe quando falta espaço', () 
 test('sem sobreposição: sem tamanho mínimo que caiba, recusa', () => {
   const rects = [{ x: 0, y: 0, w: 400, h: 225 }, { x: 10, y: 10, w: 400, h: 225 }];
   assert.equal(resolveOverlaps(rects, 0, 400, 225), null);
+});
+
+test('organizar: mantém o tamanho de cada preview e alinha em fileiras', () => {
+  const rects = [
+    { x: 700, y: 400, w: 200, h: 112.5 },
+    { x: 20, y: 30, w: 480, h: 270 },
+    { x: 600, y: 10, w: 320, h: 180 },
+  ];
+  const out = packRects(rects, 1200, 700);
+  rects.forEach((r, i) => assert.equal(out[i].w, r.w));
+  assert.ok(clear(out));
+  assert.ok(out[1].x < out[2].x, 'mantém a ordem de leitura');
+  for (const r of out) assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= 1200 && r.y + r.h <= 700);
+});
+
+test('organizar: se não couber, encolhe todos na mesma proporção', () => {
+  const rects = [{ x: 0, y: 0, w: 800, h: 450 }, { x: 0, y: 460, w: 400, h: 225 }];
+  const out = packRects(rects, 800, 500);
+  assert.ok(clear(out));
+  assert.ok(Math.abs(out[0].w / out[1].w - 2) < 0.01);
+  assert.equal(packRects([{ x: 0, y: 0, w: 400, h: 225 }, { x: 0, y: 0, w: 400, h: 225 }], 200, 100), null);
 });
 
 test('posição guardada em frações acompanha a área e não sai dela', () => {

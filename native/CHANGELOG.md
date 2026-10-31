@@ -1,3 +1,9 @@
+# OpenSpeak 1.0.31 — previews que se ajustam sozinhos
+
+- Os **previews não se sobrepõem mais:** ao mover ou redimensionar um, os outros
+  saem da frente e encolhem se faltar espaço.
+- O **menu Iniciar e os atalhos** agora mostram o ícone novo.
+
 # OpenSpeak 1.0.30 — previews livres e ícone transparente
 
 - **Previews livres:** arraste um preview para qualquer lugar da área de streams e

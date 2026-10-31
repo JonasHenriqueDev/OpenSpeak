@@ -377,14 +377,28 @@ struct WindowGrabber::Impl {
         return true;
     }
 
+    // Menus e popups são janelas à parte, mas do mesmo processo da janela capturada.
+    bool cursorOverOwnWindow(POINT point) const
+    {
+        const HWND under = GetAncestor(WindowFromPoint(point), GA_ROOT);
+        if (under == hwnd)
+            return true;
+        DWORD ownProcess = 0, underProcess = 0;
+        GetWindowThreadProcessId(hwnd, &ownProcess);
+        GetWindowThreadProcessId(under, &underProcess);
+        return ownProcess && ownProcess == underProcess;
+    }
+
     // Nem a duplicação nem o PrintWindow incluem o cursor. DrawIconEx desenha qualquer
     // tipo de cursor (monocromático, colorido, com máscara) nos dois modos.
-    void drawCursor(const RECT &b)
+    void drawCursor(const RECT &b, bool fromScreen)
     {
         CURSORINFO ci{sizeof(ci)};
         if (!GetCursorInfo(&ci) || !(ci.flags & CURSOR_SHOWING) || !ci.hCursor || !PtInRect(&b, ci.ptScreenPos))
             return;
-        if (hwnd && GetAncestor(WindowFromPoint(ci.ptScreenPos), GA_ROOT) != hwnd)
+        // A duplicação mostra a tela como ela está, com overlays e menus: o cursor sempre
+        // pertence à imagem. Já o PrintWindow mostra a janela por baixo do que a cobre.
+        if (!fromScreen && !cursorOverOwnWindow(ci.ptScreenPos))
             return;
         if (ci.hCursor != cursor) {
             ICONINFO ii{};
@@ -534,7 +548,7 @@ void WindowGrabber::tick()
         qInfo() << "WindowGrabber:" << name;
         emit methodChanged(name);
     }
-    d.drawCursor(b);
+    d.drawCursor(b, method == Impl::Method::Duplication);
     d.lastFrame = d.toFrame();
     if (d.lastFrame.isValid())
         emit frameReady(d.lastFrame);
@@ -563,7 +577,7 @@ void WindowGrabber::tickMonitor()
         d.lastMethod = Impl::Method::Duplication;
         emit methodChanged(QStringLiteral("Duplicação de tela (DXGI)"));
     }
-    d.drawCursor(b);
+    d.drawCursor(b, true);
     d.lastFrame = d.toFrame();
     if (d.lastFrame.isValid())
         emit frameReady(d.lastFrame);

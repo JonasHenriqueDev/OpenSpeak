@@ -89,6 +89,52 @@ private slots:
         QVERIFY2(with > 10, qPrintable(QString::number(with)));
     }
 
+    // Com um overlay de outra janela sob o cursor, a imagem da tela continua com o cursor.
+    void windowCaptureKeepsCursorOverOverlay()
+    {
+        SolidWindow target(QColor(220, 30, 30));
+        target.setFlags(Qt::Window | Qt::FramelessWindowHint);
+        target.setGeometry(200, 200, 400, 300);
+        target.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&target));
+
+        // Transparente ao PrintWindow não importa: WS_EX_TRANSPARENT mantém a duplicação.
+        SolidWindow overlay(QColor(220, 30, 30));
+        overlay.setFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+        overlay.setGeometry(280, 280, 120, 120);
+        overlay.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&overlay));
+        const HWND overlayHwnd = reinterpret_cast<HWND>(overlay.winId());
+        SetWindowLongPtrW(overlayHwnd, GWL_EXSTYLE, GetWindowLongPtrW(overlayHwnd, GWL_EXSTYLE) | WS_EX_TRANSPARENT);
+        SetForegroundWindow(reinterpret_cast<HWND>(target.winId()));
+        QTest::qWait(300);
+
+        WindowGrabber grabber(target.winId(), 30);
+        QSignalSpy frames(&grabber, &WindowGrabber::frameReady);
+        grabber.start();
+
+        RECT rect{};
+        GetWindowRect(overlayHwnd, &rect);
+        POINT saved{};
+        GetCursorPos(&saved);
+        // Repete: quem usa a máquina durante o teste pode tirar o cursor do lugar.
+        int cursorPixels = 0;
+        for (int attempt = 0; attempt < 20 && cursorPixels <= 10; ++attempt) {
+            SetCursorPos(rect.left + 40, rect.top + 40);
+            frames.clear();
+            QTest::qWait(150);
+            if (frames.isEmpty())
+                continue;
+            const QImage img = frames.last().first().value<QVideoFrame>().toImage();
+            cursorPixels = 0;
+            for (int y = 0; y < 24; ++y)
+                for (int x = 0; x < 16; ++x)
+                    cursorPixels += !similar(img.pixelColor(120 + x, 120 + y), QColor(220, 30, 30));
+        }
+        SetCursorPos(saved.x, saved.y);
+        QVERIFY2(cursorPixels > 10, qPrintable(QString::number(cursorPixels)));
+    }
+
     void capturesVisibleAndCoveredWindowWithoutBorder()
     {
         SolidWindow target(QColor(220, 30, 30));

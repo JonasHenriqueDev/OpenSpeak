@@ -115,6 +115,15 @@ export function resizeRect(rect, left, top, dx, dy, width, height, minWidth = MI
   return { x: left ? anchorX - w : anchorX, y: top ? anchorY - h : anchorY, w, h };
 }
 
+/** Move um preview sem deixá-lo sair da área. */
+export function moveRect(rect, dx, dy, width, height) {
+  return {
+    ...rect,
+    x: Math.min(Math.max(0, rect.x + dx), width - rect.w),
+    y: Math.min(Math.max(0, rect.y + dy), height - rect.h),
+  };
+}
+
 /** Guarda um preview em frações da área, para acompanhar o tamanho da janela. */
 export function rectToFraction(rect, width, height) {
   return { x: rect.x / width, y: rect.y / height, w: rect.w / width, aspect: rect.w / rect.h };

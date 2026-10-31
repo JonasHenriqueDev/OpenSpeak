@@ -159,6 +159,8 @@ Rectangle {
                         arrangeable: root.focusId === ""
                         property var arrangeStart: null
                         onArrangeBegun: { arrangeStart = rect; z = ++root.topZ }
+                        onMoveDragged: (dx, dy) => root.setCustomRect(streamIdentifier,
+                            StreamLayout.moveRect(arrangeStart, dx, dy, stage.width, stage.height))
                         onResizeDragged: (left, top, dx, dy) => root.setCustomRect(streamIdentifier,
                             StreamLayout.resizeRect(arrangeStart, left, top, dx, dy, stage.width, stage.height))
                         Behavior on x { enabled: !arranging; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }

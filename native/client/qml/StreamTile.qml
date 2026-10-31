@@ -17,6 +17,7 @@ Rectangle {
 
     signal toggleFocus()
     signal arrangeBegun()
+    signal moveDragged(real dx, real dy)
     signal resizeDragged(bool left, bool top, real dx, real dy)
     signal editRequested()
     signal changeSourceRequested()
@@ -145,6 +146,19 @@ Rectangle {
     TapHandler {
         acceptedButtons: Qt.LeftButton
         onDoubleTapped: tile.openFullscreen()
+    }
+
+    // Arrastar o quadro o move para qualquer lugar da área.
+    DragHandler {
+        target: null
+        enabled: tile.arrangeable
+        cursorShape: Qt.ClosedHandCursor
+        onActiveChanged: {
+            tile.arranging = active
+            if (active)
+                tile.arrangeBegun()
+        }
+        onActiveTranslationChanged: if (active) tile.moveDragged(activeTranslation.x, activeTranslation.y)
     }
 
     // Cantos que redimensionam o preview. A conta usa a posição na janela porque

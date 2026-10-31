@@ -248,6 +248,9 @@ private slots:
                 QVERIFY(t.rect.height() >= MinTileHeight);
             }
         }
+        // Mover: qualquer lugar da área, sem sair dela.
+        QCOMPARE(moveRect(QRectF(100, 100, 320, 180), 50, -20, 1000, 800), QRectF(150, 80, 320, 180));
+        QCOMPARE(moveRect(QRectF(100, 100, 320, 180), -500, 5000, 1000, 800), QRectF(0, 620, 320, 180));
         // Redimensionar: proporção e canto oposto fixos, dentro da área, com tamanho mínimo.
         const QRectF rect(300, 200, 320, 180);
         QCOMPARE(resizeRect(rect, false, false, 160, 0, 1000, 800), QRectF(300, 200, 480, 270));

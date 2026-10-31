@@ -4,7 +4,7 @@ import { h, replaceChildren } from './dom.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
 import { StreamTile } from './StreamTile.js';
-import { gridLayout, focusLayout, resizeRect, rectToFraction, rectFromFraction } from '../video/layout.js';
+import { gridLayout, focusLayout, moveRect, resizeRect, rectToFraction, rectFromFraction } from '../video/layout.js';
 import { Severity } from '../core/protocol.js';
 
 const GAP = 8;
@@ -224,6 +224,8 @@ export class StreamArea {
         this.render();
       },
       beginArrange: id => this.#beginArrange(id),
+      moveTile: (id, start, dx, dy) => this.#setCustomRect(id,
+        moveRect(start, dx, dy, this.stage.clientWidth, this.stage.clientHeight)),
       resizeTile: (id, start, left, top, dx, dy) => this.#setCustomRect(id,
         resizeRect(start, left, top, dx, dy, this.stage.clientWidth, this.stage.clientHeight)),
     };

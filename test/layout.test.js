@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gridLayout, focusLayout, resizeRect, rectToFraction, rectFromFraction, MIN_TILE_HEIGHT, MIN_CUSTOM_WIDTH } from '../public/js/video/layout.js';
+import { gridLayout, focusLayout, moveRect, resizeRect, rectToFraction, rectFromFraction, MIN_TILE_HEIGHT, MIN_CUSTOM_WIDTH } from '../public/js/video/layout.js';
 
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
@@ -59,6 +59,12 @@ test('redimensionar: respeita a área e o tamanho mínimo', () => {
   assert.equal(big.x + big.w, 1000);
   assert.ok(big.y + big.h <= 800);
   assert.equal(resizeRect(rect, false, false, -5000, 0, 1000, 800).w, MIN_CUSTOM_WIDTH);
+});
+
+test('mover: vai a qualquer lugar da área, sem sair dela', () => {
+  const rect = { x: 100, y: 100, w: 320, h: 180 };
+  assert.deepEqual(moveRect(rect, 50, -20, 1000, 800), { x: 150, y: 80, w: 320, h: 180 });
+  assert.deepEqual(moveRect(rect, -500, 5000, 1000, 800), { x: 0, y: 620, w: 320, h: 180 });
 });
 
 test('posição guardada em frações acompanha a área e não sai dela', () => {

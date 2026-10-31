@@ -10,6 +10,7 @@ import { installFullscreenIdle } from './fullscreenIdle.js';
 import { viewerCount } from './viewerCount.js';
 
 const ACCESS_ICON = { [StreamAccess.PUBLIC]: 'globe', [StreamAccess.CONTACTS_ONLY]: 'contacts', [StreamAccess.PRIVATE]: 'lock' };
+const MOVE_THRESHOLD = 4;
 const TYPE_ICON = { [StreamType.CAMERA]: 'camera', [StreamType.SCREEN]: 'screen', [StreamType.WINDOW]: 'window' };
 
 function btn(iconName, title, onClick, cls = '') {
@@ -36,6 +37,7 @@ export class StreamTile {
     this.overlay = h('div.tile-overlay');
     this.el = h('div.video-stream', { dataset: { stream: streamIdentifier } }, this.video, this.overlay,
       this.#grip(true, true), this.#grip(false, true), this.#grip(true, false), this.#grip(false, false));
+    this.el.addEventListener('pointerdown', ev => this.#startMove(ev));
     this.el.addEventListener('dblclick', () => (this.pipWindow ? this.togglePip() : this.toggleFullscreen()));
     this._disposeFullscreenIdle = installFullscreenIdle(this.el);
     this._srcObject = null;
@@ -70,6 +72,18 @@ export class StreamTile {
       this.#track(ev, (dx, dy) => this.actions.resizeTile(this.streamIdentifier, rect, left, top, dx, dy));
     };
     return h('div.tile-grip', { class: `${top ? 'top' : 'bottom'} ${left ? 'left' : 'right'}`, on: { pointerdown: start } });
+  }
+
+  /** Arrastar o quadro o move; a folga deixa o duplo clique continuar valendo. */
+  #startMove(ev) {
+    if (ev.button !== 0 || !this.el.classList.contains('arrangeable') || this.pipWindow) return;
+    if (document.fullscreenElement === this.el || ev.target.closest('button, input, a, .tile-grip')) return;
+    let rect = null;
+    this.#track(ev, (dx, dy) => {
+      if (!rect && Math.hypot(dx, dy) < MOVE_THRESHOLD) return;
+      rect ??= this.actions.beginArrange(this.streamIdentifier);
+      this.actions.moveTile(this.streamIdentifier, rect, dx, dy);
+    });
   }
 
   /** Acompanha o ponteiro até soltar, sem animar o quadro nesse meio-tempo. */

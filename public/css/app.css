@@ -282,7 +282,8 @@ select.input { padding-right: 4px; }
   background: #05070b; border-radius: var(--radius); border: 1px solid var(--border);
   transition: transform .2s ease, width .2s ease, height .2s ease;
 }
-.video-stream.arranging { transition: none; }
+.video-stream.arrangeable { cursor: grab; }
+.video-stream.arranging { transition: none; cursor: grabbing; }
 .tile-grip { position: absolute; z-index: 2; width: 12px; height: 12px; display: none; touch-action: none; }
 .video-stream.arrangeable > .tile-grip { display: block; }
 .video-stream:fullscreen > .tile-grip, .video-stream.in-pip > .tile-grip { display: none; }

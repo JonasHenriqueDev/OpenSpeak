@@ -117,6 +117,12 @@ LayoutResult focusLayout(int count, int focusIndex, double width, double height,
     return r;
 }
 
+QRectF moveRect(const QRectF &rect, double dx, double dy, double width, double height)
+{
+    return QRectF(std::min(std::max(0.0, rect.x() + dx), width - rect.width()),
+                  std::min(std::max(0.0, rect.y() + dy), height - rect.height()), rect.width(), rect.height());
+}
+
 QRectF resizeRect(const QRectF &rect, bool left, bool top, double dx, double dy, double width, double height, double minWidth)
 {
     const double aspect = rect.width() / rect.height();
@@ -148,6 +154,11 @@ QVariantMap StreamLayout::compute(int count, int focusIndex, double width, doubl
         tiles.append(QVariantMap{{"x", t.rect.x()}, {"y", t.rect.y()}, {"w", t.rect.width()}, {"h", t.rect.height()},
                                  {"index", t.index}, {"focused", t.focused}});
     return {{"perPage", r.perPage}, {"tiles", tiles}};
+}
+
+QVariantMap StreamLayout::moveRect(const QVariantMap &rect, double dx, double dy, double width, double height) const
+{
+    return toMap(openspeak::moveRect(toRect(rect), dx, dy, width, height));
 }
 
 QVariantMap StreamLayout::resizeRect(const QVariantMap &rect, bool left, bool top, double dx, double dy, double width, double height) const

@@ -14,6 +14,7 @@
 
 #include <memory>
 
+class QScreen;
 class QTimer;
 
 namespace openspeak {
@@ -25,6 +26,8 @@ public:
     ~WindowGrabber() override;
     /// Captura o monitor (HMONITOR) inteiro. Sem quadro em ~2 s: fallbackRequested.
     static std::unique_ptr<WindowGrabber> forMonitor(quintptr monitor, int targetFps);
+    /// HMONITOR da tela, ou 0 se não houver.
+    static quintptr monitorForScreen(const QScreen *screen);
 
     void start();
     void stop();

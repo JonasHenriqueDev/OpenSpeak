@@ -2,6 +2,7 @@
 
 #include <QAbstractVideoBuffer>
 #include <QDebug>
+#include <QScreen>
 #include <QTimer>
 
 #include <windows.h>
@@ -441,6 +442,14 @@ std::unique_ptr<WindowGrabber> WindowGrabber::forMonitor(quintptr monitor, int t
     auto grabber = std::make_unique<WindowGrabber>(0, targetFps);
     grabber->m_impl->monitor = reinterpret_cast<HMONITOR>(monitor);
     return grabber;
+}
+
+// Pelo canto da tela, que o Qt mantém em pixels físicos mesmo com escala. O nome não
+// serve: QScreen::name() é o do monitor ("LG FHD"), não o do GDI ("\\\\.\\DISPLAY1").
+quintptr WindowGrabber::monitorForScreen(const QScreen *screen)
+{
+    const QPoint corner = screen->geometry().topLeft();
+    return reinterpret_cast<quintptr>(MonitorFromPoint({corner.x(), corner.y()}, MONITOR_DEFAULTTONULL));
 }
 
 void WindowGrabber::start()

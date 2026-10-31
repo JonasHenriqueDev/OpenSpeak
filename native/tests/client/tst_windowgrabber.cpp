@@ -1,7 +1,9 @@
 ﻿#include "WindowGrabber.h"
 
+#include <QGuiApplication>
 #include <QPainter>
 #include <QRasterWindow>
+#include <QScreen>
 #include <QSignalSpy>
 #include <QTest>
 
@@ -43,6 +45,18 @@ bool similar(QColor a, QColor b) { return qAbs(a.red() - b.red()) < 16 && qAbs(a
 class TestWindowGrabber : public QObject {
     Q_OBJECT
 private slots:
+    // Sem o HMONITOR a transmissão cai no QScreenCapture, que fica sem cursor.
+    void everyScreenHasItsMonitor()
+    {
+        for (const QScreen *screen : QGuiApplication::screens()) {
+            const auto monitor = reinterpret_cast<HMONITOR>(WindowGrabber::monitorForScreen(screen));
+            QVERIFY2(monitor, qPrintable(screen->name()));
+            MONITORINFO info{sizeof(info)};
+            QVERIFY(GetMonitorInfoW(monitor, &info));
+            QCOMPARE(QPoint(info.rcMonitor.left, info.rcMonitor.top), screen->geometry().topLeft());
+        }
+    }
+
     // QScreenCapture não inclui o cursor; a captura de monitor precisa desenhá-lo.
     void monitorCaptureIncludesCursor()
     {

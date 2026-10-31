@@ -17,28 +17,6 @@
 
 namespace openspeak {
 
-namespace {
-
-// QScreen::name() é o nome GDI do monitor ("\\\\.\\DISPLAY1").
-quintptr monitorHandle(const QScreen *screen)
-{
-    struct Search {
-        QString name;
-        HMONITOR found = nullptr;
-    } search{screen->name()};
-    EnumDisplayMonitors(nullptr, nullptr, [](HMONITOR monitor, HDC, LPRECT, LPARAM data) -> BOOL {
-        auto *s = reinterpret_cast<Search *>(data);
-        MONITORINFOEXW info{};
-        info.cbSize = sizeof(info);
-        if (GetMonitorInfoW(monitor, &info) && QString::fromWCharArray(info.szDevice) == s->name)
-            s->found = monitor;
-        return !s->found;
-    }, reinterpret_cast<LPARAM>(&search));
-    return reinterpret_cast<quintptr>(search.found);
-}
-
-} // namespace
-
 VideoSource::VideoSource(QObject *parent) : QObject(parent)
 {
     m_session.setVideoSink(&m_sink);
@@ -182,7 +160,7 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
             return false;
         }
         // OPENSPEAK_SCREEN_CAPTURE=qt força o QScreenCapture (não inclui o cursor).
-        const quintptr monitor = monitorHandle(screens[idx]);
+        const quintptr monitor = WindowGrabber::monitorForScreen(screens[idx]);
         if (monitor && qEnvironmentVariable("OPENSPEAK_SCREEN_CAPTURE") != QLatin1String("qt")) {
             m_grabber = WindowGrabber::forMonitor(monitor, targetFps);
             connect(m_grabber.get(), &WindowGrabber::frameReady, this, &VideoSource::onFrame);

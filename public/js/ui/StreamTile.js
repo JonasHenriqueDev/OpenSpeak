@@ -39,11 +39,9 @@ export class StreamTile {
     this._disposeFullscreenIdle = installFullscreenIdle(this.el);
     this._srcObject = null;
     this.pipWindow = null;
-    // Ocupa o lugar do quadro na grade enquanto ele está na janela de PiP. Mudo: o áudio
-    // continua no vídeo que foi para a janela.
-    this.placeholderVideo = h('video.tile-video', { autoplay: true, playsInline: true, muted: true });
+    // Ocupa o lugar do quadro na grade enquanto ele está na janela de PiP.
     this.placeholder = h('div.video-stream.pip-placeholder', { on: { click: () => this.togglePip() } },
-      this.placeholderVideo, h('span', t('video.stream.in_pip')),
+      icon('pip', 'big'), h('span', t('video.stream.in_pip')),
       h('button.btn.small', t('video.action.pip.close')));
   }
 
@@ -101,9 +99,7 @@ export class StreamTile {
     win.document.title = this.model?.info?.name ?? 'OpenSpeak';
     win.document.body.classList.add('pip-body');
     if (document.fullscreenElement === this.el) await document.exitFullscreen().catch(() => {});
-    this.placeholderVideo.srcObject = this._srcObject;
     this.el.replaceWith(this.placeholder);
-    this.placeholderVideo.play().catch(() => {});
     this.el.classList.add('in-pip');
     this.el.hidden = false;
     this.pipWindow = win;
@@ -115,7 +111,6 @@ export class StreamTile {
 
   #restoreFromPip() {
     this.pipWindow = null;
-    this.placeholderVideo.srcObject = null;
     this.el.classList.remove('in-pip');
     if (this.destroyed) return;
     this.el.hidden = this.placeholder.hidden;
@@ -145,7 +140,6 @@ export class StreamTile {
     if (this._srcObject !== mediaStream) {
       this._srcObject = mediaStream;
       this.video.srcObject = mediaStream;
-      if (this.pipWindow) this.placeholderVideo.srcObject = mediaStream;
       if (mediaStream) this.video.play().catch(() => {});
     }
     this.video.muted = muted || this.muted;

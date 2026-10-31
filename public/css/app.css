@@ -289,12 +289,11 @@ select.input { padding-right: 4px; }
 .pip-body { margin: 0; height: 100vh; background: #000; overflow: hidden; }
 .video-stream.in-pip { position: fixed; inset: 0; border: none; border-radius: 0; transform: none !important; width: 100% !important; height: 100% !important; transition: none; }
 .pip-placeholder {
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px;
-  color: var(--text); cursor: pointer; border-style: dashed;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  color: var(--text-dim); cursor: pointer; border-style: dashed;
 }
 .pip-placeholder[hidden] { display: none; }
-.pip-placeholder > :not(video) { position: relative; text-shadow: 0 1px 3px #000; }
-.pip-placeholder.small > span { display: none; }
+.pip-placeholder.small .icon.big { width: 28px; height: 28px; }
 .tile-btn.active { color: var(--accent); }
 .tile-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
 .video-stream.paused .tile-video { filter: grayscale(.8) brightness(.45); }

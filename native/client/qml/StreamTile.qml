@@ -25,6 +25,8 @@ Rectangle {
     readonly property bool hovered: hover.hovered
     // Prévia do próprio stream fechada por causa de um app em tela cheia.
     readonly property bool previewClosed: own && !!data_.previewClosed
+    // No picture-in-picture o vídeo fica só na janela pequena, como na web.
+    readonly property bool inPip: pipWindow.visible
     // 1 = 100%; com "volume até 500%" ligado nas preferências, vai a 5.
     readonly property real maxVolume: Settings.volumeBoost ? 5 : 1
 
@@ -55,7 +57,7 @@ Rectangle {
             Screenshare.detachVideo(streamId, sink)
     }
     function refreshAttachment() {
-        if (playing && !previewClosed)
+        if (playing && !previewClosed && !inPip)
             attach(video.videoSink)
         if (fullscreenWindow.visible)
             attach(fullscreenVideo.videoSink)
@@ -94,14 +96,28 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 1
         fillMode: VideoOutput.PreserveAspectFit
-        visible: tile.playing && !tile.previewClosed
+        visible: tile.playing && !tile.previewClosed && !tile.inPip
         opacity: tile.data_.paused ? 0.35 : 1
     }
 
     ColumnLayout {
         anchors.centerIn: parent
+        visible: tile.inPip
+        spacing: 6
+        Icon { Layout.alignment: Qt.AlignHCenter; visible: !tile.small; name: "pip"; size: 28; color: Theme.textDim }
+        Label { Layout.alignment: Qt.AlignHCenter; visible: !tile.small; text: I18n.t("video.stream.in_pip"); color: Theme.textDim }
+        Button {
+            objectName: "closePip"
+            Layout.alignment: Qt.AlignHCenter
+            text: I18n.t("video.action.pip.close")
+            onClicked: tile.closePip()
+        }
+    }
+
+    ColumnLayout {
+        anchors.centerIn: parent
         width: Math.min(parent.width - 24, 320)
-        visible: tile.previewClosed
+        visible: tile.previewClosed && !tile.inPip
         spacing: 6
         Icon { Layout.alignment: Qt.AlignHCenter; visible: !tile.small; name: "eyeOff"; size: 28; color: Theme.textDim }
         Label {
@@ -332,7 +348,14 @@ Rectangle {
         // como transientParent e o Windows esconderia o PiP ao minimizar o app.
         transientParent: null
         flags: Qt.Window | Qt.FramelessWindowHint | (Settings.pipPinned ? Qt.WindowStaysOnTopHint : 0)
-        onVisibleChanged: if (!visible) tile.detach(pipVideo.videoSink)
+        onVisibleChanged: {
+            if (visible) {
+                tile.detach(video.videoSink)
+            } else {
+                tile.detach(pipVideo.videoSink)
+                tile.refreshAttachment()
+            }
+        }
 
         VideoOutput {
             id: pipVideo
@@ -781,7 +804,7 @@ Rectangle {
             }
             TileButton {
                 objectName: "hidePreview"
-                visible: tile.own && !tile.previewClosed
+                visible: tile.own && !tile.previewClosed && !tile.inPip
                 iconName: "eyeOff"
                 tip: I18n.t("video.preview.hide")
                 onClicked: Screenshare.closeOwnPreview(tile.streamId)

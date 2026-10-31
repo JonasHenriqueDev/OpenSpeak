@@ -33,6 +33,7 @@
 #include <QTimer>
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include <shobjidl_core.h>
 #endif
 
 using namespace openspeak;
@@ -47,6 +48,11 @@ static QQuickItem *findVisualItem(QQuickItem *root, const QString &name)
 
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_WIN
+    // Sem identidade própria, a barra de tarefas mostra o ícone do .exe/atalho em
+    // vez do ícone da janela, que acompanha o tema.
+    SetCurrentProcessExplicitAppUserModelID(L"OpenSpeak.Client");
+#endif
     // QApplication (e não QGuiApplication) por causa do menu do ícone na bandeja.
     QApplication app(argc, argv);
     QGuiApplication::setApplicationName(QStringLiteral("OpenSpeak"));

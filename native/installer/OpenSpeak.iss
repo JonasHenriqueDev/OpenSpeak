@@ -52,6 +52,8 @@ WizardStyle=modern
 SetupIconFile=..\client\assets\openspeak.ico
 DisableProgramGroupPage=yes
 CloseApplications=yes
+; Avisa o Explorer ao terminar, para ele trocar o ícone antigo que guardou em cache.
+ChangesAssociations=yes
 ; O app recusa abrir enquanto este mutex existe (exceto o relançamento com --after-update).
 SetupMutex=OpenSpeakSetupMutex
 

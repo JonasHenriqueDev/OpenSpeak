@@ -84,7 +84,7 @@ qt_add_qml_module(OpenSpeak
 )
 
 # Widgets: QSystemTrayIcon/QMenu do ícone na bandeja. Network: QLocalServer (instância única).
-target_link_libraries(OpenSpeak PRIVATE openspeak_engine Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Network Qt6::GuiPrivate Qt6::MultimediaPrivate dwmapi)
+target_link_libraries(OpenSpeak PRIVATE openspeak_engine Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Network Qt6::GuiPrivate Qt6::MultimediaPrivate dwmapi shell32)
 
 if(OPENSPEAK_BUILD_TESTS)
     find_package(Qt6 REQUIRED COMPONENTS Test)

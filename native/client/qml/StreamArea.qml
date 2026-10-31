@@ -19,6 +19,8 @@ Rectangle {
     property var rects: ({})
     property int perPage: 0
     readonly property int gap: 8
+    readonly property int previewScale: Settings.previewScale
+    onPreviewScaleChanged: relayout()
 
     function focusStream(id) {
         if (!hasItem(id))
@@ -76,8 +78,11 @@ Rectangle {
             if (streams.get(i).streamIdentifier === focusId) focusIndex = i
         const r = StreamLayout.compute(streams.count, focusIndex, stage.width, stage.height, gap, offset)
         const map = {}
+        const scale = previewScale / 100
         for (const t of r.tiles)
-            map[streams.get(t.index).streamIdentifier] = t
+            map[streams.get(t.index).streamIdentifier] = {
+                x: t.x + t.w * (1 - scale) / 2, y: t.y + t.h * (1 - scale) / 2, w: t.w * scale, h: t.h * scale
+            }
         rects = map
         perPage = r.perPage
     }
@@ -281,6 +286,23 @@ Rectangle {
                             checkable: true
                             checked: Settings.showInactiveStreams
                             onTriggered: Settings.showInactiveStreams = checked
+                        }
+                        MenuSeparator {}
+                        ColumnLayout {
+                            width: viewMenu.width - 24
+                            x: 12
+                            spacing: 2
+                            Label {
+                                text: I18n.t("video.view_settings.preview_size") + ": " + Settings.previewScale + "%"
+                                color: Theme.textDim
+                            }
+                            AppSlider {
+                                objectName: "previewScaleSlider"
+                                Layout.fillWidth: true
+                                from: 40; to: 100; step: 5
+                                value: Settings.previewScale
+                                onMoved: Settings.previewScale = Math.round(snap(value))
+                            }
                         }
                     }
                 }

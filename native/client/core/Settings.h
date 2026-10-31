@@ -39,6 +39,7 @@ class Settings : public QObject {
     Q_PROPERTY(bool fullscreenTaskbar READ fullscreenTaskbar WRITE setFullscreenTaskbar NOTIFY changed)
     Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY changed)
     Q_PROPERTY(QString accentColor READ accentColor WRITE setAccentColor NOTIFY changed)
+    Q_PROPERTY(int previewScale READ previewScale WRITE setPreviewScale NOTIFY changed)
 public:
     explicit Settings(const QString &profile, bool debug, QObject *parent = nullptr);
 
@@ -115,6 +116,9 @@ public:
     /// Em tela cheia, a barra de tarefas que se oculta automaticamente aparece ao passar o mouse.
     bool fullscreenTaskbar() const { return value("fullscreenTaskbar", true).toBool(); }
     void setFullscreenTaskbar(bool v) { set("fullscreenTaskbar", v); }
+    /// Tamanho dos previews na área de streams, 40 a 100% do espaço de cada um.
+    int previewScale() const { return qBound(40, value("previewScale", 100).toInt(), 100); }
+    void setPreviewScale(int v) { set("previewScale", qBound(40, v, 100)); }
 
     /// Senha do perfil, lembrada por servidor e apelido (não vai para outro servidor).
     Q_INVOKABLE QString profilePassword(const QString &url, const QString &nickname) const;

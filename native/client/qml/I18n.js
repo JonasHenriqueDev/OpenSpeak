@@ -200,6 +200,7 @@ const STRINGS = {
   'video.streams': 'Nenhum stream | 1 stream | {count} streams',
   'video.view_settings': 'Exibição',
   'video.view_settings.show_inactive_streams': 'Mostrar streams não assistidos',
+  'video.view_settings.preview_size': 'Tamanho dos previews',
   'video.view_settings.show_own_streams': 'Mostrar meus streams',
   'video.viewer_limit': 'Limite de espectadores',
   'video.viewer_limit.info': 'Quantidade máxima de espectadores. 0 = ilimitado.',

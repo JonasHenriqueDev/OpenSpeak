@@ -59,6 +59,14 @@ function defaultServerUrl() {
 function renderLogin(message = '') {
   const nick = h('input.input', { value: entryParams.get('nickname')?.slice(0, 32) || settings.get('nickname'), placeholder: 'Ex.: Jonas', maxLength: 32, required: true });
   const server = h('input.input', { value: deployment.cloudSignaling ? defaultServerUrl() : settings.get('serverUrl') || defaultServerUrl() });
+  // O campo do servidor só aparece a pedido, ou se já há outro servidor salvo (Tailscale sempre pede o endereço).
+  const serverField = h('label.field', h('span.field-label', t('app.server')), server);
+  const changeServer = h('button.btn.ghost', {
+    type: 'button',
+    on: { click: () => { serverField.hidden = false; changeServer.hidden = true; server.focus(); } },
+  }, t('app.server.change'));
+  serverField.hidden = !deployment.tailscaleOnly && server.value === defaultServerUrl();
+  changeServer.hidden = !serverField.hidden;
   const password = h('input.input', { type: 'password', value: settings.get('serverPassword'), placeholder: 'Deixe vazio se o servidor não tiver senha', autocomplete: 'current-password' });
   const tailnetIp = h('input.input', { value: settings.get('tailnetIp') || '', placeholder: '100.x.x.x deste PC', required: !!deployment.cloudSignaling });
   const ipHint = h('small.muted', 'Tentando detectar o IP Tailscale…');
@@ -112,11 +120,12 @@ function renderLogin(message = '') {
   h('div.login-logo', icon('logo', 'big'), h('h1', 'OpenSpeak')),
   deployment.tailscaleOnly ? h('p.login-status', deployment.cloudSignaling ? 'Tailscale obrigatório na mesma tailnet. O Vercel negocia as conexões; vídeo e áudio usam a rede P2P.' : 'Tailscale obrigatório: conecte este PC à mesma tailnet do servidor. A sessão abre no endereço privado da rede.') : null,
   h('label.field', h('span.field-label', t('app.nickname')), nick),
-  deployment.cloudSignaling ? null : h('label.field', h('span.field-label', t('app.server')), server),
+  deployment.cloudSignaling ? null : serverField,
   deployment.cloudSignaling ? null : h('label.field', h('span.field-label', 'Senha do servidor'), password),
   deployment.cloudSignaling ? h('label.field', h('span.field-label', 'IP Tailscale deste PC'), tailnetIp, ipHint) : null,
   deployment.cloudSignaling ? h('button.btn.ghost', { type: 'button', on: { click: detectIp } }, 'Detectar IP automaticamente') : null,
   submit,
+  deployment.cloudSignaling ? null : changeServer,
   status,
   installerLink(),
   repoLink());

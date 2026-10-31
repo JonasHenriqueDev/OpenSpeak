@@ -12,6 +12,8 @@ Rectangle {
     property bool busy: false
     property bool autoTried: false
     property bool advancedExpanded: false
+    // O campo do servidor só aparece a pedido, ou se já há outro servidor salvo.
+    property bool serverExpanded: Settings.serverUrl !== Settings.defaultServerUrl
     color: Theme.background
     readonly property string status: Server.tailnetStatus
     readonly property bool tailnetReady: status === "running"
@@ -31,8 +33,8 @@ Rectangle {
     }
     function enterServer() {
         // Capture todos antes de alterar Settings: os bindings reavaliam no changed.
-        const nick = nickField.text.trim(), url = serverField.text.trim(), password = passwordField.text
-        if (!nick.length || !url.length) return
+        const nick = nickField.text.trim(), url = serverField.text.trim() || Settings.defaultServerUrl, password = passwordField.text
+        if (!nick.length) return
         Settings.serverUrl = url; Settings.serverPassword = password; Settings.nickname = nick; Settings.connectionMode = "server"
         busy = true; root.connecting()
         Server.connectTo(url, nick, Settings.uid, password)
@@ -83,13 +85,14 @@ Rectangle {
                     focus: true
                     onAccepted: root.enterServer()
                 }
-                Label { text: "Endereço do servidor"; color: Theme.textDim }
+                Label { visible: root.serverExpanded; text: "Endereço do servidor"; color: Theme.textDim }
                 TextField {
                     id: serverField
                     objectName: "serverAddress"
+                    visible: root.serverExpanded
                     Layout.fillWidth: true
                     text: Settings.serverUrl
-                    placeholderText: "wss://seu-servidor/ws"
+                    placeholderText: Settings.defaultServerUrl
                     onAccepted: root.enterServer()
                 }
                 Label { text: "Senha do servidor"; color: Theme.textDim }
@@ -107,8 +110,16 @@ Rectangle {
                     Layout.fillWidth: true
                     text: I18n.t("app.connect")
                     highlighted: true
-                    enabled: !root.busy && nickField.text.trim().length > 0 && serverField.text.trim().length > 0
+                    enabled: !root.busy && nickField.text.trim().length > 0
                     onClicked: root.enterServer()
+                }
+                Button {
+                    objectName: "changeServerButton"
+                    visible: !root.serverExpanded
+                    flat: true
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "Alterar servidor"
+                    onClicked: { root.serverExpanded = true; serverField.forceActiveFocus() }
                 }
                 Button {
                     objectName: "advancedToggle"

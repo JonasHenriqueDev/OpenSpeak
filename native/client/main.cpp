@@ -204,7 +204,7 @@ int main(int argc, char *argv[])
             if (panel.startsWith("login")) {
                 auto *connectButton = findVisualItem(window->contentItem(), QStringLiteral("serverConnectButton"));
                 auto *advanced = findVisualItem(window->contentItem(), QStringLiteral("advancedOptions"));
-                auto *address = findVisualItem(window->contentItem(), QStringLiteral("serverAddress"));
+                auto *address = findVisualItem(window->contentItem(), QStringLiteral("changeServerButton"));
                 valid = valid && connectButton && connectButton->isVisible() && address && address->isVisible()
                     && advanced && advanced->isVisible() == (panel == "login-advanced");
             } else if (panel == "startup") {

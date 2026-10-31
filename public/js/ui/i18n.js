@@ -6,6 +6,7 @@ const STRINGS = {
   'app.disconnect': 'Desconectar',
   'app.nickname': 'Apelido',
   'app.server': 'Endereço do servidor',
+  'app.server.change': 'Alterar servidor',
   'app.connecting': 'Conectando...',
   'app.disconnected': 'Desconectado do servidor',
   'app.contacts.add': 'Adicionar aos contatos',

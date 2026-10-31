@@ -1,3 +1,9 @@
+# OpenSpeak 1.0.32 — botões de organizar e desligar
+
+- **Organizar automaticamente** agora é um ícone sempre à vista na barra inferior,
+  que acende quando há previews fora da grade.
+- **Desconectar** virou um ícone de desligar.
+
 # OpenSpeak 1.0.31 — previews que se ajustam sozinhos
 
 - Os **previews não se sobrepõem mais:** ao mover ou redimensionar um, os outros

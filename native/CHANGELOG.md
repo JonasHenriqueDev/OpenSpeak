@@ -1,3 +1,15 @@
+# OpenSpeak 1.0.22 — perfis, cursor na transmissão e tela inicial mais simples
+
+- **Perfis:** defina uma senha em Preferências › Perfil para reservar o seu
+  apelido e personalizar foto, descrição, cor e nome de exibição. Sem senha,
+  tudo continua como antes. Exige um servidor atualizado.
+- A **transmissão de tela inteira** agora mostra o cursor do mouse.
+- A **prévia da transmissão** fecha sozinha quando um app em tela cheia (jogo
+  etc.) entra em foco, para economizar recursos. Um botão mostra a prévia de
+  novo, e essa escolha vale até o fim da transmissão.
+- A **tela inicial** ficou mais simples: o app já usa o servidor padrão, e o
+  botão **Alterar servidor** mostra o campo de endereço.
+
 # OpenSpeak 1.0.21 — tela cheia no monitor certo desde a primeira vez
 
 - Corrigido: a **tela cheia** podia abrir no monitor principal na primeira vez

@@ -274,6 +274,7 @@ QJsonObject VirtualServer::cmdLogin(Client &client, const QJsonObject &args)
         fail(rc::InvalidArgs, QStringLiteral("nickname e uid são obrigatórios"));
     if (!m_password.isEmpty() && !samePassword(args.value("password").toString(), m_password))
         fail(rc::AccessDenied, QStringLiteral("Senha do servidor incorreta."));
+    m_profiles.refresh();
     const ProfileStore::Profile *profile = m_profiles.find(nickname);
     if (profile) {
         checkProfilePassword(ProfileStore::key(nickname), args.value("profilePassword"));
@@ -360,6 +361,7 @@ QJsonObject VirtualServer::cmdSetProfilePassword(Client &client, const QJsonObje
     const QString password = args.value("password").toString();
     if (password.size() < 4 || password.size() > 128)
         fail(rc::InvalidArgs, QStringLiteral("a senha deve ter de 4 a 128 caracteres"));
+    m_profiles.refresh();
     if (!client.profile.isEmpty()) {
         checkProfilePassword(client.profile, args.value("currentPassword"));
         m_profiles.setPassword(client.profile, password);
@@ -376,6 +378,7 @@ QJsonObject VirtualServer::cmdUpdateProfile(Client &client, const QJsonObject &a
 {
     if (client.profile.isEmpty())
         fail(rc::ProfileRequired);
+    m_profiles.refresh();
     ProfileStore::Profile profile = *m_profiles.find(client.nickname);
     if (args.contains("displayName"))
         profile.displayName = cleanString(args.value("displayName"), 32);

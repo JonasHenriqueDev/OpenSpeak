@@ -2,7 +2,8 @@
 
 Painel em `https://openspeak.duckdns.org/monitor/`, protegido por HTTP Basic Auth no Caddy.
 O usuário do painel é `admin`; a senha é fornecida separadamente e não fica no repositório.
-Além da leitura, o painel só troca a senha do servidor (sem ações de moderação).
+Além da leitura, o painel só troca a senha do servidor e gera senhas novas de perfis
+(sem ações de moderação).
 
 O servidor nativo escreve um snapshot local atômico a cada 2 segundos quando
 `OPENSPEAK_METRICS_FILE` está definido. O snapshot inclui somente participantes
@@ -74,6 +75,13 @@ Para trocar a senha, gere outro hash bcrypt, substitua o hash no Caddyfile,
 valide e recarregue o Caddy. A senha do painel é independente do admin cloud/Vercel.
 HTTP Basic Auth usa o diálogo de credenciais do navegador e pode permanecer em
 cache até fechar a sessão do navegador.
+
+## Perfis
+
+O painel **Perfis** lista os apelidos reclamados (`OPENSPEAK_PROFILES_FILE`, padrão
+`/var/lib/openspeak/profiles.json`; os hashes nunca vão para o navegador). **Gerar nova
+senha** grava uma senha aleatória no arquivo e a mostra uma única vez; o servidor relê o
+arquivo no login seguinte, sem reiniciar. A pessoa troca a senha em Preferências › Perfil.
 
 ## Senha do servidor
 

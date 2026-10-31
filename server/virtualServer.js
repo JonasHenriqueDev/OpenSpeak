@@ -169,6 +169,7 @@ export class VirtualServer {
       const nickname = cleanString(args.nickname, 32);
       const uid = cleanString(args.uid, 64);
       if (!nickname || !uid) fail(ReturnCode.INVALID_ARGS, 'nickname e uid são obrigatórios');
+      this.profiles?.refresh();
       const profile = this.profiles?.get(nickname);
       if (profile) {
         this.#checkProfilePassword(profileKey(nickname), args.profilePassword);
@@ -220,6 +221,7 @@ export class VirtualServer {
       if (!this.profiles) fail(ReturnCode.MODE_NOT_SUPPORTED);
       const password = typeof args.password === 'string' ? args.password : '';
       if (password.length < 4 || password.length > 128) fail(ReturnCode.INVALID_ARGS, 'a senha deve ter de 4 a 128 caracteres');
+      this.profiles.refresh();
       if (client.profile) {
         this.#checkProfilePassword(client.profile, args.currentPassword);
         this.profiles.setPassword(client.profile, password);
@@ -234,6 +236,7 @@ export class VirtualServer {
     updateprofile(client, args) {
       if (!this.profiles) fail(ReturnCode.MODE_NOT_SUPPORTED);
       if (!client.profile) fail(ReturnCode.PROFILE_REQUIRED);
+      this.profiles.refresh();
       const fields = {};
       if ('displayName' in args) fields.displayName = cleanString(args.displayName, 32);
       if ('description' in args) fields.description = cleanString(args.description, 190);

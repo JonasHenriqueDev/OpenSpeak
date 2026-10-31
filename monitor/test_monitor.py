@@ -11,6 +11,25 @@ spec.loader.exec_module(monitor)
 
 
 class MonitoringTests(unittest.TestCase):
+    def test_profile_hash_matches_servers(self):
+        stored = monitor.hash_password('senha', b'0123456789abcdef', 1000)
+        self.assertEqual(stored, 'pbkdf2-sha256$1000$MDEyMzQ1Njc4OWFiY2RlZg==$yNWjOB5+y96EHOKAn3xp3CM7YwtRLFxNMPHfhb8vN8c=')
+
+    def test_profile_reset_writes_new_hash_and_lists_without_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            monitor.PROFILES_FILE = Path(folder) / 'profiles.json'
+            monitor.PROFILES_FILE.write_text(json.dumps({'version': 1, 'profiles': {'jonas': {
+                'nickname': 'Jonas', 'password': 'antiga', 'displayName': 'J', 'avatar': 'x'}}}), encoding='utf-8')
+            self.assertEqual(monitor.list_profiles(), [{'nickname': 'Jonas', 'displayName': 'J'}])
+            nickname, password = monitor.reset_profile_password(' JONAS ')
+            self.assertEqual(nickname, 'Jonas')
+            self.assertGreaterEqual(len(password), 12)
+            profile = monitor.read_profiles()['profiles']['jonas']
+            self.assertTrue(profile['password'].startswith('pbkdf2-sha256$50000$'))
+            self.assertEqual(profile['avatar'], 'x')
+            with self.assertRaises(ValueError):
+                monitor.reset_profile_password('ninguem')
+
     def test_browser_and_native_identification(self):
         edge = monitor.identify_client({'userAgent': 'Mozilla/5.0 (Windows NT 10.0) Chrome/140.0 Safari/537.36 Edg/140.0'})
         self.assertEqual(edge['name'], 'Web · Edge')

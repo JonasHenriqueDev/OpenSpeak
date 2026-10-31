@@ -2,6 +2,7 @@
 // Perfis: um apelido vira perfil ao ganhar uma senha. Os dados ficam num JSON no
 // servidor, no mesmo formato de server/profileStore.js.
 
+#include <QDateTime>
 #include <QHash>
 #include <QString>
 
@@ -25,6 +26,8 @@ public:
 
     /// Arquivo JSON dos perfis; vazio = só na memória. Carrega o que já existir.
     void setFile(const QString &file);
+    /// Relê o arquivo se ele mudou por fora (o monitor gera senhas novas nele).
+    void refresh();
 
     static QString key(const QString &nickname) { return nickname.trimmed().toLower(); }
     static QString hashPassword(const QString &password, const QByteArray &salt, int iterations);
@@ -43,10 +46,13 @@ private:
         int count = 0;
         qint64 lockedUntil = 0;
     };
-    void save() const;
+    void load();
+    void save();
 
     std::function<qint64()> m_now;
     QString m_file;
+    QDateTime m_fileTime;
+    qint64 m_fileSize = -1;
     QHash<QString, Profile> m_profiles;
     QHash<QString, Failure> m_failures;
 };

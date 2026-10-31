@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { VirtualServer } from '../server/virtualServer.js';
 import { StreamAccess, LeaveReason } from '../server/protocol.js';
 import { ProfileStore, hashPassword, checkPassword } from '../server/profileStore.js';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -322,6 +322,21 @@ test('perfil: sobrevive a reiniciar o servidor', () => {
   const clid = second.server.connect();
   second.server.handle(clid, 'login', { nickname: 'Jonas', uid: 'u', profilePassword: 'segredo' });
   assert.equal(second.server.view(clid).clients[0].color, '#112233');
+});
+
+test('perfil: senha gerada pelo monitor vale sem reiniciar o servidor', () => {
+  const file = path.join(mkdtempSync(path.join(tmpdir(), 'openspeak-')), 'profiles.json');
+  const { server, login } = profileSetup(file);
+  server.handle(login('Jonas'), 'setprofilepassword', { password: 'segredo' });
+
+  const data = JSON.parse(readFileSync(file, 'utf8'));
+  data.profiles.jonas.password = hashPassword('gerada');
+  writeFileSync(file, JSON.stringify(data));
+  const later = new Date(Date.now() + 5000);
+  utimesSync(file, later, later);
+
+  assert.throws(() => server.handle(server.connect(), 'login', { nickname: 'Jonas', uid: 'u', profilePassword: 'segredo' }), { code: 'profile_password' });
+  server.handle(server.connect(), 'login', { nickname: 'Jonas', uid: 'u', profilePassword: 'gerada' });
 });
 
 test('perfil: sem ProfileStore o servidor não anuncia PROFILES', () => {

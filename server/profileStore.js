@@ -33,10 +33,24 @@ export class ProfileStore {
     this.now = now;
     this.profiles = new Map();
     this.failures = new Map(); // key -> { count, lockedUntil }
-    if (file && fs.existsSync(file)) {
-      const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-      this.profiles = new Map(Object.entries(data.profiles ?? {}));
-    }
+    this.fileStamp = '';
+    this.refresh();
+  }
+
+  /** Relê o arquivo se ele mudou por fora (o monitor gera senhas novas nele). */
+  refresh() {
+    if (!this.file || !fs.existsSync(this.file)) return;
+    const stamp = this.#stamp();
+    if (stamp === this.fileStamp) return;
+    const data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+    this.profiles = new Map(Object.entries(data.profiles ?? {}));
+    this.failures.clear();
+    this.fileStamp = stamp;
+  }
+
+  #stamp() {
+    const { mtimeMs, size } = fs.statSync(this.file);
+    return `${mtimeMs}:${size}`;
   }
 
   get(nickname) {
@@ -80,6 +94,7 @@ export class ProfileStore {
       const temp = `${this.file}.tmp`;
       fs.writeFileSync(temp, JSON.stringify({ version: 1, profiles: Object.fromEntries(this.profiles) }), { mode: 0o600 });
       fs.renameSync(temp, this.file);
+      this.fileStamp = this.#stamp();
     } catch (err) {
       console.warn('[openspeak] não foi possível gravar os perfis:', err.message);
     }

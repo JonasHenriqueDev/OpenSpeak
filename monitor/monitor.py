@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """Linux host metrics + native OpenSpeak snapshot. Bind only to loopback behind Caddy auth."""
+import base64
 import datetime as dt
+import hashlib
 import json
 import os
 import re
 from pathlib import Path
+import secrets
 import shutil
 import sqlite3
 import threading
@@ -20,6 +23,9 @@ SNAPSHOT = Path(os.environ.get('OPENSPEAK_METRICS_FILE', '/run/openspeak/metrics
 # O servidor nativo relê este arquivo a cada login (OPENSPEAK_PASSWORD_FILE).
 PASSWORD_FILE = Path(os.environ.get('OPENSPEAK_PASSWORD_FILE', str(STATE / 'server-password')))
 PASSWORD_MIN, PASSWORD_MAX = 4, 128
+# Perfis do servidor (mesmo arquivo e mesmo hash de native/server/ProfileStore.cpp); ele relê o arquivo se mudar.
+PROFILES_FILE = Path(os.environ.get('OPENSPEAK_PROFILES_FILE', '/var/lib/openspeak/profiles.json'))
+PROFILE_ITERATIONS = 50_000
 TZ = ZoneInfo(os.environ.get('MONITOR_TIMEZONE', 'America/Sao_Paulo'))
 INTERVAL = 5
 RETENTION = 7 * 86400
@@ -88,6 +94,42 @@ def write_password(password):
     os.chmod(temporary, 0o640)
     os.replace(temporary, PASSWORD_FILE)
     return password
+
+
+def read_profiles():
+    """Dicionário completo do arquivo, com os hashes: não mande direto para o navegador."""
+    try:
+        return json.loads(PROFILES_FILE.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        return {'version': 1, 'profiles': {}}
+
+
+def list_profiles():
+    profiles = read_profiles()['profiles'].values()
+    return sorted(({'nickname': p.get('nickname', ''), 'displayName': p.get('displayName', '')} for p in profiles),
+                  key=lambda p: p['nickname'].lower())
+
+
+def hash_password(password, salt=None, iterations=PROFILE_ITERATIONS):
+    salt = salt or secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, iterations, 32)
+    return f'pbkdf2-sha256${iterations}${base64.b64encode(salt).decode()}${base64.b64encode(digest).decode()}'
+
+
+def reset_profile_password(nickname):
+    """Grava uma senha aleatória no perfil e devolve (apelido, senha): ela só existe nesta resposta."""
+    key = nickname.strip().lower() if isinstance(nickname, str) else ''
+    data = read_profiles()
+    profile = data['profiles'].get(key)
+    if not profile:
+        raise ValueError('Perfil não encontrado.')
+    password = secrets.token_urlsafe(9)
+    profile['password'] = hash_password(password)
+    temporary = PROFILES_FILE.with_name(PROFILES_FILE.name + '.tmp')
+    temporary.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    temporary.chmod(0o600)
+    os.replace(temporary, PROFILES_FILE)
+    return profile.get('nickname', key), password
 
 
 def database():
@@ -297,7 +339,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         if url.path in ('/monitor', '/monitor/'):
             self.reply(200, (ROOT / 'index.html').read_bytes(), 'text/html; charset=utf-8')
-        elif url.path in ('/monitor/dashboard.js', '/monitor/participants.js', '/monitor/password.js'):
+        elif url.path in ('/monitor/dashboard.js', '/monitor/participants.js', '/monitor/password.js', '/monitor/profiles.js'):
             self.reply(200, (ROOT / url.path.rsplit('/', 1)[1]).read_bytes(), 'text/javascript; charset=utf-8')
         elif url.path == '/monitor/api/status':
             with lock:
@@ -308,6 +350,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, json.dumps(data).encode(), 'application/json')
         elif url.path == '/monitor/api/password':
             self.reply(200, json.dumps({'password': read_password()}).encode(), 'application/json')
+        elif url.path == '/monitor/api/profiles':
+            try:
+                self.reply(200, json.dumps({'profiles': list_profiles()}).encode(), 'application/json')
+            except (OSError, ValueError):
+                self.reply(500, json.dumps({'error': 'Não foi possível ler os perfis.'}).encode(), 'application/json')
         elif url.path == '/monitor/api/history':
             hours = parse_qs(url.query).get('hours', ['1'])[0]
             if hours not in ('1', '24', '168'):
@@ -323,7 +370,8 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(404, b'Not found', 'text/plain')
 
     def do_POST(self):
-        if urlsplit(self.path).path != '/monitor/api/password':
+        path = urlsplit(self.path).path
+        if path not in ('/monitor/api/password', '/monitor/api/profiles/reset'):
             self.reply(404, b'Not found', 'text/plain')
             return
         # O Basic Auth vai junto em qualquer POST do navegador: exija o cabeçalho
@@ -337,7 +385,13 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get('Content-Length') or 0)
             if length > 4096:
                 raise ValueError('Pedido grande demais.')
-            password = write_password(json.loads(self.rfile.read(length) or b'{}').get('password'))
+            body = json.loads(self.rfile.read(length) or b'{}')
+            if path == '/monitor/api/profiles/reset':
+                nickname, password = reset_profile_password(body.get('nickname'))
+                print('Senha de perfil gerada pelo painel', flush=True)
+                self.reply(200, json.dumps({'nickname': nickname, 'password': password}).encode(), 'application/json')
+                return
+            password = write_password(body.get('password'))
         except (ValueError, AttributeError) as exc:
             self.reply(400, json.dumps({'error': str(exc) or 'Pedido inválido.'}).encode(), 'application/json')
             return

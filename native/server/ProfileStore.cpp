@@ -57,9 +57,26 @@ ProfileStore::ProfileStore(std::function<qint64()> now)
 void ProfileStore::setFile(const QString &file)
 {
     m_file = file;
-    QFile in(file);
-    if (file.isEmpty() || !in.open(QIODevice::ReadOnly))
+    load();
+}
+
+void ProfileStore::refresh()
+{
+    const QFileInfo info(m_file);
+    if (!m_file.isEmpty() && info.exists() && (info.lastModified() != m_fileTime || info.size() != m_fileSize))
+        load();
+}
+
+void ProfileStore::load()
+{
+    QFile in(m_file);
+    if (m_file.isEmpty() || !in.open(QIODevice::ReadOnly))
         return;
+    const QFileInfo info(m_file);
+    m_fileTime = info.lastModified();
+    m_fileSize = info.size();
+    m_failures.clear();
+    m_profiles.clear();
     const QJsonObject profiles = QJsonDocument::fromJson(in.readAll()).object().value("profiles").toObject();
     for (auto it = profiles.begin(); it != profiles.end(); ++it) {
         const QJsonObject p = it.value().toObject();
@@ -137,7 +154,7 @@ ProfileStore::Verify ProfileStore::verify(const QString &key, const QString &pas
     return Verify::Wrong;
 }
 
-void ProfileStore::save() const
+void ProfileStore::save()
 {
     if (m_file.isEmpty())
         return;
@@ -155,6 +172,9 @@ void ProfileStore::save() const
         return;
     }
     QFile::setPermissions(m_file, QFile::ReadOwner | QFile::WriteOwner);
+    const QFileInfo info(m_file);
+    m_fileTime = info.lastModified();
+    m_fileSize = info.size();
 }
 
 } // namespace openspeak

@@ -2,6 +2,9 @@
 
 #include "VirtualServer.h"
 
+#include <QDateTime>
+#include <QFile>
+#include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -178,6 +181,34 @@ private slots:
         server->setProfilesFile(file);
         const QJsonObject view = server->handle(server->connect(), "login", {{"nickname", "Jonas"}, {"uid", "u"}, {"profilePassword", "segredo"}});
         QCOMPARE(view.value("clients").toArray().first().toObject().value("color").toString(), QStringLiteral("#112233"));
+    }
+
+    // O monitor gera senhas novas no arquivo: o servidor precisa enxergá-las sem reiniciar.
+    void profileReloadsFileChangedOutside()
+    {
+        QTemporaryDir dir;
+        const QString file = dir.filePath("profiles.json");
+        server->setProfilesFile(file);
+        const int jonas = login("Jonas");
+        server->handle(jonas, "setprofilepassword", {{"password", "segredo"}});
+
+        QFile in(file);
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        QJsonObject root = QJsonDocument::fromJson(in.readAll()).object();
+        in.close();
+        QJsonObject profiles = root.value("profiles").toObject();
+        QJsonObject profile = profiles.value("jonas").toObject();
+        profile["password"] = ProfileStore::hashPassword("gerada", "0123456789abcdef", 1000);
+        profiles["jonas"] = profile;
+        root["profiles"] = profiles;
+        QFile out(file);
+        QVERIFY(out.open(QIODevice::WriteOnly));
+        out.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+        out.setFileTime(QDateTime::currentDateTime().addSecs(5), QFileDevice::FileModificationTime);
+        out.close();
+
+        QCOMPARE(expectError(server->connect(), "login", {{"nickname", "Jonas"}, {"uid", "u"}, {"profilePassword", "segredo"}}), rc::ProfilePassword);
+        QCOMPARE(expectError(server->connect(), "login", {{"nickname", "Jonas"}, {"uid", "u"}, {"profilePassword", "gerada"}}), QStringLiteral("<sem erro>"));
     }
 
     // Mesmo vetor de test/server.test.js: os dois servidores leem o arquivo um do outro.

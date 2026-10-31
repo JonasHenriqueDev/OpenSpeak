@@ -4,7 +4,7 @@ import { h, replaceChildren } from './dom.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
 import { StreamTile } from './StreamTile.js';
-import { gridLayout, focusLayout } from '../video/layout.js';
+import { gridLayout, focusLayout, resizeRect, rectToFraction, rectFromFraction } from '../video/layout.js';
 import { Severity } from '../core/protocol.js';
 
 const GAP = 8;
@@ -26,6 +26,9 @@ export class StreamArea {
     this.focusId = null;
     this.offset = 0;
     this.perPage = 0;
+    // Previews ajustados à mão, em frações da área (ver rectToFraction).
+    this.customRects = new Map();
+    this.topZ = 0;
 
     this.stage = h('div.stream-stage');
     this.empty = h('div.stream-empty');
@@ -71,6 +74,7 @@ export class StreamArea {
       if (!ids.has(id)) {
         tile.destroy();
         this.tiles.delete(id);
+        this.customRects.delete(id);
       }
     }
     if (this.focusId && !ids.has(this.focusId)) this.focusId = null;
@@ -120,15 +124,32 @@ export class StreamArea {
     const visible = new Set();
     for (const rect of result.tiles) {
       const item = items[rect.index];
-      const tile = this.tiles.get(item.info.streamIdentifier);
-      tile.setRect(rect, rect.focused);
+      const id = item.info.streamIdentifier;
+      const tile = this.tiles.get(id);
+      const custom = focusIndex < 0 ? this.customRects.get(id) : null;
+      tile.setRect(custom ? rectFromFraction(custom, width, height) : rect, rect.focused);
+      tile.setArrangeable(focusIndex < 0);
       tile.setHidden(false);
-      visible.add(item.info.streamIdentifier);
+      visible.add(id);
     }
     for (const [id, tile] of this.tiles) if (!visible.has(id)) tile.setHidden(true);
     const pageable = focusIndex >= 0 ? items.length - 1 : items.length;
     this.pagerPrev.hidden = this.offset <= 0;
     this.pagerNext.hidden = this.offset + this.perPage >= pageable || this.perPage === 0;
+  }
+
+  /** Traz o preview para a frente e devolve o retângulo em que o gesto começa. */
+  #beginArrange(id) {
+    const tile = this.tiles.get(id);
+    tile.el.style.zIndex = String(++this.topZ);
+    return tile.rect;
+  }
+
+  #setCustomRect(id, rect) {
+    const { clientWidth: width, clientHeight: height } = this.stage;
+    this.customRects.set(id, rectToFraction(rect, width, height));
+    this.tiles.get(id).setRect(rect);
+    if (this.customRects.size === 1) this.#renderToolbar();
   }
 
   #page(dir) {
@@ -165,9 +186,9 @@ export class StreamArea {
       }, icon('users'), String(pendingTotal)) : null,
       h('span.toolbar-count', t('video.streams', { count: items.length })),
       h('span.spacer'),
-      this.focusId ? h('button.btn.ghost', {
+      this.focusId || this.customRects.size ? h('button.btn.ghost', {
         title: t('video.layout.auto.tooltip'),
-        on: { click: () => { this.focusId = null; this.offset = 0; this.render(); } },
+        on: { click: () => { this.focusId = null; this.offset = 0; this.customRects.clear(); this.render(); } },
       }, icon('grid'), t('video.layout.auto')) : null,
       hidden.length ? h('button.btn.ghost', {
         on: { click: ev => this.actions.manageHidden(ev.currentTarget) },
@@ -202,6 +223,9 @@ export class StreamArea {
         this.offset = 0;
         this.render();
       },
+      beginArrange: id => this.#beginArrange(id),
+      resizeTile: (id, start, left, top, dx, dy) => this.#setCustomRect(id,
+        resizeRect(start, left, top, dx, dy, this.stage.clientWidth, this.stage.clientHeight)),
     };
   }
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gridLayout, focusLayout, MIN_TILE_HEIGHT } from '../public/js/video/layout.js';
+import { gridLayout, focusLayout, resizeRect, rectToFraction, rectFromFraction, MIN_TILE_HEIGHT, MIN_CUSTOM_WIDTH } from '../public/js/video/layout.js';
 
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
@@ -45,4 +45,27 @@ test('foco: destaque em cima e faixa abaixo', () => {
   const strip = tiles.filter(t => !t.focused);
   assert.equal(strip.length, 3);
   for (const t of strip) assert.ok(t.y >= main.y + main.h);
+});
+
+test('redimensionar: mantém a proporção e o canto oposto', () => {
+  const rect = { x: 300, y: 200, w: 320, h: 180 };
+  assert.deepEqual(resizeRect(rect, false, false, 160, 0, 1000, 800), { x: 300, y: 200, w: 480, h: 270 });
+  assert.deepEqual(resizeRect(rect, true, true, -160, 0, 1000, 800), { x: 140, y: 110, w: 480, h: 270 });
+});
+
+test('redimensionar: respeita a área e o tamanho mínimo', () => {
+  const rect = { x: 100, y: 100, w: 320, h: 180 };
+  const big = resizeRect(rect, false, false, 5000, 0, 1000, 800);
+  assert.equal(big.x + big.w, 1000);
+  assert.ok(big.y + big.h <= 800);
+  assert.equal(resizeRect(rect, false, false, -5000, 0, 1000, 800).w, MIN_CUSTOM_WIDTH);
+});
+
+test('posição guardada em frações acompanha a área e não sai dela', () => {
+  const f = rectToFraction({ x: 800, y: 450, w: 320, h: 180 }, 1600, 900);
+  assert.equal(rectFromFraction(f, 800, 450).w, 160);
+  const small = rectFromFraction(f, 1600, 500);
+  assert.ok(small.x + small.w <= 1600 && small.y + small.h <= 500);
+  const short = rectFromFraction(rectToFraction({ x: 0, y: 0, w: 1600, h: 900 }, 1600, 900), 1600, 300);
+  assert.equal(short.h, 300);
 });

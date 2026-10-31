@@ -248,6 +248,16 @@ private slots:
                 QVERIFY(t.rect.height() >= MinTileHeight);
             }
         }
+        // Redimensionar: proporção e canto oposto fixos, dentro da área, com tamanho mínimo.
+        const QRectF rect(300, 200, 320, 180);
+        QCOMPARE(resizeRect(rect, false, false, 160, 0, 1000, 800), QRectF(300, 200, 480, 270));
+        QCOMPARE(resizeRect(rect, true, true, -160, 0, 1000, 800), QRectF(140, 110, 480, 270));
+        QCOMPARE(resizeRect(rect, false, false, 5000, 0, 1000, 800).right(), 1000.0);
+        QCOMPARE(resizeRect(rect, false, false, -5000, 0, 1000, 800).width(), MinCustomWidth);
+        const QRectF fitted = rectFromFraction(0.5, 0.5, 0.2, LayoutAspect, 1600, 500);
+        QVERIFY(fitted.right() <= 1600 && fitted.bottom() <= 500);
+        QCOMPARE(rectFromFraction(0, 0, 1, LayoutAspect, 1600, 300).height(), 300.0);
+
         auto paged = gridLayout(50, 600, 300);
         QVERIFY(paged.perPage < 50);
         auto focus = focusLayout(4, 2, 1280, 800);

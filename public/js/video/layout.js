@@ -6,6 +6,7 @@
 export const ASPECT = 16 / 9;
 export const MIN_TILE_HEIGHT = 100;
 const STRIP_HEIGHT = 100;
+export const MIN_CUSTOM_WIDTH = 160;
 
 function fit(count, rows, width, height, gap) {
   const cols = Math.ceil(count / rows);
@@ -94,4 +95,38 @@ export function focusLayout(count, focusIndex, width, height, { gap = 8, offset 
     tiles.push({ x: Math.round((width - rowW) / 2 + i * (sw + gap)), y: h + gap, w: sw, h: sh, index });
   });
   return { tiles, perPage };
+}
+
+/**
+ * Redimensiona um preview por um canto, mantendo a proporção e o canto oposto
+ * no lugar. `left`/`top` dizem qual canto está sendo arrastado.
+ */
+export function resizeRect(rect, left, top, dx, dy, width, height, minWidth = MIN_CUSTOM_WIDTH) {
+  const aspect = rect.w / rect.h;
+  const anchorX = left ? rect.x + rect.w : rect.x;
+  const anchorY = top ? rect.y + rect.h : rect.y;
+  // Vale o eixo que mais se afastou do tamanho inicial.
+  const byWidth = rect.w + (left ? -dx : dx);
+  const byHeight = (rect.h + (top ? -dy : dy)) * aspect;
+  const wanted = Math.abs(byWidth - rect.w) >= Math.abs(byHeight - rect.w) ? byWidth : byHeight;
+  const room = Math.min(left ? anchorX : width - anchorX, (top ? anchorY : height - anchorY) * aspect);
+  const w = Math.min(Math.max(wanted, minWidth), room);
+  const h = w / aspect;
+  return { x: left ? anchorX - w : anchorX, y: top ? anchorY - h : anchorY, w, h };
+}
+
+/** Guarda um preview em frações da área, para acompanhar o tamanho da janela. */
+export function rectToFraction(rect, width, height) {
+  return { x: rect.x / width, y: rect.y / height, w: rect.w / width, aspect: rect.w / rect.h };
+}
+
+/** Volta às coordenadas da área atual, sempre inteiro dentro dela. */
+export function rectFromFraction(f, width, height) {
+  const w = Math.min(f.w * width, width, height * f.aspect);
+  const h = w / f.aspect;
+  return {
+    x: Math.min(Math.max(0, f.x * width), width - w),
+    y: Math.min(Math.max(0, f.y * height), height - h),
+    w, h,
+  };
 }

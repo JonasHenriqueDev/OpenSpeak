@@ -11,8 +11,13 @@ Rectangle {
     property string streamId
     property var data_
     property bool focused: false
+    // Ajuste manual só na grade: com um stream em foco a organização é a do foco.
+    property bool arrangeable: true
+    property bool arranging: false
 
     signal toggleFocus()
+    signal arrangeBegun()
+    signal resizeDragged(bool left, bool top, real dx, real dy)
     signal editRequested()
     signal changeSourceRequested()
     signal viewersRequested()
@@ -140,6 +145,36 @@ Rectangle {
     TapHandler {
         acceptedButtons: Qt.LeftButton
         onDoubleTapped: tile.openFullscreen()
+    }
+
+    // Cantos que redimensionam o preview. A conta usa a posição na janela porque
+    // o próprio quadro se mexe durante o arrasto.
+    Repeater {
+        model: tile.arrangeable ? [Qt.TopEdge | Qt.LeftEdge, Qt.TopEdge | Qt.RightEdge,
+                                   Qt.BottomEdge | Qt.LeftEdge, Qt.BottomEdge | Qt.RightEdge] : []
+        delegate: MouseArea {
+            required property int modelData
+            readonly property bool edgeLeft: !!(modelData & Qt.LeftEdge)
+            readonly property bool edgeTop: !!(modelData & Qt.TopEdge)
+            property point pressedAt
+            z: 1000
+            x: edgeLeft ? 0 : parent.width - width
+            y: edgeTop ? 0 : parent.height - height
+            width: 12
+            height: 12
+            cursorShape: edgeLeft === edgeTop ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor
+            onPressed: mouse => {
+                pressedAt = mapToItem(null, mouse.x, mouse.y)
+                tile.arranging = true
+                tile.arrangeBegun()
+            }
+            onPositionChanged: mouse => {
+                const at = mapToItem(null, mouse.x, mouse.y)
+                tile.resizeDragged(edgeLeft, edgeTop, at.x - pressedAt.x, at.y - pressedAt.y)
+            }
+            onReleased: tile.arranging = false
+            onCanceled: tile.arranging = false
+        }
     }
 
     // ---------------------------------------------------------- tela cheia

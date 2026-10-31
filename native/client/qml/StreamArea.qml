@@ -19,6 +19,10 @@ Rectangle {
     property var rects: ({})
     property int perPage: 0
     readonly property int gap: 8
+    // Previews ajustados à mão: streamIdentifier -> frações da área (rectToFraction).
+    property var customRects: ({})
+    readonly property bool hasCustomRects: Object.keys(customRects).length > 0
+    property int topZ: 0
     readonly property int previewScale: Settings.previewScale
     onPreviewScaleChanged: relayout()
 
@@ -70,6 +74,25 @@ Rectangle {
         }
         if (focusId && ids.indexOf(focusId) < 0)
             focusId = ""
+        const kept = {}
+        for (const id in customRects)
+            if (ids.indexOf(id) >= 0)
+                kept[id] = customRects[id]
+        customRects = kept
+        relayout()
+    }
+    function setCustomRect(id, rect) {
+        const custom = Object.assign({}, customRects)
+        custom[id] = StreamLayout.rectToFraction(rect, stage.width, stage.height)
+        customRects = custom
+        const map = Object.assign({}, rects)
+        map[id] = rect
+        rects = map
+    }
+    function autoArrange() {
+        focusId = ""
+        offset = 0
+        customRects = {}
         relayout()
     }
     function relayout() {
@@ -87,6 +110,10 @@ Rectangle {
             map[streams.get(t.index).streamIdentifier] = {
                 x: left + t.x * scale, y: top + t.y * scale, w: t.w * scale, h: t.h * scale
             }
+        if (!focusId)
+            for (const id in customRects)
+                if (map[id])
+                    map[id] = StreamLayout.rectFromFraction(customRects[id], stage.width, stage.height)
         rects = map
         perPage = r.perPage
     }
@@ -129,10 +156,15 @@ Rectangle {
                         width: rect ? rect.w : 0
                         height: rect ? rect.h : 0
                         focused: root.focusId === streamIdentifier
-                        Behavior on x { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                        Behavior on y { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                        Behavior on width { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
-                        Behavior on height { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                        arrangeable: root.focusId === ""
+                        property var arrangeStart: null
+                        onArrangeBegun: { arrangeStart = rect; z = ++root.topZ }
+                        onResizeDragged: (left, top, dx, dy) => root.setCustomRect(streamIdentifier,
+                            StreamLayout.resizeRect(arrangeStart, left, top, dx, dy, stage.width, stage.height))
+                        Behavior on x { enabled: !arranging; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                        Behavior on y { enabled: !arranging; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                        Behavior on width { enabled: !arranging; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                        Behavior on height { enabled: !arranging; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         onToggleFocus: {
                             root.focusId = root.focusId === streamIdentifier ? "" : streamIdentifier
                             root.offset = 0
@@ -229,11 +261,11 @@ Rectangle {
                 Item { Layout.fillWidth: true }
                 Button {
                     flat: true
-                    visible: root.focusId !== ""
+                    visible: root.focusId !== "" || root.hasCustomRects
                     text: I18n.t("video.layout.auto")
                     ToolTip.visible: hovered
                     ToolTip.text: I18n.t("video.layout.auto.tooltip")
-                    onClicked: { root.focusId = ""; root.offset = 0; root.relayout() }
+                    onClicked: root.autoArrange()
                 }
                 Button {
                     id: hiddenButton

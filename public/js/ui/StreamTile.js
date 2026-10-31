@@ -34,7 +34,8 @@ export class StreamTile {
     this.muted = false;
     this.video = h('video.tile-video', { autoplay: true, playsInline: true });
     this.overlay = h('div.tile-overlay');
-    this.el = h('div.video-stream', { dataset: { stream: streamIdentifier } }, this.video, this.overlay);
+    this.el = h('div.video-stream', { dataset: { stream: streamIdentifier } }, this.video, this.overlay,
+      this.#grip(true, true), this.#grip(false, true), this.#grip(true, false), this.#grip(false, false));
     this.el.addEventListener('dblclick', () => (this.pipWindow ? this.togglePip() : this.toggleFullscreen()));
     this._disposeFullscreenIdle = installFullscreenIdle(this.el);
     this._srcObject = null;
@@ -45,12 +46,48 @@ export class StreamTile {
       h('button.btn.small', t('video.action.pip.close')));
   }
 
-  setRect({ x, y, w, h: height }, focused = false) {
+  setRect(rect, focused = false) {
+    this.rect = rect;
+    const { x, y, w, h: height } = rect;
     for (const el of [this.el, this.placeholder]) {
       Object.assign(el.style, { transform: `translate(${x}px, ${y}px)`, width: `${w}px`, height: `${height}px` });
       el.classList.toggle('focused', !!focused);
       el.classList.toggle('small', height < 160);
     }
+  }
+
+  /** Com um stream em foco a organização é a do foco; ajuste manual só na grade. */
+  setArrangeable(on) {
+    this.el.classList.toggle('arrangeable', on);
+  }
+
+  /** Canto que redimensiona o preview. */
+  #grip(left, top) {
+    const start = ev => {
+      if (ev.button !== 0) return;
+      ev.stopPropagation();
+      const rect = this.actions.beginArrange(this.streamIdentifier);
+      this.#track(ev, (dx, dy) => this.actions.resizeTile(this.streamIdentifier, rect, left, top, dx, dy));
+    };
+    return h('div.tile-grip', { class: `${top ? 'top' : 'bottom'} ${left ? 'left' : 'right'}`, on: { pointerdown: start } });
+  }
+
+  /** Acompanha o ponteiro até soltar, sem animar o quadro nesse meio-tempo. */
+  #track(ev, onMove) {
+    const { clientX, clientY, pointerId } = ev;
+    const el = ev.currentTarget;
+    el.setPointerCapture(pointerId);
+    this.el.classList.add('arranging');
+    const move = e => onMove(e.clientX - clientX, e.clientY - clientY);
+    const end = () => {
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', end);
+      el.removeEventListener('pointercancel', end);
+      this.el.classList.remove('arranging');
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
   }
 
   setHidden(hidden) {

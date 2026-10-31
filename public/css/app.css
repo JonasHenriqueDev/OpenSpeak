@@ -282,6 +282,16 @@ select.input { padding-right: 4px; }
   background: #05070b; border-radius: var(--radius); border: 1px solid var(--border);
   transition: transform .2s ease, width .2s ease, height .2s ease;
 }
+.video-stream.arranging { transition: none; }
+.tile-grip { position: absolute; z-index: 2; width: 12px; height: 12px; display: none; touch-action: none; }
+.video-stream.arrangeable > .tile-grip { display: block; }
+.video-stream:fullscreen > .tile-grip, .video-stream.in-pip > .tile-grip { display: none; }
+.tile-grip.top { top: 0; }
+.tile-grip.bottom { bottom: 0; }
+.tile-grip.left { left: 0; }
+.tile-grip.right { right: 0; }
+.tile-grip.top.left, .tile-grip.bottom.right { cursor: nwse-resize; }
+.tile-grip.top.right, .tile-grip.bottom.left { cursor: nesw-resize; }
 .video-stream.own { border-color: rgba(240, 56, 75, .45); }
 .video-stream.focused { border-color: var(--accent); }
 .video-stream:fullscreen { border-radius: 0; border: none; transform: none !important; width: 100% !important; height: 100% !important; }

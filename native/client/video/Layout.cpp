@@ -41,6 +41,16 @@ QList<QRectF> place(int count, const Fit &f, double width, double height, double
     return out;
 }
 
+QVariantMap toMap(const QRectF &r)
+{
+    return {{"x", r.x()}, {"y", r.y()}, {"w", r.width()}, {"h", r.height()}};
+}
+
+QRectF toRect(const QVariantMap &m)
+{
+    return QRectF(m.value("x").toDouble(), m.value("y").toDouble(), m.value("w").toDouble(), m.value("h").toDouble());
+}
+
 } // namespace
 
 LayoutResult gridLayout(int count, double width, double height, double gap, int offset, int minHeight)
@@ -107,6 +117,28 @@ LayoutResult focusLayout(int count, int focusIndex, double width, double height,
     return r;
 }
 
+QRectF resizeRect(const QRectF &rect, bool left, bool top, double dx, double dy, double width, double height, double minWidth)
+{
+    const double aspect = rect.width() / rect.height();
+    const double anchorX = left ? rect.right() : rect.x();
+    const double anchorY = top ? rect.bottom() : rect.y();
+    // Vale o eixo que mais se afastou do tamanho inicial.
+    const double byWidth = rect.width() + (left ? -dx : dx);
+    const double byHeight = (rect.height() + (top ? -dy : dy)) * aspect;
+    const double wanted = std::abs(byWidth - rect.width()) >= std::abs(byHeight - rect.width()) ? byWidth : byHeight;
+    const double room = std::min(left ? anchorX : width - anchorX, (top ? anchorY : height - anchorY) * aspect);
+    const double w = std::min(std::max(wanted, minWidth), room);
+    const double h = w / aspect;
+    return QRectF(left ? anchorX - w : anchorX, top ? anchorY - h : anchorY, w, h);
+}
+
+QRectF rectFromFraction(double fx, double fy, double fw, double aspect, double width, double height)
+{
+    const double w = std::min({fw * width, width, height * aspect});
+    const double h = w / aspect;
+    return QRectF(std::min(std::max(0.0, fx * width), width - w), std::min(std::max(0.0, fy * height), height - h), w, h);
+}
+
 QVariantMap StreamLayout::compute(int count, int focusIndex, double width, double height, double gap, int offset) const
 {
     const LayoutResult r = focusIndex >= 0 ? focusLayout(count, focusIndex, width, height, gap, offset)
@@ -116,6 +148,23 @@ QVariantMap StreamLayout::compute(int count, int focusIndex, double width, doubl
         tiles.append(QVariantMap{{"x", t.rect.x()}, {"y", t.rect.y()}, {"w", t.rect.width()}, {"h", t.rect.height()},
                                  {"index", t.index}, {"focused", t.focused}});
     return {{"perPage", r.perPage}, {"tiles", tiles}};
+}
+
+QVariantMap StreamLayout::resizeRect(const QVariantMap &rect, bool left, bool top, double dx, double dy, double width, double height) const
+{
+    return toMap(openspeak::resizeRect(toRect(rect), left, top, dx, dy, width, height));
+}
+
+QVariantMap StreamLayout::rectToFraction(const QVariantMap &rect, double width, double height) const
+{
+    const QRectF r = toRect(rect);
+    return {{"x", r.x() / width}, {"y", r.y() / height}, {"w", r.width() / width}, {"aspect", r.width() / r.height()}};
+}
+
+QVariantMap StreamLayout::rectFromFraction(const QVariantMap &fraction, double width, double height) const
+{
+    return toMap(openspeak::rectFromFraction(fraction.value("x").toDouble(), fraction.value("y").toDouble(),
+                                             fraction.value("w").toDouble(), fraction.value("aspect").toDouble(), width, height));
 }
 
 } // namespace openspeak

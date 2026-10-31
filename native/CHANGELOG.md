@@ -1,3 +1,13 @@
+# OpenSpeak 1.0.28 — novidades ao atualizar e tamanho dos previews
+
+- Depois de atualizar, o app abre uma janela com as **novidades da versão**, com a
+  opção de mostrar todas as versões.
+- **Tamanho dos previews:** ajuste em Exibição, na barra inferior da área de streams.
+- A **prévia da sua transmissão** ganhou um botão para fechá-la de novo, sem precisar
+  reiniciar a transmissão.
+- Na **versão web**, a transmissão continua aparecendo na grade enquanto o
+  picture-in-picture está aberto.
+
 # OpenSpeak 1.0.27 — troca de fonte para a tela inteira
 
 - Corrigido o erro **"Failed to duplicate IDXGIOutput1"** ao trocar a transmissão de

@@ -44,6 +44,7 @@ inline const QString ProfileRequired = QStringLiteral("profile_required");
 inline const QString CapStreamP2P = QStringLiteral("STREAM_P2P");
 inline const QString CapStreamSFU = QStringLiteral("STREAM_SFU"); // só com relay de mídia (servidor nativo)
 inline const QString CapProfiles = QStringLiteral("PROFILES");    // perfis guardados no servidor
+inline const QString CapProfileMedia = QStringLiteral("PROFILE_MEDIA"); // banner baixado sob demanda
 
 /// clid reservado do servidor como par WebRTC nos streams SFU (`streamsignaling`/`peerClid`).
 constexpr int RelayClid = 0;
@@ -52,6 +53,8 @@ constexpr int MaxStreamsPerClient = 3;
 constexpr int MaxThumbnailBytes = 256 * 1024;
 constexpr int MaxSignalingBytes = 64 * 1024;
 constexpr int MaxAvatarBytes = 64 * 1024;
+// Banner e GIF da foto: cabem numa mensagem de sinalização junto com a capa da foto.
+constexpr int MaxProfileMediaBytes = 440 * 1024;
 /// Quanto uma sessão `resumable` espera a reconexão depois que a conexão cai.
 constexpr int SessionGraceMs = 90'000;
 

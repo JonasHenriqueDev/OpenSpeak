@@ -15,6 +15,23 @@ namespace {
 
 [[noreturn]] void fail(const QString &code, const QString &message = {}) { throw CommandError(code, message); }
 
+// Laço em vez de regex: a mídia passa de 400 KB e o PCRE sem JIT pode estourar o limite.
+bool isDataImage(const QString &value, const QStringList &types)
+{
+    const int comma = value.indexOf(QLatin1Char(','));
+    const QString head = value.left(comma);
+    if (comma < 0 || !head.startsWith(QLatin1String("data:image/")) || !head.endsWith(QLatin1String(";base64")))
+        return false;
+    if (!types.contains(head.mid(11, head.size() - 11 - 7)) || comma + 1 == value.size())
+        return false;
+    for (qsizetype i = comma + 1; i < value.size(); ++i) {
+        const QChar ch = value[i];
+        if (ch.unicode() > 127 || !(ch.isLetterOrNumber() || ch == QLatin1Char('+') || ch == QLatin1Char('/') || ch == QLatin1Char('=')))
+            return false;
+    }
+    return true;
+}
+
 QString cleanString(const QJsonValue &v, int maxLength)
 {
     if (!v.isString())
@@ -109,6 +126,7 @@ const QHash<QString, VirtualServer::Handler> &VirtualServer::handlers()
         {QStringLiteral("clientupdate"), &VirtualServer::cmdClientUpdate},
         {QStringLiteral("setprofilepassword"), &VirtualServer::cmdSetProfilePassword},
         {QStringLiteral("updateprofile"), &VirtualServer::cmdUpdateProfile},
+        {QStringLiteral("profilemedia"), &VirtualServer::cmdProfileMedia},
         {QStringLiteral("setupstream"), &VirtualServer::cmdSetupStream},
         {QStringLiteral("updatestream"), &VirtualServer::cmdUpdateStream},
         {QStringLiteral("stopstream"), &VirtualServer::cmdStopStream},
@@ -305,7 +323,7 @@ QJsonObject VirtualServer::cmdHeartbeat(Client &, const QJsonObject &) { return 
 QJsonObject VirtualServer::view(const Client &client) const
 {
     QJsonArray channels, clients, streams;
-    QJsonArray caps{CapStreamP2P, CapProfiles};
+    QJsonArray caps{CapStreamP2P, CapProfiles, CapProfileMedia};
     if (m_relay)
         caps.append(CapStreamSFU);
     for (const auto &[cid, ch] : m_channels)
@@ -400,12 +418,34 @@ QJsonObject VirtualServer::cmdUpdateProfile(Client &client, const QJsonObject &a
             fail(rc::PayloadTooLarge);
         profile.avatar = avatar;
     }
+    if (args.contains("banner")) {
+        const QString banner = args.value("banner").toString();
+        if (!banner.isEmpty() && !isDataImage(banner, {QStringLiteral("png"), QStringLiteral("jpeg"), QStringLiteral("webp"), QStringLiteral("gif")}))
+            fail(rc::InvalidArgs);
+        if (banner.size() > MaxProfileMediaBytes)
+            fail(rc::PayloadTooLarge);
+        profile.banner = banner;
+    }
     m_profiles.update(client.profile, profile);
     // O mesmo perfil pode estar em mais de um dispositivo.
     for (const auto &[id, c] : m_clients)
         if (c.loggedIn && c.profile == client.profile)
             broadcast(QStringLiteral("notifyclientupdated"), {{"client", publicClient(c)}});
     return {};
+}
+
+// A mídia pesada não vai em publicClient: quem abre um card pede só a daquele perfil.
+QJsonObject VirtualServer::cmdProfileMedia(Client &, const QJsonObject &args)
+{
+    m_profiles.refresh();
+    const int clid = args.value("clid").toInt();
+    for (const auto &[id, c] : m_clients) {
+        if (!c.loggedIn || c.clid != clid)
+            continue;
+        const ProfileStore::Profile *profile = c.profile.isEmpty() ? nullptr : m_profiles.find(c.nickname);
+        return {{"mediaTag", profile ? profile->mediaTag : QString()}, {"banner", profile ? profile->banner : QString()}};
+    }
+    fail(rc::InvalidArgs);
 }
 
 QJsonObject VirtualServer::cmdSetupStream(Client &client, const QJsonObject &args)
@@ -782,7 +822,8 @@ QJsonObject VirtualServer::publicClient(const Client &c) const
             {"displayName", profile ? profile->displayName : QString()},
             {"color", profile ? profile->color : QString()},
             {"description", profile ? profile->description : QString()},
-            {"avatar", profile ? profile->avatar : QString()}};
+            {"avatar", profile ? profile->avatar : QString()},
+            {"mediaTag", profile ? profile->mediaTag : QString()}};
 }
 
 QJsonObject VirtualServer::publicStream(const Stream &s) const

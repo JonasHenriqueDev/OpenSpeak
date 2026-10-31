@@ -1,7 +1,7 @@
 // Perfis: um apelido vira perfil ao ganhar uma senha. Os dados ficam num JSON no
 // servidor, no mesmo formato de native/server/ProfileStore.cpp.
 
-import { pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, pbkdf2Sync, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -70,7 +70,9 @@ export class ProfileStore {
   }
 
   update(key, fields) {
-    Object.assign(this.profiles.get(key), fields);
+    const profile = Object.assign(this.profiles.get(key), fields);
+    // Quem já baixou a mídia reconhece pelo tag que ela não mudou.
+    profile.mediaTag = profile.banner ? createHash('sha256').update(profile.banner).digest('hex').slice(0, 12) : '';
     this.#save();
   }
 

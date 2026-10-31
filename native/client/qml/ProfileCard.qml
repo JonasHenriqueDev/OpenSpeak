@@ -7,13 +7,33 @@ import "I18n.js" as I18n
 Popup {
     id: root
     property var person: ({})
+    property var media: ({})
+    property point anchorPoint
 
+    function place() {
+        x = Math.min(anchorPoint.x, Overlay.overlay.width - width - 8)
+        y = Math.max(8, Math.min(anchorPoint.y, Overlay.overlay.height - implicitHeight - 8))
+    }
     function openFor(client, anchor) {
         person = client
-        const at = anchor.mapToItem(Overlay.overlay, anchor.width + 6, 0)
-        x = Math.min(at.x, Overlay.overlay.width - width - 8)
-        y = Math.max(8, Math.min(at.y, Overlay.overlay.height - implicitHeight - 8))
+        media = {}
+        anchorPoint = anchor.mapToItem(Overlay.overlay, anchor.width + 6, 0)
+        place()
         open()
+        Server.fetchProfileMedia(client.clid, client.mediaTag || "")
+    }
+
+    // Solta o GIF e a imagem pesada ao fechar.
+    onClosed: media = {}
+
+    Connections {
+        target: Server
+        function onProfileMediaReady(clid, tag, media) {
+            if (root.opened && clid === root.person.clid) {
+                root.media = media
+                Qt.callLater(root.place)
+            }
+        }
     }
 
     parent: Overlay.overlay
@@ -24,7 +44,18 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: 8
+        ProfileBanner {
+            objectName: "profileCardBanner"
+            visible: !!root.media.banner
+            source: root.media.banner || ""
+            Layout.fillWidth: true
+            Layout.preferredHeight: 112
+            Layout.leftMargin: -15
+            Layout.rightMargin: -15
+            Layout.topMargin: -15
+        }
         Avatar {
+            Layout.topMargin: root.media.banner ? -44 : 0
             source: root.person.avatar || ""
             name: root.person.name || ""
             size: 72

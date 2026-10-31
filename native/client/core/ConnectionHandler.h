@@ -31,6 +31,7 @@ struct ClientInfo {
     QString color;
     QString description;
     QString avatar; // data URL
+    QString mediaTag; // banner: vazio = sem mídia para baixar
 
     /// Nome que a sala mostra: o de exibição do perfil ou o apelido.
     QString shownName() const { return displayName.isEmpty() ? nickname : displayName; }
@@ -71,6 +72,7 @@ class ConnectionHandler : public QObject {
     Q_PROPERTY(bool hasStreamingP2P READ hasStreamingP2P NOTIFY connectionChanged)
     Q_PROPERTY(bool hasStreamingSFU READ hasStreamingSFU NOTIFY connectionChanged)
     Q_PROPERTY(bool hasProfiles READ hasProfiles NOTIFY connectionChanged)
+    Q_PROPERTY(bool hasProfileMedia READ hasProfileMedia NOTIFY connectionChanged)
     Q_PROPERTY(bool profilePasswordRequired READ profilePasswordRequired NOTIFY connectionChanged)
     Q_PROPERTY(QVariantMap ownProfile READ ownProfile NOTIFY changed)
     Q_PROPERTY(QVariantList tree READ tree NOTIFY changed)
@@ -107,6 +109,12 @@ public:
     /// Recorte quadrado da foto como data URL pronta para o perfil; vazia se não abrir.
     /// x e side são frações da largura da imagem; y, da altura (vêm do AvatarCropDialog).
     Q_INVOKABLE QString avatarFromFile(const QUrl &file, double x, double y, double side) const;
+    /// Banner como data URL: GIF vai intacto; o resto vira JPEG de 960x384. Vazia se não abrir.
+    Q_INVOKABLE QString bannerFromFile(const QUrl &file) const;
+    /// GIF acima do limite do servidor (o arquivo vai intacto, sem recompressão).
+    Q_INVOKABLE bool gifTooLarge(const QUrl &file) const;
+    /// Pede a mídia pesada de um perfil (com cache por tag); chega em profileMediaReady.
+    Q_INVOKABLE void fetchProfileMedia(int clid, const QString &tag);
 
     bool isConnected() const { return m_loggedIn; }
     QString serverName() const { return m_serverName; }
@@ -116,6 +124,7 @@ public:
     bool hasStreamingP2P() const { return m_capabilities.contains(CapStreamP2P); }
     bool hasStreamingSFU() const { return m_capabilities.contains(CapStreamSFU); }
     bool hasProfiles() const { return m_capabilities.contains(CapProfiles); }
+    bool hasProfileMedia() const { return m_capabilities.contains(CapProfileMedia); }
     /// O último login foi recusado por falta da senha do perfil (ou senha errada).
     bool profilePasswordRequired() const { return m_profilePasswordRequired; }
     QVariantMap ownProfile() const;
@@ -146,8 +155,10 @@ signals:
     void ownChannelChanged(int cid);
     void tailnetChanged();
     void profileResult(const QString &action, bool ok, const QString &error);
+    void profileMediaReady(int clid, const QString &tag, const QVariantMap &media);
 
 private:
+    QHash<QString, QVariantMap> m_profileMedia; // por mediaTag
     void onNotification(const QString &cmd, const QJsonObject &args);
     void reset();
     void login();

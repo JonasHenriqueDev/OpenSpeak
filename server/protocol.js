@@ -37,8 +37,11 @@ export const ReturnCode = Object.freeze({
 export const CAPABILITIES = Object.freeze(['STREAM_P2P']);
 // Só com um ProfileStore (a sala web do Vercel não guarda perfis).
 export const CAP_PROFILES = 'PROFILES';
+export const CAP_PROFILE_MEDIA = 'PROFILE_MEDIA';
 
 export const MAX_STREAMS_PER_CLIENT = 3;
 export const MAX_THUMBNAIL_BYTES = 256 * 1024;
 export const MAX_SIGNALING_BYTES = 64 * 1024;
 export const MAX_AVATAR_BYTES = 64 * 1024;
+// Banner e GIF da foto: cabem numa mensagem de sinalização junto com a capa da foto.
+export const MAX_PROFILE_MEDIA_BYTES = 440 * 1024;

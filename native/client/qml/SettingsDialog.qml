@@ -313,6 +313,22 @@ Popup {
             property string status: ""
             property bool statusFailed: false
             property string pickedColor: profile.color || ""
+            property var media: ({})
+            readonly property string mediaTag: profile.mediaTag || ""
+
+            onMediaTagChanged: refreshMedia()
+            Component.onCompleted: refreshMedia()
+            function refreshMedia() {
+                media = {}
+                Server.fetchProfileMedia(profile.clid || 0, mediaTag)
+            }
+            Connections {
+                target: Server
+                function onProfileMediaReady(clid, tag, media) {
+                    if (tag === profileContent.mediaTag)
+                        profileContent.media = media
+                }
+            }
 
             function showStatus(text, failed) {
                 status = text
@@ -340,6 +356,21 @@ Popup {
                 id: photoDialog
                 nameFilters: ["Imagens (*.png *.jpg *.jpeg *.webp *.bmp)"]
                 onAccepted: photoCrop.openFor(selectedFile)
+            }
+            FileDialog {
+                id: bannerDialog
+                nameFilters: ["Imagens e GIFs (*.png *.jpg *.jpeg *.webp *.bmp *.gif)"]
+                onAccepted: {
+                    if (Server.gifTooLarge(selectedFile)) {
+                        profileContent.showStatus(I18n.t("app.profile.gif.too_large"), true)
+                        return
+                    }
+                    const banner = Server.bannerFromFile(selectedFile)
+                    if (banner)
+                        Server.updateProfile({ banner: banner })
+                    else
+                        profileContent.showStatus(I18n.t("app.profile.photo.invalid"), true)
+                }
             }
             AvatarCropDialog {
                 id: photoCrop
@@ -428,6 +459,38 @@ Popup {
                     flat: true
                     text: I18n.t("app.profile.photo.remove")
                     onClicked: Server.updateProfile({ avatar: "" })
+                }
+            }
+
+            SectionHeader {
+                visible: profileContent.available && profileContent.claimed && Server.hasProfileMedia
+                text: I18n.t("app.profile.banner")
+            }
+            ProfileBanner {
+                objectName: "profileBannerPreview"
+                visible: !!profileContent.media.banner
+                source: profileContent.media.banner || ""
+                Layout.fillWidth: true
+                Layout.maximumWidth: 400
+                Layout.preferredHeight: 120
+            }
+            Label {
+                Layout.fillWidth: true
+                visible: profileContent.available && profileContent.claimed && Server.hasProfileMedia
+                wrapMode: Text.WordWrap
+                text: I18n.t("app.profile.banner.hint")
+                color: Theme.textDim
+                font.pixelSize: 12
+            }
+            RowLayout {
+                visible: profileContent.available && profileContent.claimed && Server.hasProfileMedia
+                spacing: 8
+                Button { text: I18n.t("app.profile.banner.choose"); onClicked: bannerDialog.open() }
+                Button {
+                    visible: !!profileContent.mediaTag
+                    flat: true
+                    text: I18n.t("app.profile.banner.remove")
+                    onClicked: Server.updateProfile({ banner: "" })
                 }
             }
 

@@ -7,7 +7,7 @@
 
 import {
   StreamAccess, StreamMode, StreamType, LeaveReason, ReturnCode, CAPABILITIES,
-  CAP_PROFILES, MAX_STREAMS_PER_CLIENT, MAX_THUMBNAIL_BYTES, MAX_SIGNALING_BYTES, MAX_AVATAR_BYTES,
+  CAP_PROFILES, CAP_PROFILE_MEDIA, MAX_STREAMS_PER_CLIENT, MAX_THUMBNAIL_BYTES, MAX_SIGNALING_BYTES, MAX_AVATAR_BYTES, MAX_PROFILE_MEDIA_BYTES,
 } from './protocol.js';
 import { profileKey } from './profileStore.js';
 
@@ -249,6 +249,11 @@ export class VirtualServer {
         if (args.avatar.length > MAX_AVATAR_BYTES) fail(ReturnCode.PAYLOAD_TOO_LARGE);
         fields.avatar = args.avatar;
       }
+      if ('banner' in args) {
+        if (args.banner !== '' && !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(args.banner)) fail(ReturnCode.INVALID_ARGS);
+        if (args.banner.length > MAX_PROFILE_MEDIA_BYTES) fail(ReturnCode.PAYLOAD_TOO_LARGE);
+        fields.banner = args.banner;
+      }
       this.profiles.update(client.profile, fields);
       // O mesmo perfil pode estar em mais de um dispositivo.
       for (const c of this.clients.values()) {
@@ -256,6 +261,15 @@ export class VirtualServer {
           this.#broadcast({ cmd: 'notifyclientupdated', args: { client: this.#publicClient(c) } });
       }
       return {};
+    },
+
+    // A mídia pesada não vai em publicClient: quem abre um card pede só a daquele perfil.
+    profilemedia(client, args) {
+      if (!this.profiles) fail(ReturnCode.MODE_NOT_SUPPORTED);
+      const target = [...this.clients.values()].find(c => c.loggedIn && c.clid === Number(args.clid));
+      if (!target) fail(ReturnCode.INVALID_ARGS);
+      const profile = this.#profileOf(target);
+      return { mediaTag: profile?.mediaTag ?? '', banner: profile?.banner ?? '' };
     },
 
     setupstream(client, args) {
@@ -426,7 +440,7 @@ export class VirtualServer {
   // ------------------------------------------------------------- auxiliares
 
   #capabilities() {
-    return this.profiles ? [...CAPABILITIES, CAP_PROFILES] : [...CAPABILITIES];
+    return this.profiles ? [...CAPABILITIES, CAP_PROFILES, CAP_PROFILE_MEDIA] : [...CAPABILITIES];
   }
 
   #checkProfilePassword(key, password) {
@@ -525,7 +539,7 @@ export class VirtualServer {
     return { clid: c.clid, nickname: c.nickname, uid: c.uid, cid: c.cid, inputMuted: c.inputMuted, outputMuted: c.outputMuted,
       pingMs: c.pingMs ?? null, pingUpdatedAt: c.pingUpdatedAt ?? 0, hasProfile: !!profile,
       displayName: profile?.displayName ?? '', color: profile?.color ?? '',
-      description: profile?.description ?? '', avatar: profile?.avatar ?? '' };
+      description: profile?.description ?? '', avatar: profile?.avatar ?? '', mediaTag: profile?.mediaTag ?? '' };
   }
 
   #publicStream(s) {

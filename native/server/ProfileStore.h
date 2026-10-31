@@ -19,6 +19,8 @@ public:
         QString color;
         QString description;
         QString avatar; // data URL
+        QString banner; // data URL; vai só por profilemedia
+        QString mediaTag; // muda quando a mídia pesada muda
     };
     enum class Verify { Ok, Wrong, Locked };
 

@@ -88,7 +88,9 @@ export class ChannelTree {
     const name = this.handler.clientName(client.clid);
     const isMe = client.clid === this.handler.ownClid;
     const row = ev.currentTarget.getBoundingClientRect();
+    const banner = h('div.profile-card-banner', { hidden: true });
     this.menu = h('div.popover.profile-card', { on: { click: e => e.stopPropagation() } },
+      banner,
       client.avatar ? h('img.profile-card-avatar', { src: client.avatar, alt: '' }) : h('div.avatar', name.trim().slice(0, 1).toUpperCase()),
       h('strong.profile-card-name', { style: client.color ? { color: client.color } : null }, name, isMe ? ` (${t('app.you')})` : ''),
       client.displayName ? h('div.muted', `@${client.nickname}`) : null,
@@ -100,10 +102,19 @@ export class ChannelTree {
         this.render();
       } } }, icon('star'), t(this.contacts.has(client.uid) ? 'app.contacts.remove' : 'app.contacts.add')));
     document.body.append(this.menu);
-    Object.assign(this.menu.style, {
-      left: `${Math.min(row.right + 6, window.innerWidth - this.menu.offsetWidth - 8)}px`,
-      top: `${Math.max(8, Math.min(row.top, window.innerHeight - this.menu.offsetHeight - 8))}px`,
+    const card = this.menu;
+    const place = () => Object.assign(card.style, {
+      left: `${Math.min(row.right + 6, window.innerWidth - card.offsetWidth - 8)}px`,
+      top: `${Math.max(8, Math.min(row.top, window.innerHeight - card.offsetHeight - 8))}px`,
     });
+    place();
+    this.handler.profileMedia(client).then(media => {
+      if (!media.banner || !card.isConnected) return;
+      banner.replaceChildren(h('img', { src: media.banner, alt: '' }));
+      banner.hidden = false;
+      card.classList.add('has-banner');
+      place();
+    }, this.onError);
   }
 
   #closeMenu() {

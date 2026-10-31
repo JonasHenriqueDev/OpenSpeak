@@ -18,6 +18,34 @@ function draw(canvas, image, rect) {
   canvas.getContext('2d').drawImage(image, rect.x, rect.y, rect.side, rect.side, 0, 0, canvas.width, canvas.height);
 }
 
+/** Maior limite de GIF: o arquivo vai intacto e o servidor aceita 440 KB de data URL. */
+export const MAX_GIF_BYTES = 320 * 1024;
+
+const BANNER_WIDTH = 960;
+const BANNER_HEIGHT = 384;
+
+const dataUrl = file => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(reader.error);
+  reader.readAsDataURL(file);
+});
+
+/** Banner como data URL: GIF vai intacto; o resto vira JPEG 5:2 recortado do centro. */
+export async function bannerFromFile(file) {
+  if (file.type === 'image/gif') {
+    if (file.size > MAX_GIF_BYTES) throw new Error(t('app.profile.gif.too_large'));
+    return dataUrl(file);
+  }
+  const image = await createImageBitmap(file);
+  const scale = Math.max(BANNER_WIDTH / image.width, BANNER_HEIGHT / image.height);
+  const output = h('canvas', { width: BANNER_WIDTH, height: BANNER_HEIGHT });
+  output.getContext('2d').drawImage(image, (BANNER_WIDTH - image.width * scale) / 2, (BANNER_HEIGHT - image.height * scale) / 2,
+    image.width * scale, image.height * scale);
+  image.close();
+  return output.toDataURL('image/jpeg', 0.85);
+}
+
 /** Abre o ajuste e resolve com a data URL da foto, ou null se cancelar. */
 export function adjustAvatar(file) {
   return createImageBitmap(file).then(image => new Promise(resolve => {

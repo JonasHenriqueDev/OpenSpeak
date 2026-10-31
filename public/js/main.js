@@ -12,7 +12,7 @@ import { SetupStreamDialog } from './ui/SetupStreamDialog.js';
 import { ViewersPanel } from './ui/ViewersPanel.js';
 import { StatsPanel } from './ui/StatsPanel.js';
 import { Toasts } from './ui/Toasts.js';
-import { adjustAvatar } from './ui/avatarCrop.js';
+import { adjustAvatar, bannerFromFile } from './ui/avatarCrop.js';
 import { SoundEffects, SOUND_THEMES, previewSound, previewRandomSound } from './ui/sounds.js';
 import { isTailnetServer, isTailnetAddress, privateEntryUrl } from './core/tailnet.js';
 import { detectTailnetAddress } from './core/detectTailnet.js';
@@ -434,7 +434,27 @@ class App {
         if (avatar) await saveFields({ avatar });
       },
     } });
+    const banner = h('input', { type: 'file', accept: 'image/*', hidden: true, on: {
+      change: async ev => {
+        const [file] = ev.target.files;
+        ev.target.value = '';
+        if (!file) return;
+        const data = await bannerFromFile(file).catch(showError);
+        if (data) await saveFields({ banner: data });
+      },
+    } });
+    const bannerPreview = h('img.profile-banner-preview', { alt: '', hidden: true });
+    this.handler.profileMedia(own).then(media => {
+      if (media.banner) { bannerPreview.src = media.banner; bannerPreview.hidden = false; }
+    }, showError);
     return [
+      this.handler.hasProfileMedia ? h('div.field', h('span.field-label', t('app.profile.banner')),
+        bannerPreview,
+        h('p.muted', t('app.profile.banner.hint')),
+        h('div.profile-photo',
+          banner,
+          h('button.btn.ghost.small', { type: 'button', on: { click: () => banner.click() } }, t('app.profile.banner.choose')),
+          own?.mediaTag ? h('button.btn.ghost.small', { type: 'button', on: { click: () => saveFields({ banner: '' }) } }, t('app.profile.banner.remove')) : null)) : null,
       h('label.field', h('span.field-label', t('app.profile.photo')),
         h('div.profile-photo',
           own?.avatar ? h('img.client-avatar', { src: own.avatar, alt: '' }) : null,

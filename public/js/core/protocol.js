@@ -8,7 +8,7 @@ export const LeaveReason = Object.freeze({
   NONE: 0, LEFT: 1, DENIED: 2, FAILED: 3, KICKED: 4, BANNED: 5, STREAM_STOPPED: 6, VIEWER_LIMIT: 7,
 });
 
-export const Capability = Object.freeze({ STREAM_P2P: 'STREAM_P2P', STREAM_SFU: 'STREAM_SFU', PROFILES: 'PROFILES' });
+export const Capability = Object.freeze({ STREAM_P2P: 'STREAM_P2P', STREAM_SFU: 'STREAM_SFU', PROFILES: 'PROFILES', PROFILE_MEDIA: 'PROFILE_MEDIA' });
 
 // clid reservado do servidor como par WebRTC nos streams SFU (`streamsignaling`/`peerClid`).
 export const RELAY_CLID = 0;

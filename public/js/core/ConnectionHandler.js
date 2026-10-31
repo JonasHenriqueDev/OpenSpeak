@@ -12,6 +12,7 @@ export class ConnectionHandler extends EventEmitter {
     this.connection = globalThis.OpenSpeakConfig?.cloudSignaling ? new CloudConnection() : new ServerConnection();
     this.serverName = '';
     this.capabilities = [];
+    this.mediaCache = new Map(); // mediaTag -> mídia pesada do perfil
     this.iceServers = [];
     this.ownClid = 0;
     this.channels = new Map();
@@ -75,6 +76,20 @@ export class ConnectionHandler extends EventEmitter {
 
   updateProfile(fields) {
     return this.connection.sendCommand('updateprofile', fields);
+  }
+
+  get hasProfileMedia() {
+    return this.capabilities.includes(Capability.PROFILE_MEDIA);
+  }
+
+  /** Mídia pesada de um perfil, baixada só ao abrir um card; com cache por tag. */
+  async profileMedia(client) {
+    if (!client?.mediaTag) return {};
+    if (!this.mediaCache.has(client.mediaTag)) {
+      if (this.mediaCache.size >= 32) this.mediaCache.clear();
+      this.mediaCache.set(client.mediaTag, await this.connection.sendCommand('profilemedia', { clid: client.clid }));
+    }
+    return this.mediaCache.get(client.mediaTag);
   }
 
   streamsInChannel(cid) {

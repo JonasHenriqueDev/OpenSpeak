@@ -1,6 +1,8 @@
 #include "ConnectionHandler.h"
 
 #include <QBuffer>
+#include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QImageReader>
 #include <QUrl>
@@ -47,7 +49,7 @@ static ClientInfo clientFromJson(const QJsonObject &c)
     return {c.value("clid").toInt(), c.value("cid").toInt(), c.value("nickname").toString(), c.value("uid").toString(),
             c.value("identity").toString(), c.value("pingMs").isDouble() ? c.value("pingMs").toDouble() : -1,
             c.value("hasProfile").toBool(), c.value("displayName").toString(), c.value("color").toString(),
-            c.value("description").toString(), c.value("avatar").toString()};
+            c.value("description").toString(), c.value("avatar").toString(), c.value("mediaTag").toString()};
 }
 
 ConnectionHandler::ConnectionHandler(QObject *parent) : QObject(parent)
@@ -264,13 +266,65 @@ QString ConnectionHandler::avatarFromFile(const QUrl &file, double x, double y, 
     return QStringLiteral("data:image/jpeg;base64,") + QString::fromLatin1(jpeg.toBase64());
 }
 
+QString ConnectionHandler::bannerFromFile(const QUrl &file) const
+{
+    const QString path = file.toLocalFile();
+    if (path.endsWith(QLatin1String(".gif"), Qt::CaseInsensitive)) {
+        QFile in(path);
+        if (!in.open(QIODevice::ReadOnly))
+            return {};
+        return QStringLiteral("data:image/gif;base64,") + QString::fromLatin1(in.readAll().toBase64());
+    }
+    QImageReader reader(path);
+    reader.setAutoTransform(true);
+    const QImage image = reader.read();
+    if (image.isNull())
+        return {};
+    // Proporção 5:2, o dobro do tamanho no card para ficar nítido em telas com escala.
+    const QImage banner = image.scaled(960, 384, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation)
+                              .copy(QRect(QPoint(0, 0), QSize(960, 384)))
+                              .convertToFormat(QImage::Format_RGB888);
+    QByteArray jpeg;
+    QBuffer buffer(&jpeg);
+    buffer.open(QIODevice::WriteOnly);
+    banner.save(&buffer, "JPEG", 85);
+    return QStringLiteral("data:image/jpeg;base64,") + QString::fromLatin1(jpeg.toBase64());
+}
+
+bool ConnectionHandler::gifTooLarge(const QUrl &file) const
+{
+    const QFileInfo info(file.toLocalFile());
+    return info.suffix().compare(QLatin1String("gif"), Qt::CaseInsensitive) == 0 && info.size() * 4 / 3 + 32 > MaxProfileMediaBytes;
+}
+
+void ConnectionHandler::fetchProfileMedia(int clid, const QString &tag)
+{
+    if (tag.isEmpty())
+        return;
+    const auto cached = m_profileMedia.constFind(tag);
+    if (cached != m_profileMedia.cend()) {
+        emit profileMediaReady(clid, tag, *cached);
+        return;
+    }
+    m_connection.sendCommand(QStringLiteral("profilemedia"), {{"clid", clid}}, [this, clid, tag](const CommandResult &r) {
+        if (!r.ok())
+            return;
+        if (m_profileMedia.size() >= 32)
+            m_profileMedia.clear(); // mídia é pesada; quem reabrir um card baixa de novo
+        const QVariantMap media = r.data.toVariantMap();
+        m_profileMedia.insert(tag, media);
+        emit profileMediaReady(clid, tag, media);
+    });
+}
+
 QVariantMap ConnectionHandler::ownProfile() const
 {
     const ClientInfo *c = client(m_ownClid);
     if (!c)
         return {};
     return {{"nickname", c->nickname}, {"hasProfile", c->hasProfile}, {"displayName", c->displayName},
-            {"color", c->color}, {"description", c->description}, {"avatar", c->avatar}};
+            {"color", c->color}, {"description", c->description}, {"avatar", c->avatar},
+            {"clid", c->clid}, {"mediaTag", c->mediaTag}};
 }
 
 int ConnectionHandler::ownChannel() const
@@ -325,7 +379,8 @@ QVariantList ConnectionHandler::tree() const
             streamCount += streams.size();
             clientList.append(QVariantMap{{"clid", c.clid}, {"nickname", c.nickname}, {"name", c.shownName()}, {"uid", c.uid}, {"identity", c.identity},
                                           {"me", c.clid == m_ownClid}, {"streams", streams}, {"pingMs", c.pingMs},
-                                          {"avatar", c.avatar}, {"description", c.description}, {"color", c.color}});
+                                          {"avatar", c.avatar}, {"description", c.description}, {"color", c.color},
+                                          {"mediaTag", c.mediaTag}});
         }
         out.append(QVariantMap{{"cid", ch.cid}, {"name", ch.name}, {"description", ch.description},
                                {"current", ch.cid == own}, {"streamCount", streamCount}, {"clients", clientList}});

@@ -162,6 +162,15 @@ private slots:
         QCOMPARE(client.value("description").toString(), QStringLiteral("oi"));
         QCOMPARE(client.value("avatar").toString(), QStringLiteral("data:image/png;base64,AAAA"));
 
+        // Banner: fora da lista, baixado sob demanda; 400 KB+ passam pela validação.
+        QCOMPARE(expectError(jonas, "updateprofile", {{"banner", "data:image/svg+xml;base64,AAAA"}}), rc::InvalidArgs);
+        QCOMPARE(expectError(jonas, "updateprofile", {{"banner", "data:image/gif;base64," + QString(460'000, 'A')}}), rc::PayloadTooLarge);
+        const QString banner = "data:image/gif;base64," + QString(430'000, 'A');
+        server->handle(jonas, "updateprofile", {{"banner", banner}});
+        const QJsonObject media = server->handle(jonas, "profilemedia", {{"clid", jonas}});
+        QCOMPARE(media.value("banner").toString(), banner);
+        QCOMPARE(media.value("mediaTag").toString().size(), 12);
+
         setup(jonas);
         const QJsonObject stream = server->liveSnapshot().value("streams").toArray().first().toObject();
         QCOMPARE(stream.value("owner").toString(), QStringLiteral("Jonas H"));
@@ -459,7 +468,7 @@ private slots:
         // Sem relay, só STREAM_P2P é anunciado.
         const int other = server->connect();
         const QJsonObject view = server->handle(other, "login", {{"nickname", "x"}, {"uid", "uid-x"}});
-        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapProfiles}));
+        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapProfiles, CapProfileMedia}));
     }
 
     // ------------------------------------------------------------ modo SFU
@@ -470,7 +479,7 @@ private slots:
         server->setRelay(&relay);
         const int host = server->connect();
         const QJsonObject view = server->handle(host, "login", {{"nickname", "host"}, {"uid", "uid-host"}});
-        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapProfiles, CapStreamSFU}));
+        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapProfiles, CapProfileMedia, CapStreamSFU}));
 
         const QString sid = setup(host, {{"mode", int(StreamMode::SFU)}, {"bitrate", 2'000'000}});
         QCOMPARE(relay.calls, QStringList{QStringLiteral("open %1 %2 2000000").arg(sid).arg(host)});

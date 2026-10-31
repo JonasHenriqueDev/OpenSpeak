@@ -60,6 +60,7 @@ qt_add_qml_module(OpenSpeak
         qml/Avatar.qml
         qml/AvatarCropDialog.qml
         qml/PasswordField.qml
+        qml/ProfileBanner.qml
         qml/ProfileCard.qml
         qml/LoginView.qml
         qml/MainView.qml

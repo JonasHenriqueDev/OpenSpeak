@@ -311,6 +311,25 @@ test('perfil: dados validados, públicos e no nome mostrado pela sala', () => {
   assert.equal(JSON.stringify(server.view(viewer)).includes('pbkdf2'), false);
 });
 
+test('perfil: banner fica fora da lista e é baixado sob demanda', () => {
+  const { server, login } = profileSetup();
+  const jonas = login('Jonas');
+  const other = login('other');
+  server.handle(jonas, 'setprofilepassword', { password: 'segredo' });
+  assert.ok(server.view(jonas).server.capabilityExtensions.includes('PROFILE_MEDIA'));
+  assert.throws(() => server.handle(jonas, 'updateprofile', { banner: 'data:image/svg+xml;base64,AAAA' }), { code: 'invalid_args' });
+  assert.throws(() => server.handle(jonas, 'updateprofile', { banner: `data:image/gif;base64,${'A'.repeat(460_000)}` }), { code: 'payload_too_large' });
+  server.handle(jonas, 'updateprofile', { banner: 'data:image/gif;base64,AAAA' });
+  const listed = server.view(other).clients.find(c => c.nickname === 'Jonas');
+  assert.equal('banner' in listed, false);
+  assert.match(listed.mediaTag, /^[0-9a-f]{12}$/);
+  assert.deepEqual(server.handle(other, 'profilemedia', { clid: jonas }),
+    { mediaTag: listed.mediaTag, banner: 'data:image/gif;base64,AAAA' });
+  assert.throws(() => server.handle(other, 'profilemedia', { clid: 999 }), { code: 'invalid_args' });
+  server.handle(jonas, 'updateprofile', { banner: '' });
+  assert.equal(server.view(other).clients.find(c => c.nickname === 'Jonas').mediaTag, '');
+});
+
 test('perfil: sobrevive a reiniciar o servidor', () => {
   const file = path.join(mkdtempSync(path.join(tmpdir(), 'openspeak-')), 'sub', 'profiles.json');
   const first = profileSetup(file);

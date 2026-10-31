@@ -135,6 +135,7 @@ private:
     QJsonObject cmdClientUpdate(Client &, const QJsonObject &);
     QJsonObject cmdSetProfilePassword(Client &, const QJsonObject &);
     QJsonObject cmdUpdateProfile(Client &, const QJsonObject &);
+    QJsonObject cmdProfileMedia(Client &, const QJsonObject &);
     QJsonObject cmdSetupStream(Client &, const QJsonObject &);
     QJsonObject cmdUpdateStream(Client &, const QJsonObject &);
     QJsonObject cmdStopStream(Client &, const QJsonObject &);

@@ -1,3 +1,16 @@
+# OpenSpeak 1.0.24 — banner, GIF no perfil e aba Perfil renovada
+
+- **Banner:** escolha uma imagem ou um GIF para aparecer atrás da sua foto no card
+  de perfil.
+- **Foto animada:** agora dá para usar um GIF de até 320 KB como foto. Na lista
+  aparece o primeiro quadro; a animação toca no card, para a interface não pesar.
+- **Preferências › Perfil** ganhou uma prévia do card e um aviso explicando que é
+  preciso definir uma senha para personalizar o perfil.
+- O **cursor do mouse** não some mais da transmissão de janela quando há um menu
+  ou um overlay embaixo dele.
+- O selo **AO VIVO** da lista de usuários ficou alinhado com a contagem de
+  espectadores.
+
 # OpenSpeak 1.0.23 — card de perfil e ajuste da foto
 
 - Clique em alguém na lista para ver o **perfil**, com foto, descrição e o botão

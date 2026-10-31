@@ -58,19 +58,20 @@ QPixmap renderSize(int size, const QColor &accent, const QColor &background)
     painter.setPen(QPen(accent, 34, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     painter.setBrush(Qt::NoBrush);
     QPainterPath antennas;
-    antennas.moveTo(250, 196);
-    antennas.cubicTo(236, 166, 206, 148, 190, 128);
-    antennas.moveTo(262, 196);
-    antennas.cubicTo(286, 150, 330, 110, 372, 62);
+    antennas.moveTo(250, 170);
+    antennas.cubicTo(236, 150, 206, 140, 190, 128);
+    antennas.moveTo(262, 170);
+    antennas.cubicTo(286, 140, 330, 105, 372, 62);
     painter.drawPath(antennas);
     painter.restore();
 
-    painter.setBrush(accent);
+    painter.setPen(QPen(accent, 38, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter.setBrush(Qt::NoBrush);
     painter.drawPath(bubblePath());
 
     const QPainterPath eye = eyePath();
-    painter.setPen(QPen(background, 18, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    painter.setBrush(background);
+    painter.setPen(QPen(accent, 18, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter.setBrush(accent);
     painter.drawPath(eye);
     painter.translate(512, 0);
     painter.scale(-1, 1);

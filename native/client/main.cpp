@@ -210,7 +210,7 @@ int main(int argc, char *argv[])
             } else if (panel == "startup") {
                 auto *startup = findVisualItem(window->contentItem(), QStringLiteral("startupScreen"));
                 valid = valid && startup && startup->isVisible() && startup->width() >= 800;
-            } else if (panel == "updates" || panel == "preferences" || panel == "changelog" || panel == "licenses") {
+            } else if (panel == "updates" || panel == "preferences" || panel == "profile" || panel == "changelog" || panel == "licenses") {
                 // Atualizações, novidades e licenças são páginas das Preferências.
                 auto *dialog = window->findChild<QObject *>(QStringLiteral("preferencesDialog"));
                 valid = valid && dialog && dialog->property("visible").toBool()
@@ -221,7 +221,9 @@ int main(int argc, char *argv[])
                                          .startsWith(QStringLiteral("# OpenSpeak "));
                 if (panel != "preferences")
                     valid = valid && dialog->property("page").toString()
-                                         == (panel == "licenses" ? QStringLiteral("about") : QStringLiteral("updates"));
+                                         == (panel == "licenses"  ? QStringLiteral("about")
+                                             : panel == "profile" ? QStringLiteral("profile")
+                                                                  : QStringLiteral("updates"));
                 if (panel == "licenses")
                     valid = valid && engine.rootContext()->contextProperty(QStringLiteral("ThirdPartyLicenses")).toString()
                                          .contains(QStringLiteral("libdatachannel"));

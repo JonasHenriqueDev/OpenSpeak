@@ -28,15 +28,22 @@ export class ConnectionHandler extends EventEmitter {
     return this.capabilities.includes(Capability.STREAM_SFU);
   }
 
+  get hasProfiles() {
+    return this.capabilities.includes(Capability.PROFILES);
+  }
+
   get ownClient() {
     return this.clients.get(this.ownClid) ?? null;
   }
   get serverPingMs() { return this.ownClient?.pingMs ?? null; }
 
-  async connect(url, { nickname, uid, password }) {
+  async connect(url, { nickname, uid, password, profilePassword }) {
     await this.connection.connect(url);
+    const args = { nickname, uid };
+    if (password) args.password = password;
+    if (profilePassword) args.profilePassword = profilePassword;
     let data;
-    try { data = await this.connection.sendCommand('login', password ? { nickname, uid, password } : { nickname, uid }); }
+    try { data = await this.connection.sendCommand('login', args); }
     catch (err) { this.connection.disconnect(); throw err; }
     this.applyView(data);
     this.emit('connected');
@@ -59,6 +66,15 @@ export class ConnectionHandler extends EventEmitter {
 
   moveTo(cid) {
     return this.connection.sendCommand('clientmove', { cid });
+  }
+
+  /** Reclama o apelido como perfil ou troca a senha. */
+  setProfilePassword(password, currentPassword = '') {
+    return this.connection.sendCommand('setprofilepassword', { password, currentPassword });
+  }
+
+  updateProfile(fields) {
+    return this.connection.sendCommand('updateprofile', fields);
   }
 
   streamsInChannel(cid) {

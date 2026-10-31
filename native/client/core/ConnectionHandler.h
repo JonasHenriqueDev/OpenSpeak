@@ -26,6 +26,11 @@ struct ClientInfo {
     QString uid;
     QString identity; // identidade real (Tailscale), discreta na UI
     double pingMs = -1;
+    bool hasProfile = false;
+    QString displayName;
+    QString color;
+    QString description;
+    QString avatar; // data URL
 };
 
 struct StreamQuality {
@@ -62,6 +67,9 @@ class ConnectionHandler : public QObject {
     Q_PROPERTY(int ownChannel READ ownChannel NOTIFY changed)
     Q_PROPERTY(bool hasStreamingP2P READ hasStreamingP2P NOTIFY connectionChanged)
     Q_PROPERTY(bool hasStreamingSFU READ hasStreamingSFU NOTIFY connectionChanged)
+    Q_PROPERTY(bool hasProfiles READ hasProfiles NOTIFY connectionChanged)
+    Q_PROPERTY(bool profilePasswordRequired READ profilePasswordRequired NOTIFY connectionChanged)
+    Q_PROPERTY(QVariantMap ownProfile READ ownProfile NOTIFY changed)
     Q_PROPERTY(QVariantList tree READ tree NOTIFY changed)
     Q_PROPERTY(bool meshMode READ meshMode NOTIFY connectionChanged)
     Q_PROPERTY(bool reconnecting READ reconnecting NOTIFY changed)
@@ -82,12 +90,19 @@ public:
     PeerDirectory *directory() const { return m_directory; }
 
     Q_INVOKABLE void connectTailnet(const QString &nickname);
-    Q_INVOKABLE void connectTo(const QString &url, const QString &nickname, const QString &uid, const QString &password = {});
+    Q_INVOKABLE void connectTo(const QString &url, const QString &nickname, const QString &uid, const QString &password = {},
+                               const QString &profilePassword = {});
     Q_INVOKABLE void connectCloud(const QString &nickname, const QString &uid);
     Q_INVOKABLE void disconnectFromServer();
     Q_INVOKABLE void moveTo(int cid);
     Q_INVOKABLE QString clientName(int clid) const;
     Q_INVOKABLE QString clientIdentity(int clid) const;
+    /// Reclama o apelido como perfil ou troca a senha; o resultado vem em profileResult("password", ...).
+    Q_INVOKABLE void setProfilePassword(const QString &password, const QString &currentPassword = {});
+    /// Grava campos do perfil; o resultado vem em profileResult("profile", ...).
+    Q_INVOKABLE void updateProfile(const QVariantMap &fields);
+    /// Foto escolhida pelo usuário como data URL pronta para o perfil; vazia se não abrir.
+    Q_INVOKABLE QString avatarFromFile(const QUrl &file) const;
 
     bool isConnected() const { return m_loggedIn; }
     QString serverName() const { return m_serverName; }
@@ -96,6 +111,10 @@ public:
     int ownChannel() const;
     bool hasStreamingP2P() const { return m_capabilities.contains(CapStreamP2P); }
     bool hasStreamingSFU() const { return m_capabilities.contains(CapStreamSFU); }
+    bool hasProfiles() const { return m_capabilities.contains(CapProfiles); }
+    /// O último login foi recusado por falta da senha do perfil (ou senha errada).
+    bool profilePasswordRequired() const { return m_profilePasswordRequired; }
+    QVariantMap ownProfile() const;
     bool meshMode() const { return m_mesh != nullptr && m_connection.backend() == m_mesh; }
     QString tailnetStatus() const;
     QString tailnetName() const { return m_directory ? m_directory->networkName() : QString(); }
@@ -122,6 +141,7 @@ signals:
     void streamRemoved(const QString &id, int reason);
     void ownChannelChanged(int cid);
     void tailnetChanged();
+    void profileResult(const QString &action, bool ok, const QString &error);
 
 private:
     void onNotification(const QString &cmd, const QJsonObject &args);
@@ -135,6 +155,7 @@ private:
     PeerDirectory *m_directory = nullptr;
     bool m_loggedIn = false;
     bool m_loginRejected = false;
+    bool m_profilePasswordRequired = false;
     bool m_reconnecting = false, m_cloudMode = false;
     QString m_serverName;
     QStringList m_capabilities;
@@ -143,7 +164,7 @@ private:
     QMap<int, ChannelInfo> m_channels;
     QMap<int, ClientInfo> m_clients;
     QMap<QString, StreamInfo> m_streams;
-    QString m_pendingNickname, m_pendingUid, m_pendingPassword;
+    QString m_pendingNickname, m_pendingUid, m_pendingPassword, m_pendingProfilePassword;
 };
 
 QVariantMap streamToVariant(const StreamInfo &s);

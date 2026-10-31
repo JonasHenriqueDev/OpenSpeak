@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import "I18n.js" as I18n
 
@@ -48,6 +49,8 @@ Popup {
     }
 
     readonly property var categories: [
+        { header: I18n.t("app.prefs.group.account") },
+        { id: "profile", label: I18n.t("app.prefs.section.profile"), icon: "user" },
         { header: I18n.t("app.prefs.group.app") },
         { id: "appearance", label: I18n.t("app.prefs.section.appearance"), icon: "palette" },
         { id: "sounds", label: I18n.t("app.prefs.section.sounds"), icon: "volume" },
@@ -60,7 +63,7 @@ Popup {
     // Mesma ordem de SoundEffects.cpp / scripts/gen_sounds.py.
     readonly property var soundThemes: ["suave", "bolha", "cristal", "retro", "kalimba", "espacial", "discreto", "nostalgia"]
     readonly property var pages: ({
-        appearance: appearancePage, sounds: soundsPage, watching: watchingPage,
+        profile: profilePage, appearance: appearancePage, sounds: soundsPage, watching: watchingPage,
         system: systemPage, updates: updatesPage, about: aboutPage
     })
 
@@ -297,6 +300,147 @@ Popup {
     }
 
     // ---------------------------------------------------------------- páginas
+
+    Component {
+        id: profilePage
+        ColumnLayout {
+            id: profileContent
+            objectName: "profileContent"
+            spacing: 10
+            readonly property bool available: Server.connected && Server.hasProfiles
+            readonly property var profile: Server.ownProfile
+            readonly property bool claimed: !!profile.hasProfile
+            property string status: ""
+            property bool statusFailed: false
+
+            function showStatus(text, failed) {
+                status = text
+                statusFailed = failed
+            }
+            function save() {
+                Server.updateProfile({ description: descriptionField.text })
+            }
+            Connections {
+                target: Server
+                function onProfileResult(action, ok, error) {
+                    if (action === "password" && ok) {
+                        Settings.setProfilePassword(Settings.serverUrl, Settings.nickname, newPassword.text)
+                        currentPassword.clear()
+                        newPassword.clear()
+                    }
+                    profileContent.showStatus(ok ? I18n.t(action === "password" ? "app.profile.password.saved" : "app.profile.saved") : error, !ok)
+                }
+            }
+            FileDialog {
+                id: photoDialog
+                nameFilters: ["Imagens (*.png *.jpg *.jpeg *.webp *.bmp)"]
+                onAccepted: {
+                    const avatar = Server.avatarFromFile(selectedFile)
+                    if (avatar)
+                        Server.updateProfile({ avatar: avatar })
+                    else
+                        profileContent.showStatus(I18n.t("app.profile.photo.invalid"), true)
+                }
+            }
+
+            PageTitle { text: I18n.t("app.prefs.section.profile") }
+            Label {
+                Layout.fillWidth: true
+                visible: !profileContent.available
+                wrapMode: Text.WordWrap
+                text: I18n.t("app.profile.unavailable")
+                color: Theme.textDim
+            }
+            RowLayout {
+                visible: profileContent.available
+                spacing: 14
+                Avatar {
+                    source: profileContent.profile.avatar || ""
+                    name: profileContent.profile.nickname || ""
+                    size: 64
+                }
+                ColumnLayout {
+                    spacing: 2
+                    Label { text: profileContent.profile.nickname || ""; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                    Label { text: I18n.t("app.profile.nickname"); color: Theme.textDim; font.pixelSize: 12 }
+                }
+            }
+
+            SectionHeader { visible: profileContent.available; first: true; text: I18n.t("app.profile.password") }
+            Label {
+                Layout.fillWidth: true
+                visible: profileContent.available && !profileContent.claimed
+                wrapMode: Text.WordWrap
+                text: I18n.t("app.profile.password.hint")
+                color: Theme.textDim
+                font.pixelSize: 12
+            }
+            TextField {
+                id: currentPassword
+                objectName: "profileCurrentPassword"
+                visible: profileContent.available && profileContent.claimed
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                placeholderText: I18n.t("app.profile.password.current")
+            }
+            TextField {
+                id: newPassword
+                objectName: "profileNewPassword"
+                visible: profileContent.available
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                maximumLength: 128
+                placeholderText: I18n.t("app.profile.password.new")
+            }
+            Button {
+                objectName: "profileSetPassword"
+                visible: profileContent.available
+                text: I18n.t(profileContent.claimed ? "app.profile.password.change" : "app.profile.password.set")
+                enabled: newPassword.text.length >= 4
+                onClicked: Server.setProfilePassword(newPassword.text, currentPassword.text)
+            }
+
+            SectionHeader { visible: profileContent.available && profileContent.claimed; text: I18n.t("app.profile.photo") }
+            RowLayout {
+                visible: profileContent.available && profileContent.claimed
+                spacing: 8
+                Button { text: I18n.t("app.profile.photo.choose"); onClicked: photoDialog.open() }
+                Button {
+                    visible: !!profileContent.profile.avatar
+                    flat: true
+                    text: I18n.t("app.profile.photo.remove")
+                    onClicked: Server.updateProfile({ avatar: "" })
+                }
+            }
+
+            SectionHeader { visible: profileContent.available && profileContent.claimed; text: I18n.t("app.profile.description") }
+            TextArea {
+                id: descriptionField
+                objectName: "profileDescription"
+                visible: profileContent.available && profileContent.claimed
+                Layout.fillWidth: true
+                Layout.preferredHeight: 72
+                wrapMode: TextEdit.Wrap
+                text: profileContent.profile.description || ""
+                onTextChanged: if (length > 190) remove(190, length)
+            }
+            Button {
+                objectName: "profileSave"
+                visible: profileContent.available && profileContent.claimed
+                Layout.topMargin: 8
+                highlighted: true
+                text: I18n.t("app.profile.save")
+                onClicked: profileContent.save()
+            }
+            Label {
+                Layout.fillWidth: true
+                visible: text.length > 0
+                wrapMode: Text.WordWrap
+                text: profileContent.status
+                color: profileContent.statusFailed ? Theme.danger : Theme.textDim
+            }
+        }
+    }
 
     Component {
         id: appearancePage

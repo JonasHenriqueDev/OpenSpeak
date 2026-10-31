@@ -1,5 +1,8 @@
 #include "ConnectionHandler.h"
 
+#include <QBuffer>
+#include <QImage>
+#include <QImageReader>
 #include <QUrl>
 
 #include <algorithm>
@@ -41,7 +44,9 @@ QVariantMap streamToVariant(const StreamInfo &s)
 static ClientInfo clientFromJson(const QJsonObject &c)
 {
     return {c.value("clid").toInt(), c.value("cid").toInt(), c.value("nickname").toString(), c.value("uid").toString(),
-            c.value("identity").toString(), c.value("pingMs").isDouble() ? c.value("pingMs").toDouble() : -1};
+            c.value("identity").toString(), c.value("pingMs").isDouble() ? c.value("pingMs").toDouble() : -1,
+            c.value("hasProfile").toBool(), c.value("displayName").toString(), c.value("color").toString(),
+            c.value("description").toString(), c.value("avatar").toString()};
 }
 
 ConnectionHandler::ConnectionHandler(QObject *parent) : QObject(parent)
@@ -111,13 +116,16 @@ void ConnectionHandler::connectTailnet(const QString &nickname)
     m_mesh->start(nickname);
 }
 
-void ConnectionHandler::connectTo(const QString &url, const QString &nickname, const QString &uid, const QString &password)
+void ConnectionHandler::connectTo(const QString &url, const QString &nickname, const QString &uid, const QString &password,
+                                  const QString &profilePassword)
 {
     m_cloudMode = false;
     m_ws->setCloudMode(false);
     m_pendingNickname = nickname;
     m_pendingUid = uid;
     m_pendingPassword = password;
+    m_pendingProfilePassword = profilePassword;
+    m_profilePasswordRequired = false;
     m_loginRejected = false;
     m_connection.setBackend(m_ws);
     emit connectionChanged();
@@ -147,9 +155,12 @@ void ConnectionHandler::login()
     QJsonObject args{{"nickname", m_pendingNickname}, {"uid", m_pendingUid}};
     if (!m_pendingPassword.isEmpty())
         args.insert("password", m_pendingPassword);
+    if (!m_pendingProfilePassword.isEmpty())
+        args.insert("profilePassword", m_pendingProfilePassword);
     m_connection.sendCommand(QStringLiteral("login"), args, [this](const CommandResult &r) {
         if (!r.ok()) {
             m_loginRejected = true;
+            m_profilePasswordRequired = r.returnCode == rc::ProfilePassword || r.returnCode == rc::ProfileLocked;
             emit connectFailed(r.error.isEmpty() ? r.returnCode : r.error);
             m_connection.close();
             return;
@@ -214,6 +225,51 @@ QString ConnectionHandler::clientIdentity(int clid) const
     return it != m_clients.end() ? it->identity : QString();
 }
 
+void ConnectionHandler::setProfilePassword(const QString &password, const QString &currentPassword)
+{
+    m_connection.sendCommand(QStringLiteral("setprofilepassword"), {{"password", password}, {"currentPassword", currentPassword}},
+                             [this, password](const CommandResult &r) {
+        if (r.ok())
+            m_pendingProfilePassword = password; // a reconexão usa a senha nova
+        emit profileResult(QStringLiteral("password"), r.ok(), r.error.isEmpty() ? r.returnCode : r.error);
+    });
+}
+
+void ConnectionHandler::updateProfile(const QVariantMap &fields)
+{
+    m_connection.sendCommand(QStringLiteral("updateprofile"), QJsonObject::fromVariantMap(fields), [this](const CommandResult &r) {
+        emit profileResult(QStringLiteral("profile"), r.ok(), r.error.isEmpty() ? r.returnCode : r.error);
+    });
+}
+
+QString ConnectionHandler::avatarFromFile(const QUrl &file) const
+{
+    QImageReader reader(file.toLocalFile());
+    reader.setAutoTransform(true);
+    const QImage image = reader.read();
+    if (image.isNull())
+        return {};
+    // Quadrado central de 128 px: cabe com folga no limite do servidor (MaxAvatarBytes).
+    const int side = std::min(image.width(), image.height());
+    const QImage square = image.copy((image.width() - side) / 2, (image.height() - side) / 2, side, side)
+                              .scaled(128, 128, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                              .convertToFormat(QImage::Format_RGB888);
+    QByteArray jpeg;
+    QBuffer buffer(&jpeg);
+    buffer.open(QIODevice::WriteOnly);
+    square.save(&buffer, "JPEG", 80);
+    return QStringLiteral("data:image/jpeg;base64,") + QString::fromLatin1(jpeg.toBase64());
+}
+
+QVariantMap ConnectionHandler::ownProfile() const
+{
+    const ClientInfo *c = client(m_ownClid);
+    if (!c)
+        return {};
+    return {{"nickname", c->nickname}, {"hasProfile", c->hasProfile}, {"displayName", c->displayName},
+            {"color", c->color}, {"description", c->description}, {"avatar", c->avatar}};
+}
+
 int ConnectionHandler::ownChannel() const
 {
     const auto it = m_clients.find(m_ownClid);
@@ -265,7 +321,8 @@ QVariantList ConnectionHandler::tree() const
                     streams.append(streamToVariant(s));
             streamCount += streams.size();
             clientList.append(QVariantMap{{"clid", c.clid}, {"nickname", c.nickname}, {"uid", c.uid}, {"identity", c.identity},
-                                          {"me", c.clid == m_ownClid}, {"streams", streams}, {"pingMs", c.pingMs}});
+                                          {"me", c.clid == m_ownClid}, {"streams", streams}, {"pingMs", c.pingMs},
+                                          {"avatar", c.avatar}, {"description", c.description}});
         }
         out.append(QVariantMap{{"cid", ch.cid}, {"name", ch.name}, {"description", ch.description},
                                {"current", ch.cid == own}, {"streamCount", streamCount}, {"clients", clientList}});

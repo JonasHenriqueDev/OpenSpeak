@@ -26,6 +26,7 @@ const DEFAULTS = {
   nickname: '',
   serverUrl: '',
   serverPassword: '', // servidor privado (OPENSPEAK_PASSWORD), lembrada após digitar
+  profilePasswords: {}, // por servidor e apelido (não vai para outro servidor)
   preferredCodec: 'auto',
   contacts: [], // uids
   hiddenStreams: [],

@@ -125,6 +125,23 @@ void Settings::refreshLaunchAtStartup()
 #endif
 }
 
+static QString profilePasswordKey(const QString &url, const QString &nickname)
+{
+    return url + QLatin1Char('|') + nickname.trimmed().toLower();
+}
+
+QString Settings::profilePassword(const QString &url, const QString &nickname) const
+{
+    return value("profilePasswords").toMap().value(profilePasswordKey(url, nickname)).toString();
+}
+
+void Settings::setProfilePassword(const QString &url, const QString &nickname, const QString &password)
+{
+    QVariantMap passwords = value("profilePasswords").toMap();
+    passwords.insert(profilePasswordKey(url, nickname), password);
+    set("profilePasswords", passwords);
+}
+
 void Settings::toggleContact(const QString &uid)
 {
     QStringList list = contacts();

@@ -116,6 +116,9 @@ public:
     bool fullscreenTaskbar() const { return value("fullscreenTaskbar", true).toBool(); }
     void setFullscreenTaskbar(bool v) { set("fullscreenTaskbar", v); }
 
+    /// Senha do perfil, lembrada por servidor e apelido (não vai para outro servidor).
+    Q_INVOKABLE QString profilePassword(const QString &url, const QString &nickname) const;
+    Q_INVOKABLE void setProfilePassword(const QString &url, const QString &nickname, const QString &password);
     Q_INVOKABLE bool isContact(const QString &uid) const { return contacts().contains(uid); }
     Q_INVOKABLE void toggleContact(const QString &uid);
     Q_INVOKABLE void hideStream(const QString &id);

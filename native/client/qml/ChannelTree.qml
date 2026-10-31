@@ -96,12 +96,23 @@ Rectangle {
                                 background: RowHighlight { control: clientRow }
                                 onClicked: if (!client.modelData.me) contextMenu.popup()
                                 // Identidade real (Tailscale) fica discreta: só no hover/menu.
-                                ToolTip.visible: hovered && !!client.modelData.identity
+                                ToolTip.visible: hovered && ToolTip.text.length > 0
                                 ToolTip.delay: 500
-                                ToolTip.text: I18n.t("app.identity") + ": " + client.modelData.identity
+                                ToolTip.text: [client.modelData.description,
+                                               client.modelData.identity ? I18n.t("app.identity") + ": " + client.modelData.identity : ""]
+                                              .filter(line => line).join("\n")
                                 contentItem: RowLayout {
                                     spacing: 7
-                                    Rectangle { width: 9; height: 9; radius: 5; color: "transparent"; border.width: 2; border.color: Theme.online }
+                                    Rectangle {
+                                        visible: !client.modelData.avatar
+                                        width: 9; height: 9; radius: 5; color: "transparent"; border.width: 2; border.color: Theme.online
+                                    }
+                                    Avatar {
+                                        visible: !!client.modelData.avatar
+                                        source: client.modelData.avatar
+                                        name: client.modelData.nickname
+                                        size: 18
+                                    }
                                     Label {
                                         text: client.modelData.nickname
                                         color: Theme.text

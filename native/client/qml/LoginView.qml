@@ -34,10 +34,12 @@ Rectangle {
     function enterServer() {
         // Capture todos antes de alterar Settings: os bindings reavaliam no changed.
         const nick = nickField.text.trim(), url = serverField.text.trim() || Settings.defaultServerUrl, password = passwordField.text
+        const typedProfilePassword = profilePasswordField.visible ? profilePasswordField.text : ""
         if (!nick.length) return
         Settings.serverUrl = url; Settings.serverPassword = password; Settings.nickname = nick; Settings.connectionMode = "server"
         busy = true; root.connecting()
-        Server.connectTo(url, nick, Settings.uid, password)
+        if (typedProfilePassword) Settings.setProfilePassword(url, nick, typedProfilePassword)
+        Server.connectTo(url, nick, Settings.uid, password, Settings.profilePassword(url, nick))
     }
     function enterCloud() {
         const nick = nickField.text.trim()
@@ -103,6 +105,17 @@ Rectangle {
                     text: Settings.serverPassword
                     echoMode: TextInput.Password
                     placeholderText: "Deixe vazio se o servidor não tiver senha"
+                    onAccepted: root.enterServer()
+                }
+                // Só aparece quando o apelido é um perfil e a senha lembrada não serviu.
+                Label { visible: Server.profilePasswordRequired; text: I18n.t("app.profile.password"); color: Theme.textDim }
+                TextField {
+                    id: profilePasswordField
+                    objectName: "profilePassword"
+                    visible: Server.profilePasswordRequired
+                    Layout.fillWidth: true
+                    echoMode: TextInput.Password
+                    onVisibleChanged: if (visible) forceActiveFocus()
                     onAccepted: root.enterServer()
                 }
                 Button {

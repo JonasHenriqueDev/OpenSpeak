@@ -48,6 +48,16 @@ function showError(err) {
   toasts.show({ kind: 'error', text: errorText(err) });
 }
 
+const profilePasswordKey = (url, nickname) => `${url}|${nickname.trim().toLowerCase()}`;
+
+function savedProfilePassword(url, nickname) {
+  return settings.get('profilePasswords')[profilePasswordKey(url, nickname)] ?? '';
+}
+
+function saveProfilePassword(url, nickname, password) {
+  settings.set('profilePasswords', { ...settings.get('profilePasswords'), [profilePasswordKey(url, nickname)]: password });
+}
+
 function defaultServerUrl() {
   if (deployment.serverUrl) return deployment.serverUrl;
   const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -55,6 +65,8 @@ function defaultServerUrl() {
 }
 
 // ================================================================ login
+
+let serverAddress = ''; // servidor da sessão atual (chave da senha do perfil)
 
 function renderLogin(message = '') {
   const nick = h('input.input', { value: entryParams.get('nickname')?.slice(0, 32) || settings.get('nickname'), placeholder: 'Ex.: Jonas', maxLength: 32, required: true });
@@ -68,6 +80,9 @@ function renderLogin(message = '') {
   serverField.hidden = !deployment.tailscaleOnly && server.value === defaultServerUrl();
   changeServer.hidden = !serverField.hidden;
   const password = h('input.input', { type: 'password', value: settings.get('serverPassword'), placeholder: 'Deixe vazio se o servidor não tiver senha', autocomplete: 'current-password' });
+  // Só aparece quando o apelido é um perfil e a senha lembrada não serviu.
+  const profilePassword = h('input.input', { type: 'password', autocomplete: 'current-password' });
+  const profilePasswordField = h('label.field', { hidden: true }, h('span.field-label', t('app.profile.password')), profilePassword);
   const tailnetIp = h('input.input', { value: settings.get('tailnetIp') || '', placeholder: '100.x.x.x deste PC', required: !!deployment.cloudSignaling });
   const ipHint = h('small.muted', 'Tentando detectar o IP Tailscale…');
   let detecting = false;
@@ -102,6 +117,7 @@ function renderLogin(message = '') {
         settings.set('nickname', nickname);
         settings.set('serverUrl', server.value.trim());
         settings.set('serverPassword', password.value);
+        if (!profilePasswordField.hidden) saveProfilePassword(server.value.trim(), nickname, profilePassword.value);
         if (deployment.tailscaleOnly && !deployment.cloudSignaling && new URL(server.value.trim()).hostname !== location.hostname) {
           location.assign(privateEntryUrl(server.value.trim(), nickname, entryParams.get('profile')));
           return;
@@ -113,6 +129,10 @@ function renderLogin(message = '') {
         } catch (err) {
           submit.disabled = false;
           status.textContent = errorText(err);
+          if (['profile_password', 'profile_locked'].includes(err?.returnCode)) {
+            profilePasswordField.hidden = false;
+            profilePassword.focus();
+          }
         }
       },
     },
@@ -122,6 +142,7 @@ function renderLogin(message = '') {
   h('label.field', h('span.field-label', t('app.nickname')), nick),
   deployment.cloudSignaling ? null : serverField,
   deployment.cloudSignaling ? null : h('label.field', h('span.field-label', 'Senha do servidor'), password),
+  profilePasswordField,
   deployment.cloudSignaling ? h('label.field', h('span.field-label', 'IP Tailscale deste PC'), tailnetIp, ipHint) : null,
   deployment.cloudSignaling ? h('button.btn.ghost', { type: 'button', on: { click: detectIp } }, 'Detectar IP automaticamente') : null,
   submit,
@@ -140,12 +161,23 @@ function renderLogin(message = '') {
 
 async function startSession(url, nickname) {
   const handler = new ConnectionHandler();
-  await handler.connect(url, { nickname, uid: settings.get('uid'), password: deployment.cloudSignaling ? '' : settings.get('serverPassword') });
+  await handler.connect(url, { nickname, uid: settings.get('uid'), password: deployment.cloudSignaling ? '' : settings.get('serverPassword'),
+    profilePassword: savedProfilePassword(url, nickname) });
+  serverAddress = url;
   if (deployment.tailscaleOnly) handler.iceServers = [];
   const manager = new ScreenshareManager(handler, { contacts, settings });
   new SoundEffects(handler, settings, manager);
   window.addEventListener('pagehide', () => handler.disconnect(), { once: true });
   new App(handler, manager).mount();
+}
+
+// Quadrado central de 128 px: cabe com folga no limite do servidor (MAX_AVATAR_BYTES).
+async function avatarFromFile(file) {
+  const image = await createImageBitmap(file);
+  const side = Math.min(image.width, image.height);
+  const canvas = h('canvas', { width: 128, height: 128 });
+  canvas.getContext('2d').drawImage(image, (image.width - side) / 2, (image.height - side) / 2, side, side, 0, 0, 128, 128);
+  return canvas.toDataURL('image/jpeg', 0.8);
 }
 
 class App {
@@ -188,6 +220,7 @@ class App {
           this.statusBar,
           installerLink(true),
           repoLink(),
+          h('button.btn.ghost.small', { title: t('app.profile'), on: { click: ev => this.#profilePopover(ev.currentTarget) } }, icon('user')),
           h('button.btn.ghost.small', { title: t('app.settings'), on: { click: ev => this.#settingsPopover(ev.currentTarget) } }, icon('settings')),
           h('button.btn.ghost.small', { on: { click: () => hd.disconnect() } }, icon('leave'), t('app.disconnect'))),
         h('div.app-body',
@@ -355,6 +388,52 @@ class App {
           }, icon('eye'), t('video.stream.show_stream')));
       }),
     ]);
+  }
+
+  #profilePopover(anchor) {
+    const hd = this.handler;
+    const own = hd.ownClient;
+    const reopen = () => this.#profilePopover(anchor);
+    const current = h('input.input', { type: 'password', autocomplete: 'current-password', placeholder: t('app.profile.password.current') });
+    const next = h('input.input', { type: 'password', autocomplete: 'new-password', maxLength: 128, placeholder: t('app.profile.password.new') });
+    const setPassword = async () => {
+      try {
+        await hd.setProfilePassword(next.value, current.value);
+        saveProfilePassword(serverAddress, own.nickname, next.value);
+        reopen();
+      } catch (err) { showError(err); }
+    };
+    const saveFields = fields => hd.updateProfile(fields).then(reopen, showError);
+    const profileFields = this.#profileFields(own, saveFields);
+    this.#popover(anchor, [
+      h('h4', t('app.profile')),
+      !hd.hasProfiles ? h('p.muted', t('app.profile.unavailable')) : [
+        own?.hasProfile ? current : h('p.muted', t('app.profile.password.hint')),
+        next,
+        h('button.btn', { type: 'button', on: { click: setPassword } }, t(own?.hasProfile ? 'app.profile.password.change' : 'app.profile.password.set')),
+        own?.hasProfile ? profileFields : null,
+      ],
+    ]);
+  }
+
+  #profileFields(own, saveFields) {
+    const description = h('textarea.input', { rows: 3, maxLength: 190, value: own?.description ?? '' });
+    const photo = h('input', { type: 'file', accept: 'image/*', hidden: true, on: {
+      change: async ev => {
+        const [file] = ev.target.files;
+        if (file) await saveFields({ avatar: await avatarFromFile(file) }).catch(showError);
+      },
+    } });
+    return [
+      h('label.field', h('span.field-label', t('app.profile.photo')),
+        h('div.profile-photo',
+          own?.avatar ? h('img.client-avatar', { src: own.avatar, alt: '' }) : null,
+          photo,
+          h('button.btn.ghost.small', { type: 'button', on: { click: () => photo.click() } }, t('app.profile.photo')),
+          own?.avatar ? h('button.btn.ghost.small', { type: 'button', on: { click: () => saveFields({ avatar: '' }) } }, t('app.profile.photo.remove')) : null)),
+      h('label.field', h('span.field-label', t('app.profile.description')), description),
+      h('button.btn.primary', { type: 'button', on: { click: () => saveFields({ description: description.value }) } }, t('app.profile.save')),
+    ];
   }
 
   #settingsPopover(anchor) {

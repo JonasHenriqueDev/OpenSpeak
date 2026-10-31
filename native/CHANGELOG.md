@@ -1,3 +1,10 @@
+# OpenSpeak 1.0.25 — ícone novo que acompanha o tema
+
+- O OpenSpeak tem um **ícone novo**: uma TV de antenas com cara de brava.
+- O ícone agora muda junto com o **tema e a cor de destaque**, na janela, na barra
+  de tarefas e na bandeja, sem precisar reiniciar. O atalho e o instalador
+  continuam com o ícone azul.
+
 # OpenSpeak 1.0.24 — banner, GIF no perfil e aba Perfil renovada
 
 - **Banner:** escolha uma imagem ou um GIF para aparecer atrás da sua foto no card

@@ -91,7 +91,7 @@ const STRINGS = {
   'video.join.status.waiting_for_answer': 'Aguardando autorização...',
   'video.join_requests.tooltip': 'Usuários aguardando para entrar',
 
-  'video.layout.auto': 'Automático',
+  'video.layout.auto': 'Organizar automaticamente',
   'video.layout.auto.tooltip': 'Organiza automaticamente para maximizar a área de todos os streams',
 
   'video.mode.p2p': 'P2P',

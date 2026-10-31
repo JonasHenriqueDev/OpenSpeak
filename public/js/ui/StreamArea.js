@@ -196,10 +196,12 @@ export class StreamArea {
       }, icon('users'), String(pendingTotal)) : null,
       h('span.toolbar-count', t('video.streams', { count: items.length })),
       h('span.spacer'),
-      this.focusId || this.customRects.size ? h('button.btn.ghost', {
+      items.length ? h('button.btn.ghost', {
         title: t('video.layout.auto.tooltip'),
+        'aria-label': t('video.layout.auto'),
+        disabled: !this.focusId && !this.customRects.size,
         on: { click: () => { this.focusId = null; this.offset = 0; this.customRects.clear(); this.render(); } },
-      }, icon('grid'), t('video.layout.auto')) : null,
+      }, icon('grid')) : null,
       hidden.length ? h('button.btn.ghost', {
         on: { click: ev => this.actions.manageHidden(ev.currentTarget) },
       }, icon('eyeOff'), `${t('video.stream.manage_hidden_streams')} (${hidden.length})`) : null,

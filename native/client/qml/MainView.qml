@@ -69,10 +69,16 @@ Rectangle {
                     text: Server.clientName(Server.ownClid)
                     color: Theme.text
                 }
-                Button {
-                    flat: true
-                    text: I18n.t("app.disconnect")
-                    icon.width: 0
+                ToolButton {
+                    objectName: "disconnect"
+                    implicitWidth: 34
+                    implicitHeight: 34
+                    contentItem: Item {}
+                    Icon { anchors.centerIn: parent; name: "power"; color: parent.hovered ? Theme.danger : Theme.text }
+                    Accessible.name: I18n.t("app.disconnect")
+                    ToolTip.visible: hovered
+                    ToolTip.text: I18n.t("app.disconnect")
+                    hoverEnabled: true
                     onClicked: Server.disconnectFromServer()
                 }
             }

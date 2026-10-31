@@ -280,12 +280,18 @@ Rectangle {
                 }
                 Label { text: I18n.t("video.streams", { count: streams.count }); color: Theme.textDim; leftPadding: 6 }
                 Item { Layout.fillWidth: true }
-                Button {
-                    flat: true
-                    visible: root.focusId !== "" || root.hasCustomRects
-                    text: I18n.t("video.layout.auto")
+                ToolButton {
+                    objectName: "autoArrange"
+                    implicitWidth: 34
+                    implicitHeight: 34
+                    visible: streams.count > 0
+                    enabled: root.focusId !== "" || root.hasCustomRects
+                    contentItem: Item {}
+                    Icon { anchors.centerIn: parent; name: "grid"; color: parent.enabled ? Theme.text : Theme.textFaint }
+                    Accessible.name: I18n.t("video.layout.auto")
                     ToolTip.visible: hovered
                     ToolTip.text: I18n.t("video.layout.auto.tooltip")
+                    hoverEnabled: true
                     onClicked: root.autoArrange()
                 }
                 Button {

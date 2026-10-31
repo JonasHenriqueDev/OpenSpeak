@@ -225,7 +225,7 @@ class App {
           repoLink(),
           h('button.btn.ghost.small', { title: t('app.profile'), on: { click: ev => this.#profilePopover(ev.currentTarget) } }, icon('user')),
           h('button.btn.ghost.small', { title: t('app.settings'), on: { click: ev => this.#settingsPopover(ev.currentTarget) } }, icon('settings')),
-          h('button.btn.ghost.small', { on: { click: () => hd.disconnect() } }, icon('leave'), t('app.disconnect'))),
+          h('button.btn.ghost.small', { title: t('app.disconnect'), 'aria-label': t('app.disconnect'), on: { click: () => hd.disconnect() } }, icon('power'))),
         h('div.app-body',
           h('div.sidebar', this.tree.el),
           h('main.content', this.area.el),

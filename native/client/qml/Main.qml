@@ -194,6 +194,7 @@ ApplicationWindow {
         onQuitRequested: window.quitApp()
         onInstallRequested: installDialog.open()
     }
+    ChangelogDialog { id: changelogDialog }
     Dialog {
         id: installDialog
         title: "Atualizar OpenSpeak"
@@ -215,11 +216,9 @@ ApplicationWindow {
             const text = I18n.t("app.updated", { version: Updater.version })
             if (StartHidden)
                 Tray.showMessage("OpenSpeak", text)
-            Qt.callLater(() => toasts.show({
-                key: "updated", kind: "info", icon: "download", timeout: 15000, text: text,
-                actions: [{ label: I18n.t("app.updated.open"), primary: true, run: function() { preferencesDialog.openAt("updates") } }]
-            }))
+            Qt.callLater(() => changelogDialog.open())
         }
+        if (DebugOpen === "update-notes") Qt.callLater(() => changelogDialog.open())
         Tray.texts = {
             open: I18n.t("app.tray.open"),
             stop: I18n.t("app.tray.stop"),

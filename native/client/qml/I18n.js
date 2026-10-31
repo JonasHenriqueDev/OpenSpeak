@@ -335,7 +335,6 @@ const STRINGS = {
   'app.updates.options': 'Opções',
   'app.prefs.section.updates': 'Atualizações',
   'app.updated': 'OpenSpeak atualizado para a versão {version}',
-  'app.updated.open': 'Ver novidades',
   'video.sources.test': 'Teste',
   'video.setup.test_pattern': 'Padrão de teste',
   'video.setup.refresh': 'Atualizar lista',

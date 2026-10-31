@@ -223,6 +223,12 @@ int main(int argc, char *argv[])
             } else if (panel == "startup") {
                 auto *startup = findVisualItem(window->contentItem(), QStringLiteral("startupScreen"));
                 valid = valid && startup && startup->isVisible() && startup->width() >= 800;
+            } else if (panel == "update-notes") {
+                auto *dialog = window->findChild<QObject *>(QStringLiteral("changelogDialog"));
+                auto *text = findVisualItem(window->contentItem(), QStringLiteral("changelogText"));
+                valid = valid && dialog && dialog->property("visible").toBool()
+                    && dialog->property("height").toDouble() < window->height()
+                    && text && text->height() > 20;
             } else if (panel == "updates" || panel == "preferences" || panel == "profile" || panel == "changelog" || panel == "licenses") {
                 // Atualizações, novidades e licenças são páginas das Preferências.
                 auto *dialog = window->findChild<QObject *>(QStringLiteral("preferencesDialog"));

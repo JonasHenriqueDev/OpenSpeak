@@ -47,7 +47,7 @@ function Build-Edition([string]$Edition) {
     }
     New-Item -ItemType Directory -Force $staging | Out-Null
     Copy-Item (Join-Path $release 'OpenSpeak.exe') $staging
-    & $deploy --release --no-translations --no-compiler-runtime --no-system-d3d-compiler --qmldir (Join-Path $here 'client\qml') (Join-Path $staging 'OpenSpeak.exe') | Out-Null
+    & $deploy --release --no-translations --no-compiler-runtime --no-system-d3d-compiler --no-system-dxc-compiler --qmldir (Join-Path $here 'client\qml') (Join-Path $staging 'OpenSpeak.exe') | Out-Null
     if ($LASTEXITCODE) { throw 'windeployqt do cliente falhou' }
     if ($full) {
         Copy-Item (Join-Path $release 'openspeak-server.exe') $staging

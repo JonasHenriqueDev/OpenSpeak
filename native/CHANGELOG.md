@@ -1,3 +1,13 @@
+# OpenSpeak 1.0.26 — GIF em loop, cursor na tela inteira e ícone na barra de tarefas
+
+- A **foto e o banner em GIF** agora ficam em loop, em vez de parar depois da
+  primeira volta.
+- A foto em GIF e o banner voltaram a aparecer no **card de perfil** da lista de
+  pessoas conectadas.
+- A **transmissão de tela inteira** volta a mostrar o cursor do mouse.
+- A **barra de tarefas** agora mostra o ícone novo, que acompanha o tema, no lugar
+  do antigo. O instalador também avisa o Windows para trocar o ícone guardado.
+
 # OpenSpeak 1.0.25 — ícone novo que acompanha o tema
 
 - O OpenSpeak tem um **ícone novo**: uma TV de antenas com cara de brava.

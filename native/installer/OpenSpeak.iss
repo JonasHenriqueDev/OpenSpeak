@@ -45,6 +45,10 @@ OutputDir=..\dist
 OutputBaseFilename={#SetupName}-{#AppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
+; Comprime em blocos paralelos: a etapa mais lenta do package.ps1, por poucos MB a mais.
+LZMANumBlockThreads=8
+LZMABlockSize=32768
+LZMAUseSeparateProcess=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest

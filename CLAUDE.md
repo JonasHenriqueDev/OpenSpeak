@@ -30,15 +30,16 @@ Env: `PORT`, `HOST`, `OPENSPEAK_NAME`, `OPENSPEAK_PROFILES_FILE`, `OPENSPEAK_ICE
 
 Native (Windows, PowerShell; toolchain paths are hardcoded defaults in the scripts: VS 2026, Qt `C:\Qt\6.11.3\msvc2022_64`, vcpkg `D:\Dev\vcpkg`, triplet `x64-windows-static-md`, deps in `native/vcpkg_installed`):
 ```bash
-powershell -ExecutionPolicy Bypass -File native/build.ps1               # configure + Release build + ctest
+powershell -ExecutionPolicy Bypass -File native/build.ps1               # Release build (Ninja) + only the tests whose inputs changed
+powershell -ExecutionPolicy Bypass -File native/build.ps1 -AllTests     # same, full suite
+powershell -ExecutionPolicy Bypass -File native/build.ps1 -DryRun       # print the test selection, build nothing
 powershell -ExecutionPolicy Bypass -File native/build.ps1 -ServerOnly   # server + tests only
-powershell -ExecutionPolicy Bypass -File native/build.ps1 -Tests 'tst_engine|ui_'   # build all, ctest -R <regex> only
-powershell -ExecutionPolicy Bypass -File native/build.ps1 -Changed      # build all, only tests affected since last v* tag
+powershell -ExecutionPolicy Bypass -File native/build.ps1 -Tests 'tst_engine|ui_'   # force tests by ctest -R regex
 powershell -ExecutionPolicy Bypass -File native/package.ps1             # Lite installer only (default) into native/dist
 powershell -ExecutionPolicy Bypass -File native/package.ps1 -Full -Portable   # also Full edition and portable ZIP/exe
 ```
 **Packaging rule (user preference):** build/package **only the Lite installer** (plain `package.ps1`, no flags). Do **not** pass `-Full` or `-Portable` unless the user explicitly asks for the Full edition or the portable builds in that request. When publishing a Lite-only release, upload just `OpenSpeak-Setup-<versão>.exe`, `OpenSpeak-Setup.exe` and the `SHA256SUMS-<versão>.txt` covering them.
-`-Changed` diffs `<last v* tag>..HEAD` + working tree + untracked: `native/client/qml/` → `ui_*`; `native/server/` → `tst_virtualserver|tst_sfu_e2e|tst_p2p_e2e`; `native/client/{core,rtc,video,media}/` → `tst_engine|tst_p2p_e2e|tst_cloudconnection`; only `native/installer/` or `*.md` (CHANGELOG, docs) or files outside `native/` → skips ctest; anything else → full suite. Use `-Tests`/`-Changed` only day to day: releases (`package.ps1`) always run the full suite. The build uses `--parallel $env:NUMBER_OF_PROCESSORS` plus MSVC `/MP`.
+Test selection lives in `native/tests/TestSelection.ps1`: each test lists its input files, and `build.ps1` runs it only if their hash differs from its last pass (`build/test-cache-<Config>.json`; a failed test stays pending). Unmapped files and tests fall back to running everything, so add new ones to the map. `build.ps1` builds only the test executables it will run, plus `OpenSpeak` and `openspeak-server`; tests run with `ctest --parallel 8` (`RUN_SERIAL` for real-window tests, `RESOURCE_LOCK e2e` for e2e). `package.ps1` uses the same selection; pass `-AllTests` to force the full suite.
 Single native test: `ctest --test-dir native/build -C Release -R tst_virtualserver --output-on-failure` (Qt `bin` must be on PATH). Tests: `tst_virtualserver`, `tst_windowthumbnail`, and `ui_<panel>` smoke tests that run `OpenSpeak --ui-smoke-test --open <panel>`.
 
 ## Releases / editions

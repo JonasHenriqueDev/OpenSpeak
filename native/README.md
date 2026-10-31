@@ -20,34 +20,41 @@ Pré-requisitos (já instalados nesta máquina):
 powershell -ExecutionPolicy Bypass -File native/build.ps1
 ```
 
-O script configura, compila em Release e roda os testes. O `windeployqt` copia as
-DLLs do Qt para `build\Release`, que fica autônomo. FFmpeg, libdatachannel e
-OpenSSL são linkados estaticamente. A compilação usa todos os núcleos
-(`--parallel $env:NUMBER_OF_PROCESSORS` e `/MP` do MSVC).
+O script configura, compila em Release com Ninja e roda os testes afetados. O
+`windeployqt` copia as DLLs do Qt para `build\Release`, que fica autônomo. FFmpeg,
+libdatachannel e OpenSSL são linkados estaticamente. A compilação usa todos os
+núcleos e os cabeçalhos do Qt são pré-compilados (`OPENSPEAK_PCH`).
 
 A versão (`-Version`) entra só em `build\generated\Version.cpp`, gerado de
 `common/Version.cpp.in` e exposto por `openspeak::version()` (`common/Version.h`).
 Trocar de versão recompila apenas esse arquivo e refaz o link.
 
-No dia a dia dá para rodar só parte dos testes (o build continua completo):
+Um teste só roda se os arquivos de que ele depende mudaram desde a última vez que
+passou. O mapa teste → arquivos fica em `tests/TestSelection.ps1`, e quem passou é
+lembrado em `build\test-cache-<Config>.json` pelo hash desses arquivos. Por isso um
+teste que falhou continua pendente, e desfazer uma alteração não repete o que já
+passou com aquele conteúdo. Só são compilados os testes que vão rodar.
 
 ```bash
-powershell -ExecutionPolicy Bypass -File native/build.ps1 -Tests 'tst_engine|ui_'   # regex passada ao ctest -R
-powershell -ExecutionPolicy Bypass -File native/build.ps1 -Changed                  # só o afetado desde a última tag v*
+powershell -ExecutionPolicy Bypass -File native/build.ps1 -DryRun                   # mostra o que rodaria, sem compilar
+powershell -ExecutionPolicy Bypass -File native/build.ps1 -AllTests                 # suíte completa
+powershell -ExecutionPolicy Bypass -File native/build.ps1 -Tests 'tst_engine|ui_'   # força por regex (ctest -R)
 ```
-
-O `-Changed` olha `git diff <última tag v*>..HEAD`, a working tree e os arquivos não
-rastreados:
 
 | Mudou | Testes |
 |---|---|
-| `client/qml/` | `ui_*` |
-| `server/` | `tst_virtualserver`, `tst_sfu_e2e`, `tst_p2p_e2e` |
-| `client/core`, `rtc`, `video`, `media` | `tst_engine`, `tst_p2p_e2e`, `tst_cloudconnection` |
-| só `installer/`, `*.md` (CHANGELOG, docs) ou fora de `native/` | nenhum (pula o ctest) |
-| qualquer outra coisa (CMake, `common/`, `tests/`…) | todos |
+| uma tela em `client/qml/` | só os `ui_*` daquela tela |
+| `Main`, `MainView`, `main.cpp` | todos os `ui_*` |
+| `Theme`, `Icon`, `I18n`, `assets/` e demais peças visuais comuns | amostra: `ui_startup`, `ui_login`, `ui_setup`, `ui_preferences` |
+| `server/` | `tst_serverhost`, `tst_p2p_e2e`, `tst_sfu_e2e` (e `tst_virtualserver` no núcleo) |
+| motor (`client/core`, `media`, `mesh`, `rtc`, `video`) | `tst_engine`, e2e e a amostra de `ui_*` |
+| `WindowGrabber` | `tst_windowgrabber`, `ui_setup`, `ui_source` |
+| `installer/`, `portable/`, `*.md` (fora o CHANGELOG), versão ou fora de `native/` | nenhum |
+| `CMakeLists.txt`, `vcpkg.json` ou arquivo fora do mapa | todos |
 
-O `package.ps1` sempre roda a suíte completa antes de gerar a release.
+Arquivo ou teste novo que não esteja no mapa entra na regra de rodar tudo; ao criar
+um, acrescente-o em `tests/TestSelection.ps1`. O `package.ps1` usa a mesma seleção;
+passe `-AllTests` para exigir a suíte completa na release.
 
 Para reinstalar as dependências (≈30 min na primeira vez):
 

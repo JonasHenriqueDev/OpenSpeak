@@ -34,6 +34,7 @@ target_link_libraries(openspeak_engine PUBLIC
 )
 target_link_libraries(openspeak_engine PRIVATE Qt6::MultimediaPrivate dwmapi)
 target_compile_definitions(openspeak_engine PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+target_precompile_headers(openspeak_engine PRIVATE ${OPENSPEAK_PCH})
 
 # ---------------------------------------------------------------- app
 find_package(Qt6 REQUIRED COMPONENTS MultimediaPrivate)

@@ -1,3 +1,8 @@
+# OpenSpeak 1.0.29 — preview no picture-in-picture
+
+- O **preview maior** agora some da grade enquanto o picture-in-picture está aberto,
+  no app e na versão web, em vez de mostrar o vídeo duas vezes.
+
 # OpenSpeak 1.0.28 — novidades ao atualizar e tamanho dos previews
 
 - Depois de atualizar, o app abre uma janela com as **novidades da versão**, com a

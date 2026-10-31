@@ -1,3 +1,12 @@
+# OpenSpeak 1.0.23 — card de perfil e ajuste da foto
+
+- Clique em alguém na lista para ver o **perfil**, com foto, descrição e o botão
+  de contato.
+- Ao escolher uma **foto**, agora dá para posicionar e dar zoom antes de aplicar.
+- Os campos de senha ganharam um botão para **mostrar a senha**.
+- Perdeu a senha do perfil? O administrador pode gerar uma nova, e você a troca
+  depois em Preferências › Perfil.
+
 # OpenSpeak 1.0.22 — perfis, cursor na transmissão e tela inicial mais simples
 
 - **Perfis:** defina uma senha em Preferências › Perfil para reservar o seu

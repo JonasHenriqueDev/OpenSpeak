@@ -57,6 +57,28 @@ private slots:
         }
     }
 
+    // Trocar de fonte abre a prévia do monitor com a transmissão ainda capturando nele.
+    void twoCapturesShareTheMonitor()
+    {
+        const auto monitor = reinterpret_cast<quintptr>(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY));
+        auto stream = WindowGrabber::forMonitor(monitor, 30);
+        QSignalSpy streamFrames(stream.get(), &WindowGrabber::frameReady);
+        stream->start();
+        QTRY_VERIFY_WITH_TIMEOUT(!streamFrames.isEmpty(), 2000);
+
+        auto preview = WindowGrabber::forMonitor(monitor, 30);
+        QSignalSpy previewFrames(preview.get(), &WindowGrabber::frameReady);
+        QSignalSpy fallback(preview.get(), &WindowGrabber::fallbackRequested);
+        preview->start();
+        QTRY_VERIFY_WITH_TIMEOUT(!previewFrames.isEmpty(), 1500);
+        QVERIFY(fallback.isEmpty());
+
+        // A transmissão continua depois que a prévia fecha.
+        preview.reset();
+        streamFrames.clear();
+        QTRY_VERIFY_WITH_TIMEOUT(!streamFrames.isEmpty(), 1000);
+    }
+
     // QScreenCapture não inclui o cursor; a captura de monitor precisa desenhá-lo.
     void monitorCaptureIncludesCursor()
     {

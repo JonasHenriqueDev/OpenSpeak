@@ -221,10 +221,12 @@ select.input { padding-right: 4px; }
 .stream-row.clickable:hover { background: var(--panel-2); color: var(--text); }
 .stream-row.watching { color: var(--accent); }
 .live-badge {
-  margin-left: auto; font-size: 9.5px; font-weight: 700; letter-spacing: .06em;
-  background: var(--live); color: #fff; padding: 1px 5px; border-radius: 3px;
+  display: inline-flex; align-items: center; flex: none; height: 16px;
+  margin-left: auto; font-size: 9.5px; font-weight: 700; letter-spacing: .06em; line-height: 1;
+  background: var(--live); color: #fff; padding: 0 5px; border-radius: 4px;
 }
-.viewer-count { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; }
+.viewer-count { display: inline-flex; align-items: center; flex: none; gap: 3px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.stream-row .viewer-count { min-width: 30px; }
 .viewer-count .icon { width: 14px; height: 14px; }
 
 .context-menu, .popover {

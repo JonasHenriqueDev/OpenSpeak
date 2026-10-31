@@ -162,14 +162,19 @@ Rectangle {
                                             font.pixelSize: 12
                                             elide: Text.ElideRight
                                         }
+                                        // Selo e contagem no mesmo eixo; a contagem tem largura
+                                        // reservada para o selo não pular quando o número muda.
                                         Rectangle {
-                                            radius: 3
+                                            Layout.alignment: Qt.AlignVCenter
+                                            Layout.preferredWidth: liveLabel.implicitWidth + 10
+                                            Layout.preferredHeight: 16
+                                            radius: 4
                                             color: Theme.live
-                                            implicitWidth: liveLabel.implicitWidth + 10
-                                            implicitHeight: 15
                                             Label {
                                                 id: liveLabel
-                                                anchors.centerIn: parent
+                                                anchors.fill: parent
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
                                                 text: I18n.t("video.stream.live")
                                                 color: "white"
                                                 font.pixelSize: 9
@@ -178,6 +183,8 @@ Rectangle {
                                         }
                                         ViewerCount {
                                             id: streamViewers
+                                            Layout.alignment: Qt.AlignVCenter
+                                            Layout.minimumWidth: 30
                                             streamId: streamRow.modelData.streamIdentifier
                                             count: streamRow.modelData.viewerCount
                                         }

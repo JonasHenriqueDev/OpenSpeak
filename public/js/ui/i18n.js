@@ -18,6 +18,8 @@ const STRINGS = {
   'app.profile.photo': 'Foto',
   'app.profile.photo.remove': 'Remover foto',
   'app.profile.description': 'Descrição',
+  'app.profile.color': 'Cor do apelido',
+  'app.profile.color.default': 'Padrão',
   'app.profile.save': 'Salvar perfil',
   'app.profile.saved': 'Perfil salvo.',
   'app.connecting': 'Conectando...',

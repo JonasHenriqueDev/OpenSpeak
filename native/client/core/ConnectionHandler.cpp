@@ -322,7 +322,7 @@ QVariantList ConnectionHandler::tree() const
             streamCount += streams.size();
             clientList.append(QVariantMap{{"clid", c.clid}, {"nickname", c.nickname}, {"uid", c.uid}, {"identity", c.identity},
                                           {"me", c.clid == m_ownClid}, {"streams", streams}, {"pingMs", c.pingMs},
-                                          {"avatar", c.avatar}, {"description", c.description}});
+                                          {"avatar", c.avatar}, {"description", c.description}, {"color", c.color}});
         }
         out.append(QVariantMap{{"cid", ch.cid}, {"name", ch.name}, {"description", ch.description},
                                {"current", ch.cid == own}, {"streamCount", streamCount}, {"clients", clientList}});

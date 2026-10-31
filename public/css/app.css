@@ -196,6 +196,7 @@ select.input { padding-right: 4px; }
 .client-row:hover { background: var(--panel-2); }
 .client-row.me { font-weight: 600; }
 .profile-photo { display: flex; align-items: center; gap: 8px; }
+.profile-color { width: 36px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent; cursor: pointer; }
 .client-avatar { width: 18px; height: 18px; flex: none; border-radius: 50%; object-fit: cover; }
 .talk-dot { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--online); flex: none; }
 .contact-star { color: var(--gold); }

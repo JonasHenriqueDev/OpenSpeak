@@ -51,7 +51,7 @@ export class ChannelTree {
         on: { contextmenu: ev => { if (!isMe) { ev.preventDefault(); this.#openMenu(ev, client); } } },
       },
         client.avatar ? h('img.client-avatar', { src: client.avatar, alt: '' }) : h('span.talk-dot'),
-        h('span.ellipsis', { title: client.description || null }, client.nickname),
+        h('span.ellipsis', { title: client.description || null, style: client.color ? { color: client.color } : null }, client.nickname),
         isMe ? h('span.muted', `(${t('app.you')})`) : null,
         isContact ? h('span.contact-star', { title: t('app.contacts') }, icon('star')) : null,
         h('span.client-ping', { title: 'Ping desta pessoa até o servidor (RTT)' },

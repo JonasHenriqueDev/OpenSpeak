@@ -312,13 +312,18 @@ Popup {
             readonly property bool claimed: !!profile.hasProfile
             property string status: ""
             property bool statusFailed: false
+            property string pickedColor: profile.color || ""
 
             function showStatus(text, failed) {
                 status = text
                 statusFailed = failed
             }
             function save() {
-                Server.updateProfile({ description: descriptionField.text })
+                if (pickedColor && !/^#[0-9a-fA-F]{6}$/.test(pickedColor)) {
+                    showStatus(I18n.t("app.profile.color.invalid"), true)
+                    return
+                }
+                Server.updateProfile({ description: descriptionField.text, color: pickedColor })
             }
             Connections {
                 target: Server
@@ -361,7 +366,12 @@ Popup {
                 }
                 ColumnLayout {
                     spacing: 2
-                    Label { text: profileContent.profile.nickname || ""; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                    Label {
+                        text: profileContent.profile.nickname || ""
+                        color: profileContent.pickedColor.length === 7 ? profileContent.pickedColor : Theme.text
+                        font.pixelSize: 16
+                        font.weight: Font.DemiBold
+                    }
                     Label { text: I18n.t("app.profile.nickname"); color: Theme.textDim; font.pixelSize: 12 }
                 }
             }
@@ -410,6 +420,42 @@ Popup {
                     flat: true
                     text: I18n.t("app.profile.photo.remove")
                     onClicked: Server.updateProfile({ avatar: "" })
+                }
+            }
+
+            SectionHeader { visible: profileContent.available && profileContent.claimed; text: I18n.t("app.profile.color") }
+            Flow {
+                visible: profileContent.available && profileContent.claimed
+                Layout.fillWidth: true
+                spacing: 8
+                Repeater {
+                    model: ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899"]
+                    delegate: AbstractButton {
+                        id: swatch
+                        required property string modelData
+                        width: 30; height: 30
+                        Accessible.name: modelData
+                        onClicked: profileContent.pickedColor = modelData
+                        background: Rectangle {
+                            radius: width / 2
+                            color: swatch.modelData
+                            border.width: profileContent.pickedColor === swatch.modelData ? 3 : 0
+                            border.color: Theme.text
+                        }
+                    }
+                }
+                TextField {
+                    objectName: "profileColor"
+                    width: 110
+                    text: profileContent.pickedColor
+                    placeholderText: "#RRGGBB"
+                    maximumLength: 7
+                    onTextEdited: profileContent.pickedColor = text.trim()
+                }
+                Button {
+                    flat: true
+                    text: I18n.t("app.profile.color.default")
+                    onClicked: profileContent.pickedColor = ""
                 }
             }
 

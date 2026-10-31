@@ -115,7 +115,7 @@ Rectangle {
                                     }
                                     Label {
                                         text: client.modelData.nickname
-                                        color: Theme.text
+                                        color: client.modelData.color || Theme.text
                                         font.weight: client.modelData.me ? Font.DemiBold : Font.Normal
                                         elide: Text.ElideRight
                                         Layout.maximumWidth: 150

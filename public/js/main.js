@@ -418,6 +418,9 @@ class App {
 
   #profileFields(own, saveFields) {
     const description = h('textarea.input', { rows: 3, maxLength: 190, value: own?.description ?? '' });
+    const color = h('input.profile-color', { type: 'color', value: own?.color || '#ffffff' });
+    let colorPicked = !!own?.color;
+    color.addEventListener('input', () => { colorPicked = true; });
     const photo = h('input', { type: 'file', accept: 'image/*', hidden: true, on: {
       change: async ev => {
         const [file] = ev.target.files;
@@ -431,8 +434,11 @@ class App {
           photo,
           h('button.btn.ghost.small', { type: 'button', on: { click: () => photo.click() } }, t('app.profile.photo')),
           own?.avatar ? h('button.btn.ghost.small', { type: 'button', on: { click: () => saveFields({ avatar: '' }) } }, t('app.profile.photo.remove')) : null)),
+      h('div.field', h('span.field-label', t('app.profile.color')),
+        h('div.profile-photo', color,
+          h('button.btn.ghost.small', { type: 'button', on: { click: () => { colorPicked = false; saveFields({ color: '' }); } } }, t('app.profile.color.default')))),
       h('label.field', h('span.field-label', t('app.profile.description')), description),
-      h('button.btn.primary', { type: 'button', on: { click: () => saveFields({ description: description.value }) } }, t('app.profile.save')),
+      h('button.btn.primary', { type: 'button', on: { click: () => saveFields({ description: description.value, color: colorPicked ? color.value : '' }) } }, t('app.profile.save')),
     ];
   }
 

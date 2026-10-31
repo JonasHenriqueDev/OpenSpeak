@@ -3,7 +3,7 @@
 // permite desligá-la). Híbrido, como o CroppingWindowCapturer do WebRTC:
 //  A) janela sem nada por cima: duplicação da tela (DXGI) recortada na GPU;
 //  B) janela coberta: PrintWindow(PW_RENDERFULLCONTENT);
-//  C) preto nos dois por ~1 s (alguns jogos/D3D): emite fallbackRequested e o
+//  C) preto nos dois por ~3 s (alguns jogos/D3D): emite fallbackRequested e o
 //     VideoSource volta para o QWindowCapture (com borda).
 // Também captura um monitor inteiro (forMonitor), pelo mesmo caminho A: é o que põe o
 // cursor na transmissão de tela, que o QScreenCapture não inclui.

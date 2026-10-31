@@ -24,6 +24,7 @@ namespace {
 
 constexpr UINT kPrintWindowFullContent = 0x2; // PW_RENDERFULLCONTENT (Windows 8.1+)
 constexpr ULONGLONG kOcclusionIntervalMs = 250;
+constexpr int kBlackFallbackSeconds = 3; // folga para um alt-tab não cair na captura com borda
 
 RECT frameBounds(HWND hwnd)
 {
@@ -537,12 +538,12 @@ void WindowGrabber::tick()
     if (!ok)
         return;
 
-    // C) preto nos dois modos por ~1 s: PW_RENDERFULLCONTENT não funciona para esta janela.
+    // C) preto nos dois modos por ~3 s: PW_RENDERFULLCONTENT não funciona para esta janela.
     if (method == Impl::Method::PrintWindow && d.outIsBlack()) {
-        if (++d.blackStreak >= m_fps) {
+        if (++d.blackStreak >= kBlackFallbackSeconds * m_fps) {
             d.closed = true;
             m_timer->stop();
-            qInfo() << "WindowGrabber: duplicação e PrintWindow só devolvem preto há 1 s; voltando para o Windows.Graphics.Capture";
+            qInfo() << "WindowGrabber: duplicação e PrintWindow só devolvem preto há 3 s; voltando para o Windows.Graphics.Capture";
             emit fallbackRequested();
             return;
         }

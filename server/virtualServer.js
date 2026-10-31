@@ -249,6 +249,11 @@ export class VirtualServer {
         if (args.avatar.length > MAX_AVATAR_BYTES) fail(ReturnCode.PAYLOAD_TOO_LARGE);
         fields.avatar = args.avatar;
       }
+      if ('avatarAnimated' in args) {
+        if (args.avatarAnimated !== '' && !/^data:image\/gif;base64,[A-Za-z0-9+/=]+$/.test(args.avatarAnimated)) fail(ReturnCode.INVALID_ARGS);
+        if (args.avatarAnimated.length > MAX_PROFILE_MEDIA_BYTES) fail(ReturnCode.PAYLOAD_TOO_LARGE);
+        fields.avatarAnimated = args.avatarAnimated;
+      }
       if ('banner' in args) {
         if (args.banner !== '' && !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(args.banner)) fail(ReturnCode.INVALID_ARGS);
         if (args.banner.length > MAX_PROFILE_MEDIA_BYTES) fail(ReturnCode.PAYLOAD_TOO_LARGE);
@@ -269,7 +274,7 @@ export class VirtualServer {
       const target = [...this.clients.values()].find(c => c.loggedIn && c.clid === Number(args.clid));
       if (!target) fail(ReturnCode.INVALID_ARGS);
       const profile = this.#profileOf(target);
-      return { mediaTag: profile?.mediaTag ?? '', banner: profile?.banner ?? '' };
+      return { mediaTag: profile?.mediaTag ?? '', banner: profile?.banner ?? '', avatarAnimated: profile?.avatarAnimated ?? '' };
     },
 
     setupstream(client, args) {

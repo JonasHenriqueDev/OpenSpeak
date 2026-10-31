@@ -354,8 +354,20 @@ Popup {
             }
             FileDialog {
                 id: photoDialog
-                nameFilters: ["Imagens (*.png *.jpg *.jpeg *.webp *.bmp)"]
-                onAccepted: photoCrop.openFor(selectedFile)
+                nameFilters: ["Imagens e GIFs (*.png *.jpg *.jpeg *.webp *.bmp *.gif)"]
+                onAccepted: {
+                    if (!/\.gif$/i.test(selectedFile.toString())) {
+                        photoCrop.openFor(selectedFile)
+                    } else if (Server.gifTooLarge(selectedFile)) {
+                        profileContent.showStatus(I18n.t("app.profile.gif.too_large"), true)
+                    } else {
+                        const fields = Server.animatedAvatarFromFile(selectedFile)
+                        if (fields.avatar)
+                            Server.updateProfile(fields)
+                        else
+                            profileContent.showStatus(I18n.t("app.profile.photo.invalid"), true)
+                    }
+                }
             }
             FileDialog {
                 id: bannerDialog
@@ -379,7 +391,7 @@ Popup {
                 onCropped: (file, x, y, side) => {
                     const avatar = Server.avatarFromFile(file, x, y, side)
                     if (avatar)
-                        Server.updateProfile({ avatar: avatar })
+                        Server.updateProfile({ avatar: avatar, avatarAnimated: "" })
                     else
                         profileContent.showStatus(I18n.t("app.profile.photo.invalid"), true)
                 }
@@ -398,6 +410,7 @@ Popup {
                 spacing: 14
                 Avatar {
                     source: profileContent.profile.avatar || ""
+                    animatedSource: profileContent.media.avatarAnimated || ""
                     name: profileContent.profile.displayName || profileContent.profile.nickname || ""
                     size: 64
                 }
@@ -458,7 +471,7 @@ Popup {
                     visible: !!profileContent.profile.avatar
                     flat: true
                     text: I18n.t("app.profile.photo.remove")
-                    onClicked: Server.updateProfile({ avatar: "" })
+                    onClicked: Server.updateProfile({ avatar: "", avatarAnimated: "" })
                 }
             }
 
@@ -487,7 +500,7 @@ Popup {
                 spacing: 8
                 Button { text: I18n.t("app.profile.banner.choose"); onClicked: bannerDialog.open() }
                 Button {
-                    visible: !!profileContent.mediaTag
+                    visible: !!profileContent.media.banner
                     flat: true
                     text: I18n.t("app.profile.banner.remove")
                     onClicked: Server.updateProfile({ banner: "" })

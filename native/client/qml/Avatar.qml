@@ -6,6 +6,7 @@ import QtQuick.Effects
 Item {
     id: root
     property string source: ""
+    property string animatedSource: "" // GIF; só o card e as configurações passam, a lista fica estática
     property string name: ""
     property int size: 20
     implicitWidth: size
@@ -32,6 +33,15 @@ Item {
         fillMode: Image.PreserveAspectCrop
         visible: false
     }
+    AnimatedImage {
+        id: gif
+        anchors.fill: parent
+        source: root.animatedSource
+        fillMode: Image.PreserveAspectCrop
+        asynchronous: true
+        cache: false
+        visible: false
+    }
     Item {
         id: mask
         anchors.fill: parent
@@ -41,8 +51,8 @@ Item {
     }
     MultiEffect {
         anchors.fill: parent
-        source: photo
-        visible: photo.status === Image.Ready
+        source: root.animatedSource && gif.status === Image.Ready ? gif : photo
+        visible: photo.status === Image.Ready || gif.status === Image.Ready
         maskEnabled: true
         maskSource: mask
         maskThresholdMin: 0.5

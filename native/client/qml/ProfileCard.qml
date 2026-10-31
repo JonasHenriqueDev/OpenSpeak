@@ -57,6 +57,7 @@ Popup {
         Avatar {
             Layout.topMargin: root.media.banner ? -44 : 0
             source: root.person.avatar || ""
+            animatedSource: root.media.avatarAnimated || ""
             name: root.person.name || ""
             size: 72
         }

@@ -31,6 +31,16 @@ const dataUrl = file => new Promise((resolve, reject) => {
   reader.readAsDataURL(file);
 });
 
+/** GIF como foto: a capa estática (recorte central) vai na lista; o GIF intacto, no card. */
+export async function animatedAvatarFromFile(file) {
+  if (file.size > MAX_GIF_BYTES) throw new Error(t('app.profile.gif.too_large'));
+  const image = await createImageBitmap(file);
+  const output = h('canvas', { width: OUTPUT, height: OUTPUT });
+  draw(output, image, cropRect(image.width, image.height, { centerX: 0.5, centerY: 0.5, zoom: 1 }));
+  image.close();
+  return { avatar: output.toDataURL('image/jpeg', 0.8), avatarAnimated: await dataUrl(file) };
+}
+
 /** Banner como data URL: GIF vai intacto; o resto vira JPEG 5:2 recortado do centro. */
 export async function bannerFromFile(file) {
   if (file.type === 'image/gif') {

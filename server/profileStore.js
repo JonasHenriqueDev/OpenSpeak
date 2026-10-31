@@ -72,7 +72,8 @@ export class ProfileStore {
   update(key, fields) {
     const profile = Object.assign(this.profiles.get(key), fields);
     // Quem já baixou a mídia reconhece pelo tag que ela não mudou.
-    profile.mediaTag = profile.banner ? createHash('sha256').update(profile.banner).digest('hex').slice(0, 12) : '';
+    const media = `${profile.banner ?? ''}${profile.avatarAnimated ?? ''}`;
+    profile.mediaTag = media ? createHash('sha256').update(media).digest('hex').slice(0, 12) : '';
     this.#save();
   }
 

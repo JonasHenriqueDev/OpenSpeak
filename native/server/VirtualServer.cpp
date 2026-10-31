@@ -418,6 +418,14 @@ QJsonObject VirtualServer::cmdUpdateProfile(Client &client, const QJsonObject &a
             fail(rc::PayloadTooLarge);
         profile.avatar = avatar;
     }
+    if (args.contains("avatarAnimated")) {
+        const QString gif = args.value("avatarAnimated").toString();
+        if (!gif.isEmpty() && !isDataImage(gif, {QStringLiteral("gif")}))
+            fail(rc::InvalidArgs);
+        if (gif.size() > MaxProfileMediaBytes)
+            fail(rc::PayloadTooLarge);
+        profile.avatarAnimated = gif;
+    }
     if (args.contains("banner")) {
         const QString banner = args.value("banner").toString();
         if (!banner.isEmpty() && !isDataImage(banner, {QStringLiteral("png"), QStringLiteral("jpeg"), QStringLiteral("webp"), QStringLiteral("gif")}))
@@ -443,7 +451,8 @@ QJsonObject VirtualServer::cmdProfileMedia(Client &, const QJsonObject &args)
         if (!c.loggedIn || c.clid != clid)
             continue;
         const ProfileStore::Profile *profile = c.profile.isEmpty() ? nullptr : m_profiles.find(c.nickname);
-        return {{"mediaTag", profile ? profile->mediaTag : QString()}, {"banner", profile ? profile->banner : QString()}};
+        return {{"mediaTag", profile ? profile->mediaTag : QString()}, {"banner", profile ? profile->banner : QString()},
+                {"avatarAnimated", profile ? profile->avatarAnimated : QString()}};
     }
     fail(rc::InvalidArgs);
 }

@@ -324,10 +324,16 @@ test('perfil: banner fica fora da lista e é baixado sob demanda', () => {
   assert.equal('banner' in listed, false);
   assert.match(listed.mediaTag, /^[0-9a-f]{12}$/);
   assert.deepEqual(server.handle(other, 'profilemedia', { clid: jonas }),
-    { mediaTag: listed.mediaTag, banner: 'data:image/gif;base64,AAAA' });
+    { mediaTag: listed.mediaTag, banner: 'data:image/gif;base64,AAAA', avatarAnimated: '' });
   assert.throws(() => server.handle(other, 'profilemedia', { clid: 999 }), { code: 'invalid_args' });
   server.handle(jonas, 'updateprofile', { banner: '' });
   assert.equal(server.view(other).clients.find(c => c.nickname === 'Jonas').mediaTag, '');
+  assert.throws(() => server.handle(jonas, 'updateprofile', { avatarAnimated: 'data:image/png;base64,AAAA' }), { code: 'invalid_args' });
+  server.handle(jonas, 'updateprofile', { avatar: 'data:image/jpeg;base64,AAAA', avatarAnimated: 'data:image/gif;base64,BBBB' });
+  const animated = server.view(other).clients.find(c => c.nickname === 'Jonas');
+  assert.equal(animated.avatar, 'data:image/jpeg;base64,AAAA');
+  assert.equal('avatarAnimated' in animated, false);
+  assert.equal(server.handle(other, 'profilemedia', { clid: jonas }).avatarAnimated, 'data:image/gif;base64,BBBB');
 });
 
 test('perfil: sobrevive a reiniciar o servidor', () => {

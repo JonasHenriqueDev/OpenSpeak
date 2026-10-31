@@ -15,7 +15,7 @@ Command names deliberately match TeamSpeak 6 (`setupstream`, `joinstreamrequest`
 
 The native server additionally implements SFU mode (`STREAM_SFU`): `native/server/Sfu*.cpp` (ingest, forwarder, egress, relay, and a WebSocket viewer fallback `SfuWsViewer`). The web server only announces `STREAM_P2P`.
 
-Profiles (capability `PROFILES`, not on the Vercel room): a nickname becomes a profile when it gets a password (`setprofilepassword`); `login` then requires `profilePassword`, and `updateprofile` edits display name, color, description and avatar, which go out in `publicClient`. Heavy media (capability `PROFILE_MEDIA`: banner) stays out of `publicClient`, which only carries `mediaTag`; clients fetch it with `profilemedia` when a card opens and cache by tag. Stored in a JSON file shared by `server/profileStore.js` and `native/server/ProfileStore.cpp` (`OPENSPEAK_PROFILES_FILE`).
+Profiles (capability `PROFILES`, not on the Vercel room): a nickname becomes a profile when it gets a password (`setprofilepassword`); `login` then requires `profilePassword`, and `updateprofile` edits display name, color, description and avatar, which go out in `publicClient`. Heavy media (capability `PROFILE_MEDIA`: banner and the GIF `avatarAnimated`, whose first frame is the static `avatar`) stays out of `publicClient`, which only carries `mediaTag`; clients fetch it with `profilemedia` when a card opens and cache by tag. Stored in a JSON file shared by `server/profileStore.js` and `native/server/ProfileStore.cpp` (`OPENSPEAK_PROFILES_FILE`).
 
 ## Commands
 

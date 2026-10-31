@@ -266,6 +266,19 @@ QString ConnectionHandler::avatarFromFile(const QUrl &file, double x, double y, 
     return QStringLiteral("data:image/jpeg;base64,") + QString::fromLatin1(jpeg.toBase64());
 }
 
+QVariantMap ConnectionHandler::animatedAvatarFromFile(const QUrl &file) const
+{
+    QFile in(file.toLocalFile());
+    const QImage first = QImage::fromData(in.open(QIODevice::ReadOnly) ? in.readAll() : QByteArray());
+    if (first.isNull())
+        return {};
+    // A capa usa o mesmo recorte central com que o GIF aparece.
+    const double side = double(std::min(first.width(), first.height()));
+    const double x = (first.width() - side) / 2 / first.width();
+    const double y = (first.height() - side) / 2 / first.height();
+    return {{"avatar", avatarFromFile(file, x, y, side / first.width())}, {"avatarAnimated", bannerFromFile(file)}};
+}
+
 QString ConnectionHandler::bannerFromFile(const QUrl &file) const
 {
     const QString path = file.toLocalFile();

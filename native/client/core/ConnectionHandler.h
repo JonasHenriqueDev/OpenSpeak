@@ -109,6 +109,8 @@ public:
     /// Recorte quadrado da foto como data URL pronta para o perfil; vazia se não abrir.
     /// x e side são frações da largura da imagem; y, da altura (vêm do AvatarCropDialog).
     Q_INVOKABLE QString avatarFromFile(const QUrl &file, double x, double y, double side) const;
+    /// GIF como foto: {avatar: capa estática do primeiro quadro, avatarAnimated: o GIF intacto}.
+    Q_INVOKABLE QVariantMap animatedAvatarFromFile(const QUrl &file) const;
     /// Banner como data URL: GIF vai intacto; o resto vira JPEG de 960x384. Vazia se não abrir.
     Q_INVOKABLE QString bannerFromFile(const QUrl &file) const;
     /// GIF acima do limite do servidor (o arquivo vai intacto, sem recompressão).

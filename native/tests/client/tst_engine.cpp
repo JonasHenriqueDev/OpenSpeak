@@ -15,6 +15,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QSignalSpy>
+#include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QWindow>
@@ -38,6 +39,28 @@ class TestEngine : public QObject {
 
 private slots:
     // Metade esquerda vermelha, direita azul: o recorte da direita não pode trazer vermelho.
+    void animatedAvatarKeepsTheGifAndMakesACover()
+    {
+        const QByteArray gif = QByteArray::fromBase64(
+            "R0lGODlhAgABAPAAAP8AAAD/ACH/C05FVFNDQVBFMi4wAwEAAAAh+QQACgAAACwAAAAAAgABAAACAkQBACH5BAAKAAAALAAAAAACAAEAAAICDAoAOw==");
+        QTemporaryDir dir;
+        const QString path = dir.filePath("foto.GIF");
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(gif);
+        file.close();
+
+        ConnectionHandler handler;
+        const QVariantMap fields = handler.animatedAvatarFromFile(QUrl::fromLocalFile(path));
+        QVERIFY(fields.value("avatar").toString().startsWith("data:image/jpeg;base64,"));
+        QCOMPARE(fields.value("avatarAnimated").toString(), "data:image/gif;base64," + QString::fromLatin1(gif.toBase64()));
+        QVERIFY(!handler.gifTooLarge(QUrl::fromLocalFile(path)));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(QByteArray(400 * 1024, 'x'));
+        file.close();
+        QVERIFY(handler.gifTooLarge(QUrl::fromLocalFile(path)));
+    }
+
     void avatarUsesTheAdjustedCrop()
     {
         QTemporaryDir dir;

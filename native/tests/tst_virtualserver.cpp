@@ -170,6 +170,9 @@ private slots:
         const QJsonObject media = server->handle(jonas, "profilemedia", {{"clid", jonas}});
         QCOMPARE(media.value("banner").toString(), banner);
         QCOMPARE(media.value("mediaTag").toString().size(), 12);
+        QCOMPARE(expectError(jonas, "updateprofile", {{"avatarAnimated", "data:image/png;base64,AAAA"}}), rc::InvalidArgs);
+        server->handle(jonas, "updateprofile", {{"avatarAnimated", "data:image/gif;base64,BBBB"}});
+        QCOMPARE(server->handle(jonas, "profilemedia", {{"clid", jonas}}).value("avatarAnimated").toString(), QStringLiteral("data:image/gif;base64,BBBB"));
 
         setup(jonas);
         const QJsonObject stream = server->liveSnapshot().value("streams").toArray().first().toObject();

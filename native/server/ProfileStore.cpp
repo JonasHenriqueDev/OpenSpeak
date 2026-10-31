@@ -82,7 +82,7 @@ void ProfileStore::load()
         const QJsonObject p = it.value().toObject();
         m_profiles.insert(it.key(), {p.value("nickname").toString(), p.value("password").toString(), p.value("displayName").toString(),
                                      p.value("color").toString(), p.value("description").toString(), p.value("avatar").toString(),
-                                     p.value("banner").toString(), p.value("mediaTag").toString()});
+                                     p.value("banner").toString(), p.value("avatarAnimated").toString(), p.value("mediaTag").toString()});
     }
 }
 
@@ -138,8 +138,9 @@ void ProfileStore::update(const QString &key, const Profile &profile)
     Profile &stored = m_profiles[key];
     stored = profile;
     // Quem já baixou a mídia reconhece pelo tag que ela não mudou.
-    stored.mediaTag = stored.banner.isEmpty() ? QString()
-        : QString::fromLatin1(QCryptographicHash::hash(stored.banner.toUtf8(), QCryptographicHash::Sha256).toHex().left(12));
+    const QByteArray media = (stored.banner + stored.avatarAnimated).toUtf8();
+    stored.mediaTag = media.isEmpty() ? QString()
+        : QString::fromLatin1(QCryptographicHash::hash(media, QCryptographicHash::Sha256).toHex().left(12));
     save();
 }
 
@@ -168,7 +169,7 @@ void ProfileStore::save()
         const Profile &p = it.value();
         profiles.insert(it.key(), QJsonObject{{"nickname", p.nickname}, {"password", p.password}, {"displayName", p.displayName},
                                               {"color", p.color}, {"description", p.description}, {"avatar", p.avatar},
-                                              {"banner", p.banner}, {"mediaTag", p.mediaTag}});
+                                              {"banner", p.banner}, {"avatarAnimated", p.avatarAnimated}, {"mediaTag", p.mediaTag}});
     }
     QDir().mkpath(QFileInfo(m_file).absolutePath());
     QSaveFile out(m_file);

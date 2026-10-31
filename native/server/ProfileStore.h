@@ -20,6 +20,7 @@ public:
         QString description;
         QString avatar; // data URL
         QString banner; // data URL; vai só por profilemedia
+        QString avatarAnimated; // data URL de um GIF; avatar guarda a capa estática
         QString mediaTag; // muda quando a mídia pesada muda
     };
     enum class Verify { Ok, Wrong, Locked };

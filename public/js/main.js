@@ -12,7 +12,7 @@ import { SetupStreamDialog } from './ui/SetupStreamDialog.js';
 import { ViewersPanel } from './ui/ViewersPanel.js';
 import { StatsPanel } from './ui/StatsPanel.js';
 import { Toasts } from './ui/Toasts.js';
-import { adjustAvatar, bannerFromFile } from './ui/avatarCrop.js';
+import { adjustAvatar, animatedAvatarFromFile, bannerFromFile } from './ui/avatarCrop.js';
 import { SoundEffects, SOUND_THEMES, previewSound, previewRandomSound } from './ui/sounds.js';
 import { isTailnetServer, isTailnetAddress, privateEntryUrl } from './core/tailnet.js';
 import { detectTailnetAddress } from './core/detectTailnet.js';
@@ -430,8 +430,13 @@ class App {
         const [file] = ev.target.files;
         ev.target.value = ''; // escolher o mesmo arquivo de novo também reabre o ajuste
         if (!file) return;
+        if (file.type === 'image/gif') {
+          const fields = await animatedAvatarFromFile(file).catch(showError);
+          if (fields) await saveFields(fields);
+          return;
+        }
         const avatar = await adjustAvatar(file).catch(showError);
-        if (avatar) await saveFields({ avatar });
+        if (avatar) await saveFields({ avatar, avatarAnimated: '' });
       },
     } });
     const banner = h('input', { type: 'file', accept: 'image/*', hidden: true, on: {
@@ -444,8 +449,10 @@ class App {
       },
     } });
     const bannerPreview = h('img.profile-banner-preview', { alt: '', hidden: true });
+    const photoPreview = h('img.client-avatar', { src: own?.avatar ?? '', alt: '', hidden: !own?.avatar });
     this.handler.profileMedia(own).then(media => {
       if (media.banner) { bannerPreview.src = media.banner; bannerPreview.hidden = false; }
+      if (media.avatarAnimated) photoPreview.src = media.avatarAnimated;
     }, showError);
     return [
       this.handler.hasProfileMedia ? h('div.field', h('span.field-label', t('app.profile.banner')),
@@ -457,10 +464,10 @@ class App {
           own?.mediaTag ? h('button.btn.ghost.small', { type: 'button', on: { click: () => saveFields({ banner: '' }) } }, t('app.profile.banner.remove')) : null)) : null,
       h('label.field', h('span.field-label', t('app.profile.photo')),
         h('div.profile-photo',
-          own?.avatar ? h('img.client-avatar', { src: own.avatar, alt: '' }) : null,
+          photoPreview,
           photo,
           h('button.btn.ghost.small', { type: 'button', on: { click: () => photo.click() } }, t('app.profile.photo.choose')),
-          own?.avatar ? h('button.btn.ghost.small', { type: 'button', on: { click: () => saveFields({ avatar: '' }) } }, t('app.profile.photo.remove')) : null)),
+          own?.avatar ? h('button.btn.ghost.small', { type: 'button', on: { click: () => saveFields({ avatar: '', avatarAnimated: '' }) } }, t('app.profile.photo.remove')) : null)),
       h('label.field', h('span.field-label', t('app.profile.display_name')), displayName),
       h('div.field', h('span.field-label', t('app.profile.color')),
         h('div.profile-photo', color,

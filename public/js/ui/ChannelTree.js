@@ -89,9 +89,10 @@ export class ChannelTree {
     const isMe = client.clid === this.handler.ownClid;
     const row = ev.currentTarget.getBoundingClientRect();
     const banner = h('div.profile-card-banner', { hidden: true });
+    const avatar = client.avatar ? h('img.profile-card-avatar', { src: client.avatar, alt: '' }) : h('div.avatar', name.trim().slice(0, 1).toUpperCase());
     this.menu = h('div.popover.profile-card', { on: { click: e => e.stopPropagation() } },
       banner,
-      client.avatar ? h('img.profile-card-avatar', { src: client.avatar, alt: '' }) : h('div.avatar', name.trim().slice(0, 1).toUpperCase()),
+      avatar,
       h('strong.profile-card-name', { style: client.color ? { color: client.color } : null }, name, isMe ? ` (${t('app.you')})` : ''),
       client.displayName ? h('div.muted', `@${client.nickname}`) : null,
       client.description ? h('section.profile-card-about',
@@ -109,7 +110,9 @@ export class ChannelTree {
     });
     place();
     this.handler.profileMedia(client).then(media => {
-      if (!media.banner || !card.isConnected) return;
+      if (!card.isConnected) return;
+      if (media.avatarAnimated) avatar.src = media.avatarAnimated;
+      if (!media.banner) return;
       banner.replaceChildren(h('img', { src: media.banner, alt: '' }));
       banner.hidden = false;
       card.classList.add('has-banner');

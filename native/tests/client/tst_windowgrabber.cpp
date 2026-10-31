@@ -6,6 +6,7 @@
 #include <QScreen>
 #include <QSignalSpy>
 #include <QTest>
+#include <QTimer>
 
 #include <windows.h>
 
@@ -116,10 +117,15 @@ private slots:
 
         POINT saved{};
         GetCursorPos(&saved);
-        SetCursorPos(0, 0);
+        // Prende o cursor no lugar: quem mexe no mouse durante o teste não pode tirá-lo do ponto.
+        POINT spotOnScreen{0, 0};
+        QTimer pin;
+        connect(&pin, &QTimer::timeout, &pin, [&spotOnScreen] { SetCursorPos(spotOnScreen.x, spotOnScreen.y); });
+        pin.start(5);
         const int without = others();
-        SetCursorPos(rect.left + 100, rect.top + 100);
+        spotOnScreen = {rect.left + 100, rect.top + 100};
         const int with = others();
+        pin.stop();
         SetCursorPos(saved.x, saved.y);
         QCOMPARE(without, 0);
         QVERIFY2(with > 10, qPrintable(QString::number(with)));

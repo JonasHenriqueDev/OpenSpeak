@@ -24,6 +24,8 @@ export const MAX_GIF_BYTES = 320 * 1024;
 const BANNER_WIDTH = 960;
 const BANNER_HEIGHT = 384;
 
+const decode = file => createImageBitmap(file).catch(() => { throw new Error(t('app.profile.photo.invalid')); });
+
 const dataUrl = file => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onload = () => resolve(reader.result);
@@ -34,7 +36,7 @@ const dataUrl = file => new Promise((resolve, reject) => {
 /** GIF como foto: a capa estática (recorte central) vai na lista; o GIF intacto, no card. */
 export async function animatedAvatarFromFile(file) {
   if (file.size > MAX_GIF_BYTES) throw new Error(t('app.profile.gif.too_large'));
-  const image = await createImageBitmap(file);
+  const image = await decode(file);
   const output = h('canvas', { width: OUTPUT, height: OUTPUT });
   draw(output, image, cropRect(image.width, image.height, { centerX: 0.5, centerY: 0.5, zoom: 1 }));
   image.close();
@@ -47,7 +49,7 @@ export async function bannerFromFile(file) {
     if (file.size > MAX_GIF_BYTES) throw new Error(t('app.profile.gif.too_large'));
     return dataUrl(file);
   }
-  const image = await createImageBitmap(file);
+  const image = await decode(file);
   const scale = Math.max(BANNER_WIDTH / image.width, BANNER_HEIGHT / image.height);
   const output = h('canvas', { width: BANNER_WIDTH, height: BANNER_HEIGHT });
   output.getContext('2d').drawImage(image, (BANNER_WIDTH - image.width * scale) / 2, (BANNER_HEIGHT - image.height * scale) / 2,
@@ -58,7 +60,7 @@ export async function bannerFromFile(file) {
 
 /** Abre o ajuste e resolve com a data URL da foto, ou null se cancelar. */
 export function adjustAvatar(file) {
-  return createImageBitmap(file).then(image => new Promise(resolve => {
+  return decode(file).then(image => new Promise(resolve => {
     const state = { centerX: 0.5, centerY: 0.5, zoom: 1 };
     const rect = () => cropRect(image.width, image.height, state);
     // Guarda o centro já limitado: arrastar além da borda não acumula.

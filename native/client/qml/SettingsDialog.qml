@@ -312,6 +312,8 @@ Popup {
             readonly property bool claimed: !!profile.hasProfile
             property string status: ""
             property bool statusFailed: false
+            property string passwordStatus: ""
+            property bool passwordFailed: false
             property string pickedColor: profile.color || ""
             property var media: ({})
             readonly property string mediaTag: profile.mediaTag || ""
@@ -349,7 +351,12 @@ Popup {
                         currentPassword.clear()
                         newPassword.clear()
                     }
-                    profileContent.showStatus(ok ? I18n.t(action === "password" ? "app.profile.password.saved" : "app.profile.saved") : error, !ok)
+                    if (action === "password") {
+                        profileContent.passwordStatus = ok ? I18n.t("app.profile.password.saved") : error
+                        profileContent.passwordFailed = !ok
+                    } else {
+                        profileContent.showStatus(ok ? I18n.t("app.profile.saved") : error, !ok)
+                    }
                 }
             }
             FileDialog {
@@ -405,64 +412,116 @@ Popup {
                 text: I18n.t("app.profile.unavailable")
                 color: Theme.textDim
             }
-            RowLayout {
+            // Prévia de como os outros veem o perfil; muda junto com os campos abaixo.
+            Rectangle {
+                objectName: "profilePreview"
                 visible: profileContent.available
-                spacing: 14
-                Avatar {
-                    source: profileContent.profile.avatar || ""
-                    animatedSource: profileContent.media.avatarAnimated || ""
-                    name: profileContent.profile.displayName || profileContent.profile.nickname || ""
-                    size: 64
-                }
+                Layout.topMargin: 6
+                Layout.fillWidth: true
+                Layout.maximumWidth: 480
+                implicitHeight: previewColumn.implicitHeight
+                radius: Theme.radius
+                color: Theme.panel2
+                border.color: Theme.border
+                clip: true
                 ColumnLayout {
-                    spacing: 2
-                    Label {
-                        text: displayNameField.text.trim() || profileContent.profile.nickname || ""
-                        color: profileContent.pickedColor.length === 7 ? profileContent.pickedColor : Theme.text
-                        font.pixelSize: 16
-                        font.weight: Font.DemiBold
+                    id: previewColumn
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.margins: 1
+                    spacing: 0
+                    ProfileBanner {
+                        objectName: "profileBannerPreview"
+                        source: profileContent.media.banner || ""
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 96
                     }
-                    Label {
-                        text: I18n.t("app.profile.nickname") + ": " + (profileContent.profile.nickname || "")
-                        color: Theme.textDim
-                        font.pixelSize: 12
+                    RowLayout {
+                        Layout.margins: 14
+                        Layout.topMargin: -28
+                        spacing: 12
+                        Rectangle {
+                            implicitWidth: 72; implicitHeight: 72
+                            radius: 36
+                            color: Theme.panel2
+                            Avatar {
+                                anchors.centerIn: parent
+                                source: profileContent.profile.avatar || ""
+                                animatedSource: profileContent.media.avatarAnimated || ""
+                                name: profileContent.profile.displayName || profileContent.profile.nickname || ""
+                                size: 64
+                            }
+                        }
+                        ColumnLayout {
+                            Layout.topMargin: 28
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Label {
+                                Layout.fillWidth: true
+                                text: displayNameField.text.trim() || profileContent.profile.nickname || ""
+                                color: profileContent.pickedColor.length === 7 ? profileContent.pickedColor : Theme.text
+                                font.pixelSize: 16
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: I18n.t("app.profile.nickname") + ": " + (profileContent.profile.nickname || "")
+                                color: Theme.textDim
+                                font.pixelSize: 12
+                                elide: Text.ElideRight
+                            }
+                        }
                     }
                 }
             }
 
-            SectionHeader { visible: profileContent.available; first: true; text: I18n.t("app.profile.password") }
+            // Sem senha nada mais aparece: o aviso diz por quê e o que ela libera.
+            Rectangle {
+                objectName: "profilePasswordCallout"
+                visible: profileContent.available && !profileContent.claimed
+                Layout.fillWidth: true
+                Layout.maximumWidth: 480
+                Layout.topMargin: 6
+                implicitHeight: calloutRow.implicitHeight + 24
+                radius: Theme.radius
+                color: Theme.accentSoft
+                RowLayout {
+                    id: calloutRow
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 10
+                    Icon { Layout.alignment: Qt.AlignTop; name: "lock"; size: 18; color: Theme.accent }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Label {
+                            Layout.fillWidth: true
+                            text: I18n.t("app.profile.callout.title")
+                            color: Theme.text
+                            font.weight: Font.DemiBold
+                            wrapMode: Text.WordWrap
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: I18n.t("app.profile.password.hint")
+                            color: Theme.textDim
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+            }
+
+            SectionHeader { visible: profileContent.available && profileContent.claimed; first: true; text: I18n.t("app.profile.photo") }
             Label {
                 Layout.fillWidth: true
-                visible: profileContent.available && !profileContent.claimed
+                visible: profileContent.available && profileContent.claimed
                 wrapMode: Text.WordWrap
-                text: I18n.t("app.profile.password.hint")
+                text: I18n.t("app.profile.photo.hint")
                 color: Theme.textDim
                 font.pixelSize: 12
             }
-            PasswordField {
-                id: currentPassword
-                objectName: "profileCurrentPassword"
-                visible: profileContent.available && profileContent.claimed
-                Layout.fillWidth: true
-                placeholderText: I18n.t("app.profile.password.current")
-            }
-            PasswordField {
-                id: newPassword
-                objectName: "profileNewPassword"
-                visible: profileContent.available
-                Layout.fillWidth: true
-                maximumLength: 128
-                placeholderText: I18n.t("app.profile.password.new")
-            }
-            Button {
-                objectName: "profileSetPassword"
-                visible: profileContent.available
-                text: I18n.t(profileContent.claimed ? "app.profile.password.change" : "app.profile.password.set")
-                enabled: newPassword.text.length >= 4
-                onClicked: Server.setProfilePassword(newPassword.text, currentPassword.text)
-            }
-
-            SectionHeader { visible: profileContent.available && profileContent.claimed; text: I18n.t("app.profile.photo") }
             RowLayout {
                 visible: profileContent.available && profileContent.claimed
                 spacing: 8
@@ -478,14 +537,6 @@ Popup {
             SectionHeader {
                 visible: profileContent.available && profileContent.claimed && Server.hasProfileMedia
                 text: I18n.t("app.profile.banner")
-            }
-            ProfileBanner {
-                objectName: "profileBannerPreview"
-                visible: !!profileContent.media.banner
-                source: profileContent.media.banner || ""
-                Layout.fillWidth: true
-                Layout.maximumWidth: 400
-                Layout.preferredHeight: 120
             }
             Label {
                 Layout.fillWidth: true
@@ -587,6 +638,37 @@ Popup {
                 wrapMode: Text.WordWrap
                 text: profileContent.status
                 color: profileContent.statusFailed ? Theme.danger : Theme.textDim
+            }
+
+            SectionHeader { visible: profileContent.available; first: !profileContent.claimed; text: I18n.t("app.profile.password") }
+            PasswordField {
+                id: currentPassword
+                objectName: "profileCurrentPassword"
+                visible: profileContent.available && profileContent.claimed
+                Layout.fillWidth: true
+                placeholderText: I18n.t("app.profile.password.current")
+            }
+            PasswordField {
+                id: newPassword
+                objectName: "profileNewPassword"
+                visible: profileContent.available
+                Layout.fillWidth: true
+                maximumLength: 128
+                placeholderText: I18n.t("app.profile.password.new")
+            }
+            Button {
+                objectName: "profileSetPassword"
+                visible: profileContent.available
+                text: I18n.t(profileContent.claimed ? "app.profile.password.change" : "app.profile.password.set")
+                enabled: newPassword.text.length >= 4
+                onClicked: Server.setProfilePassword(newPassword.text, currentPassword.text)
+            }
+            Label {
+                Layout.fillWidth: true
+                visible: text.length > 0
+                wrapMode: Text.WordWrap
+                text: profileContent.passwordStatus
+                color: profileContent.passwordFailed ? Theme.danger : Theme.textDim
             }
         }
     }

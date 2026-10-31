@@ -214,6 +214,9 @@ select.input { padding-right: 4px; }
 .profile-card-about { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .profile-card-about p { overflow-wrap: anywhere; white-space: pre-wrap; }
 .profile-card .btn { width: 100%; margin-top: 12px; }
+.profile-callout { display: flex; gap: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--accent-soft); }
+.profile-callout .icon { flex: none; color: var(--accent); }
+.profile-callout strong { display: block; margin-bottom: 2px; }
 .profile-photo { display: flex; align-items: center; gap: 8px; }
 .profile-color { width: 36px; height: 30px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); background: transparent; cursor: pointer; }
 .client-avatar { width: 18px; height: 18px; flex: none; border-radius: 50%; object-fit: cover; }
@@ -244,7 +247,7 @@ select.input { padding-right: 4px; }
   background: transparent; border-radius: 4px; cursor: pointer; text-align: left;
 }
 .context-menu button:hover { background: var(--panel-3); }
-.popover { min-width: 260px; max-width: 360px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.popover { min-width: 260px; max-width: 360px; max-height: calc(100vh - 48px); overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .popover h4 { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; }
 
 /* ----------------------------------------------------------- stream area */

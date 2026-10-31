@@ -411,10 +411,12 @@ class App {
     this.#popover(anchor, [
       h('h4', t('app.profile')),
       !hd.hasProfiles ? h('p.muted', t('app.profile.unavailable')) : [
-        own?.hasProfile ? revealable(current) : h('p.muted', t('app.profile.password.hint')),
+        own?.hasProfile ? profileFields : h('div.profile-callout', icon('lock'),
+          h('div', h('strong', t('app.profile.callout.title')), h('p.muted', t('app.profile.password.hint')))),
+        own?.hasProfile ? h('h4', t('app.profile.password')) : null,
+        own?.hasProfile ? revealable(current) : null,
         revealable(next),
         h('button.btn', { type: 'button', on: { click: setPassword } }, t(own?.hasProfile ? 'app.profile.password.change' : 'app.profile.password.set')),
-        own?.hasProfile ? profileFields : null,
       ],
     ]);
   }
@@ -462,7 +464,8 @@ class App {
           banner,
           h('button.btn.ghost.small', { type: 'button', on: { click: () => banner.click() } }, t('app.profile.banner.choose')),
           own?.mediaTag ? h('button.btn.ghost.small', { type: 'button', on: { click: () => saveFields({ banner: '' }) } }, t('app.profile.banner.remove')) : null)) : null,
-      h('label.field', h('span.field-label', t('app.profile.photo')),
+      h('div.field', h('span.field-label', t('app.profile.photo')),
+        h('p.muted', t('app.profile.photo.hint')),
         h('div.profile-photo',
           photoPreview,
           photo,

@@ -5,6 +5,8 @@
 //  B) janela coberta: PrintWindow(PW_RENDERFULLCONTENT);
 //  C) preto nos dois por ~1 s (alguns jogos/D3D): emite fallbackRequested e o
 //     VideoSource volta para o QWindowCapture (com borda).
+// Também captura um monitor inteiro (forMonitor), pelo mesmo caminho A: é o que põe o
+// cursor na transmissão de tela, que o QScreenCapture não inclui.
 
 #include <QObject>
 #include <QThread>
@@ -21,6 +23,8 @@ class WindowGrabber : public QObject {
 public:
     WindowGrabber(quintptr hwnd, int targetFps, QObject *parent = nullptr);
     ~WindowGrabber() override;
+    /// Captura o monitor (HMONITOR) inteiro. Sem quadro em ~2 s: fallbackRequested.
+    static std::unique_ptr<WindowGrabber> forMonitor(quintptr monitor, int targetFps);
 
     void start();
     void stop();
@@ -35,6 +39,7 @@ signals:
 private:
     struct Impl;
     void tick();
+    void tickMonitor();
 
     QThread m_thread;
     QObject *m_context = nullptr; // vive na m_thread

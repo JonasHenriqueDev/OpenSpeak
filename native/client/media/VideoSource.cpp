@@ -17,6 +17,28 @@
 
 namespace openspeak {
 
+namespace {
+
+// QScreen::name() é o nome GDI do monitor ("\\\\.\\DISPLAY1").
+quintptr monitorHandle(const QScreen *screen)
+{
+    struct Search {
+        QString name;
+        HMONITOR found = nullptr;
+    } search{screen->name()};
+    EnumDisplayMonitors(nullptr, nullptr, [](HMONITOR monitor, HDC, LPRECT, LPARAM data) -> BOOL {
+        auto *s = reinterpret_cast<Search *>(data);
+        MONITORINFOEXW info{};
+        info.cbSize = sizeof(info);
+        if (GetMonitorInfoW(monitor, &info) && QString::fromWCharArray(info.szDevice) == s->name)
+            s->found = monitor;
+        return !s->found;
+    }, reinterpret_cast<LPARAM>(&search));
+    return reinterpret_cast<quintptr>(search.found);
+}
+
+} // namespace
+
 VideoSource::VideoSource(QObject *parent) : QObject(parent)
 {
     m_session.setVideoSink(&m_sink);
@@ -159,12 +181,22 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
             m_error = QStringLiteral("no_available_source");
             return false;
         }
-        m_screen = std::make_unique<QScreenCapture>();
-        m_screen->setScreen(screens[idx]);
-        m_session.setScreenCapture(m_screen.get());
-        m_captureMethod = QStringLiteral("Tela inteira (Qt)");
-        connect(m_screen.get(), &QScreenCapture::errorOccurred, this, [this](auto, const QString &e) { emit errorOccurred(e); });
-        m_screen->start();
+        // OPENSPEAK_SCREEN_CAPTURE=qt força o QScreenCapture (não inclui o cursor).
+        const quintptr monitor = monitorHandle(screens[idx]);
+        if (monitor && qEnvironmentVariable("OPENSPEAK_SCREEN_CAPTURE") != QLatin1String("qt")) {
+            m_grabber = WindowGrabber::forMonitor(monitor, targetFps);
+            connect(m_grabber.get(), &WindowGrabber::frameReady, this, &VideoSource::onFrame);
+            connect(m_grabber.get(), &WindowGrabber::methodChanged, this, [this](const QString &m) { m_captureMethod = m; });
+            connect(m_grabber.get(), &WindowGrabber::fallbackRequested, this, [this, screen = QPointer<QScreen>(screens[idx])] {
+                m_grabber.reset();
+                if (screen)
+                    startScreenCapture(screen);
+            });
+            m_captureMethod = QStringLiteral("Duplicação de tela (DXGI)");
+            m_grabber->start();
+        } else {
+            startScreenCapture(screens[idx]);
+        }
     } else if (desc.type == StreamType::Window) {
         const auto windows = QWindowCapture::capturableWindows();
         const int idx = desc.id.toInt();
@@ -244,6 +276,16 @@ void VideoSource::close()
     m_active = false;
     m_lastFrame = {};
     m_captureMethod.clear();
+}
+
+void VideoSource::startScreenCapture(QScreen *screen)
+{
+    m_screen = std::make_unique<QScreenCapture>();
+    m_screen->setScreen(screen);
+    m_session.setScreenCapture(m_screen.get());
+    m_captureMethod = QStringLiteral("Tela inteira (Qt)");
+    connect(m_screen.get(), &QScreenCapture::errorOccurred, this, [this](auto, const QString &e) { emit errorOccurred(e); });
+    m_screen->start();
 }
 
 void VideoSource::startWindowCapture(const QCapturableWindow &window)

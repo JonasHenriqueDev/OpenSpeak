@@ -43,6 +43,52 @@ bool similar(QColor a, QColor b) { return qAbs(a.red() - b.red()) < 16 && qAbs(a
 class TestWindowGrabber : public QObject {
     Q_OBJECT
 private slots:
+    // QScreenCapture não inclui o cursor; a captura de monitor precisa desenhá-lo.
+    void monitorCaptureIncludesCursor()
+    {
+        SolidWindow target(QColor(220, 30, 30));
+        target.setFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+        target.setGeometry(200, 200, 400, 300);
+        target.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&target));
+        QTest::qWait(300);
+
+        const HWND hwnd = reinterpret_cast<HWND>(target.winId());
+        RECT rect{};
+        GetWindowRect(hwnd, &rect);
+        const HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO info{sizeof(info)};
+        QVERIFY(GetMonitorInfoW(monitor, &info));
+        auto grabber = WindowGrabber::forMonitor(reinterpret_cast<quintptr>(monitor), 30);
+        QSignalSpy frames(grabber.get(), &WindowGrabber::frameReady);
+        grabber->start();
+
+        const QPoint spot(rect.left + 100 - info.rcMonitor.left, rect.top + 100 - info.rcMonitor.top);
+        // Conta os pixels que não são da janela vermelha ao redor do ponto.
+        const auto others = [&] {
+            frames.clear();
+            QTest::qWait(400);
+            if (frames.isEmpty())
+                return -1;
+            const QImage img = frames.last().first().value<QVideoFrame>().toImage();
+            int count = 0;
+            for (int y = 0; y < 24; ++y)
+                for (int x = 0; x < 16; ++x)
+                    count += !similar(img.pixelColor(spot.x() + x, spot.y() + y), QColor(220, 30, 30));
+            return count;
+        };
+
+        POINT saved{};
+        GetCursorPos(&saved);
+        SetCursorPos(0, 0);
+        const int without = others();
+        SetCursorPos(rect.left + 100, rect.top + 100);
+        const int with = others();
+        SetCursorPos(saved.x, saved.y);
+        QCOMPARE(without, 0);
+        QVERIFY2(with > 10, qPrintable(QString::number(with)));
+    }
+
     void capturesVisibleAndCoveredWindowWithoutBorder()
     {
         SolidWindow target(QColor(220, 30, 30));

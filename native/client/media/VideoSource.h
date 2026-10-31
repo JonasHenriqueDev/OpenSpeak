@@ -81,6 +81,7 @@ private:
     void onFrame(const QVideoFrame &frame);
     void renderTestPattern();
     void startWindowCapture(const QCapturableWindow &window);
+    void startScreenCapture(QScreen *screen);
 
     SourceDescriptor m_desc;
     QString m_appName;

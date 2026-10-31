@@ -185,6 +185,8 @@ struct WindowGrabber::Impl {
     enum class Method { None, Duplication, PrintWindow, Paused };
 
     HWND hwnd;
+    HMONITOR monitor = nullptr; // captura do monitor inteiro (hwnd nulo)
+    int failedTicks = 0;        // só no modo monitor, antes do primeiro quadro
     int fps;
     Dib out;   // quadro final (área visível da janela)
     Dib print; // destino do PrintWindow (inclui as bordas invisíveis de redimensionamento)
@@ -382,7 +384,7 @@ struct WindowGrabber::Impl {
         CURSORINFO ci{sizeof(ci)};
         if (!GetCursorInfo(&ci) || !(ci.flags & CURSOR_SHOWING) || !ci.hCursor || !PtInRect(&b, ci.ptScreenPos))
             return;
-        if (GetAncestor(WindowFromPoint(ci.ptScreenPos), GA_ROOT) != hwnd)
+        if (hwnd && GetAncestor(WindowFromPoint(ci.ptScreenPos), GA_ROOT) != hwnd)
             return;
         if (ci.hCursor != cursor) {
             ICONINFO ii{};
@@ -419,6 +421,13 @@ WindowGrabber::WindowGrabber(quintptr hwnd, int targetFps, QObject *parent)
 }
 
 WindowGrabber::~WindowGrabber() { stop(); }
+
+std::unique_ptr<WindowGrabber> WindowGrabber::forMonitor(quintptr monitor, int targetFps)
+{
+    auto grabber = std::make_unique<WindowGrabber>(0, targetFps);
+    grabber->m_impl->monitor = reinterpret_cast<HMONITOR>(monitor);
+    return grabber;
+}
 
 void WindowGrabber::start()
 {
@@ -458,6 +467,10 @@ void WindowGrabber::tick()
     Impl &d = *m_impl;
     if (d.closed)
         return;
+    if (d.monitor) {
+        tickMonitor();
+        return;
+    }
     if (!IsWindow(d.hwnd)) {
         d.closed = true;
         m_timer->stop();
@@ -520,6 +533,35 @@ void WindowGrabber::tick()
                                                                  : QStringLiteral("PrintWindow");
         qInfo() << "WindowGrabber:" << name;
         emit methodChanged(name);
+    }
+    d.drawCursor(b);
+    d.lastFrame = d.toFrame();
+    if (d.lastFrame.isValid())
+        emit frameReady(d.lastFrame);
+}
+
+void WindowGrabber::tickMonitor()
+{
+    Impl &d = *m_impl;
+    MONITORINFO info{sizeof(info)};
+    bool ok = GetMonitorInfoW(d.monitor, &info);
+    const RECT b = info.rcMonitor;
+    ok = ok && d.out.ensure(b.right - b.left, b.bottom - b.top) && d.ensureDuplication(d.monitor) && d.grabDuplication(b);
+    if (!ok) {
+        // Perda passageira (UAC, tela bloqueada): segura o último quadro até recriar a duplicação.
+        if (d.lastFrame.isValid()) {
+            emit frameReady(d.lastFrame);
+        } else if (++d.failedTicks >= 2 * m_fps) {
+            d.closed = true;
+            m_timer->stop();
+            qInfo() << "WindowGrabber: duplicação do monitor sem quadro há 2 s; voltando para o QScreenCapture";
+            emit fallbackRequested();
+        }
+        return;
+    }
+    if (d.lastMethod != Impl::Method::Duplication) {
+        d.lastMethod = Impl::Method::Duplication;
+        emit methodChanged(QStringLiteral("Duplicação de tela (DXGI)"));
     }
     d.drawCursor(b);
     d.lastFrame = d.toFrame();

@@ -520,6 +520,16 @@ void ScreenshareManager::keepOwnPreview(const QString &id)
     notifyChanged();
 }
 
+void ScreenshareManager::closeOwnPreview(const QString &id)
+{
+    auto it = m_own.find(id);
+    if (it == m_own.end())
+        return;
+    it->second->previewClosed = true;
+    it->second->previewKept = false;
+    notifyChanged();
+}
+
 void ScreenshareManager::closePreviewsForFullscreenApp()
 {
     if (m_own.empty() || !VideoSource::fullscreenAppInForeground())

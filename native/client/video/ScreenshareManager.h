@@ -69,6 +69,8 @@ public:
     Q_INVOKABLE void detachOwnPreview(const QString &id, QVideoSink *sink);
     /// Reabre a prévia fechada pelo app em tela cheia; vale até o fim desta transmissão.
     Q_INVOKABLE void keepOwnPreview(const QString &id);
+    /// Fecha a prévia à mão; com um app em tela cheia ela volta a fechar sozinha.
+    Q_INVOKABLE void closeOwnPreview(const QString &id);
     Q_INVOKABLE void respondJoinRequest(const QString &id, int clid, bool accept, bool ban = false);
     Q_INVOKABLE void removeViewer(const QString &id, int clid, bool ban = false);
     Q_INVOKABLE void unban(const QString &id, const QString &uid);

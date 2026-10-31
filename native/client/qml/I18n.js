@@ -232,8 +232,9 @@ const STRINGS = {
   'app.tray.join_request.title': 'Pedido para assistir',
 
   'app.prefs.tooltip': 'Preferências do OpenSpeak',
-  'video.preview.closed': 'Prévia fechada para economizar recursos enquanto um app em tela cheia estava em foco.',
+  'video.preview.closed': 'Prévia fechada para economizar recursos.',
   'video.preview.show': 'Mostrar prévia',
+  'video.preview.hide': 'Fechar prévia',
   'app.prefs.group.app': 'Configurações do app',
   'app.prefs.group.account': 'Conta',
   'app.prefs.section.profile': 'Perfil',

@@ -780,6 +780,13 @@ Rectangle {
                 onClicked: tile.toggleFocus()
             }
             TileButton {
+                objectName: "hidePreview"
+                visible: tile.own && !tile.previewClosed
+                iconName: "eyeOff"
+                tip: I18n.t("video.preview.hide")
+                onClicked: Screenshare.closeOwnPreview(tile.streamId)
+            }
+            TileButton {
                 visible: tile.playing
                 iconName: "pip"
                 iconColor: pipWindow.visible ? Theme.accent : "white"

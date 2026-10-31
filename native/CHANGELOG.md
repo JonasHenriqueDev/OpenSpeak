@@ -1,3 +1,8 @@
+# OpenSpeak 1.0.33 — organizar em dois cliques
+
+- **Organizar** agora alinha os previews mantendo o tamanho de cada um. Clique de
+  novo para deixar todos do mesmo tamanho.
+
 # OpenSpeak 1.0.32 — botões de organizar e desligar
 
 - **Organizar automaticamente** agora é um ícone sempre à vista na barra inferior,

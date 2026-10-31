@@ -152,6 +152,8 @@ Rectangle {
     DragHandler {
         target: null
         enabled: tile.arrangeable
+        // Sem isso o arrasto rouba o gesto dos cantos, dos botões e do volume.
+        grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType | PointerHandler.ApprovesTakeOverByAnything
         cursorShape: Qt.ClosedHandCursor
         onActiveChanged: {
             tile.arranging = active

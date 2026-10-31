@@ -38,7 +38,7 @@ public:
 
     Q_INVOKABLE void showMessage(const QString &title, const QString &text);
     /// Redesenha o ícone da janela, da barra de tarefas e da bandeja nas cores do tema.
-    Q_INVOKABLE void setThemeColors(const QColor &accent, const QColor &background);
+    Q_INVOKABLE void setThemeColor(const QColor &accent);
 
 signals:
     void changed();

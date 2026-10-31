@@ -39,17 +39,13 @@ QPainterPath eyePath()
     return p;
 }
 
-QPixmap renderSize(int size, const QColor &accent, const QColor &background)
+QPixmap renderSize(int size, const QColor &accent)
 {
     QImage image(size, size, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
     QPainter painter(&image);
     painter.setRenderHint(QPainter::Antialiasing);
     painter.scale(size / 512.0, size / 512.0);
-
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(background);
-    painter.drawRoundedRect(QRectF(0, 0, 512, 512), 112, 112);
 
     painter.save();
     painter.translate(256, 190);
@@ -82,10 +78,10 @@ QPixmap renderSize(int size, const QColor &accent, const QColor &background)
 
 }
 
-QIcon AppIcon::render(const QColor &accent, const QColor &background)
+QIcon AppIcon::render(const QColor &accent)
 {
     QIcon icon;
     for (int size : {16, 20, 24, 32, 40, 48, 64, 128, 256})
-        icon.addPixmap(renderSize(size, accent, background));
+        icon.addPixmap(renderSize(size, accent));
     return icon;
 }

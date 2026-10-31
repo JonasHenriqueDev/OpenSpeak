@@ -6,6 +6,6 @@
 
 namespace AppIcon {
 
-QIcon render(const QColor &accent, const QColor &background);
+QIcon render(const QColor &accent);
 
 }

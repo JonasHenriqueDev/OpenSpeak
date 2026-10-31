@@ -48,9 +48,9 @@ TrayIcon::~TrayIcon()
     delete m_menu;
 }
 
-void TrayIcon::setThemeColors(const QColor &accent, const QColor &background)
+void TrayIcon::setThemeColor(const QColor &accent)
 {
-    const QIcon icon = AppIcon::render(accent, background);
+    const QIcon icon = AppIcon::render(accent);
     QApplication::setWindowIcon(icon);
     const auto windows = QGuiApplication::topLevelWindows();
     for (QWindow *window : windows)

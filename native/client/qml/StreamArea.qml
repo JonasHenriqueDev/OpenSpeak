@@ -38,7 +38,8 @@ Rectangle {
     ListModel { id: streams }
     readonly property var roleDefaults: ({
         kind: "", name: "", type: 0, access: 0, viewerCount: 0, paused: false, thumbnail: "", ownerName: "",
-        status: "", errorKey: "", severity: 0, pendingRequests: 0, volume: 1.0, hasVideo: false, ownerClid: 0
+        status: "", errorKey: "", severity: 0, pendingRequests: 0, volume: 1.0, hasVideo: false, ownerClid: 0,
+        previewClosed: false
     })
 
     function sync() {

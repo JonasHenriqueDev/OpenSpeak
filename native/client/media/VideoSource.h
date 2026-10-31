@@ -57,6 +57,9 @@ public:
     QSize lastFrameSize() const { return m_lastSize; }
 
     /// Encaminha cada quadro também para estes sinks (pré-visualização na QML).
+    /// Há um app em tela cheia (jogo etc.) em foco, fora o próprio OpenSpeak?
+    static bool fullscreenAppInForeground();
+
     void addPreviewSink(QVideoSink *sink);
     void removePreviewSink(QVideoSink *sink);
     void clearPreviewSinks() { m_previews.clear(); }

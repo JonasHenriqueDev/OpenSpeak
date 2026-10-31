@@ -74,6 +74,9 @@ ScreenshareManager::ScreenshareManager(ConnectionHandler *handler, Settings *set
     m_statsTimer.setInterval(1000);
     connect(&m_statsTimer, &QTimer::timeout, this, &ScreenshareManager::collectStats);
     m_statsTimer.start();
+    m_fullscreenTimer.setInterval(1000);
+    connect(&m_fullscreenTimer, &QTimer::timeout, this, &ScreenshareManager::closePreviewsForFullscreenApp);
+    m_fullscreenTimer.start();
     m_changeDebounce.setSingleShot(true);
     m_changeDebounce.setInterval(16);
     connect(&m_changeDebounce, &QTimer::timeout, this, &ScreenshareManager::itemsChanged);
@@ -505,6 +508,29 @@ void ScreenshareManager::detachOwnPreview(const QString &id, QVideoSink *sink)
     auto it = m_own.find(id);
     if (it != m_own.end())
         it->second->source->removePreviewSink(sink);
+}
+
+void ScreenshareManager::keepOwnPreview(const QString &id)
+{
+    auto it = m_own.find(id);
+    if (it == m_own.end())
+        return;
+    it->second->previewClosed = false;
+    it->second->previewKept = true;
+    notifyChanged();
+}
+
+void ScreenshareManager::closePreviewsForFullscreenApp()
+{
+    if (m_own.empty() || !VideoSource::fullscreenAppInForeground())
+        return;
+    bool closed = false;
+    for (auto &[id, own] : m_own) {
+        if (!own->previewClosed && !own->previewKept)
+            closed = own->previewClosed = true;
+    }
+    if (closed)
+        notifyChanged();
 }
 
 bool ScreenshareManager::viewerLimitReached(const OwnStream &own) const
@@ -1120,6 +1146,7 @@ QVariantList ScreenshareManager::items() const
             item["kind"] = QStringLiteral("own");
             item["status"] = QStringLiteral("live");
             item["paused"] = s.paused;
+            item["previewClosed"] = s.previewClosed;
             item["viewerCount"] = int(s.viewers.size());
             item["pendingRequests"] = int(s.joinRequests.size());
             item["severity"] = severity;

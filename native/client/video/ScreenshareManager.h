@@ -67,6 +67,8 @@ public:
     Q_INVOKABLE QVariantMap ownConfig(const QString &id) const;
     Q_INVOKABLE void attachOwnPreview(const QString &id, QVideoSink *sink);
     Q_INVOKABLE void detachOwnPreview(const QString &id, QVideoSink *sink);
+    /// Reabre a prévia fechada pelo app em tela cheia; vale até o fim desta transmissão.
+    Q_INVOKABLE void keepOwnPreview(const QString &id);
     Q_INVOKABLE void respondJoinRequest(const QString &id, int clid, bool accept, bool ban = false);
     Q_INVOKABLE void removeViewer(const QString &id, int clid, bool ban = false);
     Q_INVOKABLE void unban(const QString &id, const QString &uid);
@@ -137,6 +139,8 @@ private:
         QSet<int> viewers;
         QSet<QString> banned;
         bool paused = false;
+        bool previewClosed = false; // fechada para economizar com um app em tela cheia em foco
+        bool previewKept = false;   // o usuário pediu para mostrar: não fecha mais nesta transmissão
         QTimer thumbTimer;
         QMap<int, History> history;
         bool sfu() const { return config.mode == StreamMode::SFU; }
@@ -175,6 +179,7 @@ private:
     void disposeInbound(InboundView &view);
     void setInboundError(InboundView &view, const QString &key);
     void collectStats();
+    void closePreviewsForFullscreenApp();
     void notifyChanged();
     void updateInboundMute();
     double effectiveVolume(const InboundView &view) const;
@@ -190,6 +195,7 @@ private:
     QMap<QString, InboundView> m_inbound;
     QMap<QString, QList<QJsonObject>> m_earlySignals;
     QTimer m_statsTimer;
+    QTimer m_fullscreenTimer;
     QTimer m_changeDebounce;
     // Com o Discord excluído, o OpenSpeak entra na captura da tela: o áudio de quem
     // você assiste vazaria para a sua transmissão, então ele é silenciado.

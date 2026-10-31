@@ -65,6 +65,29 @@ QString VideoSource::appNameForWindow(quintptr id)
     return name.left(64);
 }
 
+bool VideoSource::fullscreenAppInForeground()
+{
+    const HWND hwnd = GetForegroundWindow();
+    if (!hwnd)
+        return false;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == GetCurrentProcessId())
+        return false;
+    // A área de trabalho também cobre o monitor inteiro.
+    wchar_t className[64]{};
+    GetClassNameW(hwnd, className, 64);
+    const QString cls = QString::fromWCharArray(className);
+    if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd")
+        return false;
+    RECT rect{};
+    MONITORINFO info{sizeof(info)};
+    if (!GetWindowRect(hwnd, &rect) || !GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &info))
+        return false;
+    return rect.left <= info.rcMonitor.left && rect.top <= info.rcMonitor.top
+        && rect.right >= info.rcMonitor.right && rect.bottom >= info.rcMonitor.bottom;
+}
+
 bool VideoSource::isShareableWindow(const QCapturableWindow &window)
 {
     const auto *handle = QCapturableWindowPrivate::handle(window);

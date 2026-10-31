@@ -23,6 +23,8 @@ Rectangle {
     readonly property bool playing: own || status === "playing" || status === "reconnecting" || status === "connecting"
     readonly property bool small: height < 160
     readonly property bool hovered: hover.hovered
+    // Prévia do próprio stream fechada por causa de um app em tela cheia.
+    readonly property bool previewClosed: own && !!data_.previewClosed
     // 1 = 100%; com "volume até 500%" ligado nas preferências, vai a 5.
     readonly property real maxVolume: Settings.volumeBoost ? 5 : 1
 
@@ -53,12 +55,18 @@ Rectangle {
             Screenshare.detachVideo(streamId, sink)
     }
     function refreshAttachment() {
-        if (playing)
+        if (playing && !previewClosed)
             attach(video.videoSink)
         if (fullscreenWindow.visible)
             attach(fullscreenVideo.videoSink)
         if (pipWindow.visible)
             attach(pipVideo.videoSink)
+    }
+    onPreviewClosedChanged: {
+        if (previewClosed)
+            detach(video.videoSink)
+        else
+            refreshAttachment()
     }
     onStatusChanged: {
         refreshAttachment()
@@ -86,8 +94,30 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: 1
         fillMode: VideoOutput.PreserveAspectFit
-        visible: tile.playing
+        visible: tile.playing && !tile.previewClosed
         opacity: tile.data_.paused ? 0.35 : 1
+    }
+
+    ColumnLayout {
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 24, 320)
+        visible: tile.previewClosed
+        spacing: 6
+        Icon { Layout.alignment: Qt.AlignHCenter; visible: !tile.small; name: "eyeOff"; size: 28; color: Theme.textDim }
+        Label {
+            Layout.fillWidth: true
+            visible: !tile.small
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: I18n.t("video.preview.closed")
+            color: Theme.textDim
+        }
+        Button {
+            objectName: "showPreview"
+            Layout.alignment: Qt.AlignHCenter
+            text: I18n.t("video.preview.show")
+            onClicked: Screenshare.keepOwnPreview(tile.streamId)
+        }
     }
 
     HoverHandler { id: hover }

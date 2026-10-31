@@ -2,6 +2,7 @@
 // Ícone na bandeja do sistema (como no Discord). O QML decide o que cada ação
 // faz; aqui ficam só o ícone, o menu de contexto e os balões de notificação.
 
+#include <QColor>
 #include <QObject>
 #include <QVariantMap>
 
@@ -36,6 +37,8 @@ public:
     void setTexts(const QVariantMap &texts);
 
     Q_INVOKABLE void showMessage(const QString &title, const QString &text);
+    /// Redesenha o ícone da janela, da barra de tarefas e da bandeja nas cores do tema.
+    Q_INVOKABLE void setThemeColors(const QColor &accent, const QColor &background);
 
 signals:
     void changed();

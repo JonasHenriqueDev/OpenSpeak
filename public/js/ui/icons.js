@@ -40,7 +40,7 @@ const P = {
   volume: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>',
   mute: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M22 9l-6 6M16 9l6 6"/>',
   swap: '<path d="M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7"/>',
-  logo: '<circle cx="12" cy="12" r="9.5"/><path d="M7.5 12a4.5 4.5 0 0 1 9 0M9.8 12a2.2 2.2 0 0 1 4.4 0"/><circle cx="12" cy="15.5" r="1.2" fill="currentColor"/>',
+  logo: '<path d="M11.7 9c-.6-1.2-2-2.1-2.8-3M12.3 9c1.1-2 3.2-3.8 5.1-6"/><path d="M6.5 9h11a3.5 3.5 0 0 1 3.5 3.5v4a3.5 3.5 0 0 1-3.5 3.5H9.5L5 22.5l.6-3A3.5 3.5 0 0 1 3 16.5v-4A3.5 3.5 0 0 1 6.5 9z"/><path d="M7 13l3.6 1.8v1a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1zM17 13l-3.6 1.8v1a1 1 0 0 0 1 1H16a1 1 0 0 0 1-1z" fill="currentColor"/>',
 };
 
 export function icon(name, cls = '') {

@@ -175,6 +175,9 @@ ApplicationWindow {
     Binding { target: Tray; property: "streaming"; value: Screenshare.streaming }
     Binding { target: Tray; property: "audioMuted"; value: Screenshare.audioMuted }
     Binding { target: Tray; property: "soundsMuted"; value: !Settings.soundEffects }
+    // Ícone da janela, da barra de tarefas e da bandeja nas cores do tema, sem reiniciar.
+    readonly property string appIconColors: `${Theme.accent} ${Theme.background}`
+    onAppIconColorsChanged: Tray.setThemeColors(Theme.accent, Theme.background)
     Connections {
         target: Tray
         function onOpenRequested() { window.showFromTray() }

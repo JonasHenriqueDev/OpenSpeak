@@ -1,8 +1,11 @@
 #include "TrayIcon.h"
 
+#include "AppIcon.h"
+
 #include <QApplication>
 #include <QMenu>
 #include <QSystemTrayIcon>
+#include <QWindow>
 
 TrayIcon::TrayIcon(QObject *parent) : QObject(parent)
 {
@@ -43,6 +46,16 @@ TrayIcon::~TrayIcon()
 {
     m_tray->hide();
     delete m_menu;
+}
+
+void TrayIcon::setThemeColors(const QColor &accent, const QColor &background)
+{
+    const QIcon icon = AppIcon::render(accent, background);
+    QApplication::setWindowIcon(icon);
+    const auto windows = QGuiApplication::topLevelWindows();
+    for (QWindow *window : windows)
+        window->setIcon(icon);
+    m_tray->setIcon(icon);
 }
 
 bool TrayIcon::available() const { return QSystemTrayIcon::isSystemTrayAvailable(); }

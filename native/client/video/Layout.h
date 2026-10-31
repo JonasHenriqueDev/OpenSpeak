@@ -7,6 +7,7 @@
 #include <QList>
 #include <QObject>
 #include <QRectF>
+#include <QVariantList>
 #include <QVariantMap>
 
 namespace openspeak {
@@ -32,6 +33,9 @@ LayoutResult focusLayout(int count, int focusIndex, double width, double height,
 QRectF moveRect(const QRectF &rect, double dx, double dy, double width, double height);
 /// Redimensiona por um canto (left/top dizem qual), mantendo a proporção e o canto oposto no lugar.
 QRectF resizeRect(const QRectF &rect, bool left, bool top, double dx, double dy, double width, double height, double minWidth = MinCustomWidth);
+/// Tira os previews de cima uns dos outros: empurra e, se faltar espaço, encolhe. `fixed` é o
+/// índice do preview arrastado, que não sai do lugar (-1 para nenhum). Vazio se não couberem.
+QList<QRectF> resolveOverlaps(QList<QRectF> rects, int fixed, double width, double height, double gap = 8, double minWidth = MinCustomWidth);
 /// Volta às coordenadas da área um preview guardado em frações, sempre inteiro dentro dela.
 QRectF rectFromFraction(double fx, double fy, double fw, double aspect, double width, double height);
 
@@ -45,6 +49,7 @@ public:
     /// Os retângulos abaixo são {x,y,w,h}, como os de compute.
     Q_INVOKABLE QVariantMap moveRect(const QVariantMap &rect, double dx, double dy, double width, double height) const;
     Q_INVOKABLE QVariantMap resizeRect(const QVariantMap &rect, bool left, bool top, double dx, double dy, double width, double height) const;
+    Q_INVOKABLE QVariantList resolveOverlaps(const QVariantList &rects, int fixed, double width, double height, double gap) const;
     /// Guarda um preview em frações da área, para acompanhar o tamanho da janela.
     Q_INVOKABLE QVariantMap rectToFraction(const QVariantMap &rect, double width, double height) const;
     Q_INVOKABLE QVariantMap rectFromFraction(const QVariantMap &fraction, double width, double height) const;

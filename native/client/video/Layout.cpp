@@ -51,6 +51,52 @@ QRectF toRect(const QVariantMap &m)
     return QRectF(m.value("x").toDouble(), m.value("y").toDouble(), m.value("w").toDouble(), m.value("h").toDouble());
 }
 
+constexpr double Epsilon = 0.01;
+
+bool overlapping(const QRectF &a, const QRectF &b, double gap)
+{
+    return a.x() < b.right() + gap - Epsilon && b.x() < a.right() + gap - Epsilon
+        && a.y() < b.bottom() + gap - Epsilon && b.y() < a.bottom() + gap - Epsilon;
+}
+
+// Menor deslocamento que tira `mover` de cima de `other` sem sair da área.
+void pushAway(QRectF &mover, const QRectF &other, double width, double height, double gap)
+{
+    const QPointF options[] = {{other.x() - gap - mover.width(), mover.y()},
+                               {other.right() + gap, mover.y()},
+                               {mover.x(), other.y() - gap - mover.height()},
+                               {mover.x(), other.bottom() + gap}};
+    std::optional<QPointF> best;
+    const auto cost = [&](const QPointF &p) { return std::abs(p.x() - mover.x()) + std::abs(p.y() - mover.y()); };
+    for (const QPointF &p : options) {
+        if (p.x() < 0 || p.y() < 0 || p.x() + mover.width() > width || p.y() + mover.height() > height)
+            continue;
+        if (!best || cost(p) < cost(*best))
+            best = p;
+    }
+    if (best)
+        mover.moveTo(*best);
+}
+
+bool settle(QList<QRectF> &rects, int fixed, double width, double height, double gap)
+{
+    for (int pass = 0; pass < 32; ++pass) {
+        bool clear = true;
+        for (int i = 0; i < rects.size(); ++i) {
+            for (int j = i + 1; j < rects.size(); ++j) {
+                if (!overlapping(rects[i], rects[j], gap))
+                    continue;
+                clear = false;
+                const bool moverIsI = j == fixed;
+                pushAway(moverIsI ? rects[i] : rects[j], moverIsI ? rects[j] : rects[i], width, height, gap);
+            }
+        }
+        if (clear)
+            return true;
+    }
+    return false;
+}
+
 } // namespace
 
 LayoutResult gridLayout(int count, double width, double height, double gap, int offset, int minHeight)
@@ -138,6 +184,27 @@ QRectF resizeRect(const QRectF &rect, bool left, bool top, double dx, double dy,
     return QRectF(left ? anchorX - w : anchorX, top ? anchorY - h : anchorY, w, h);
 }
 
+QList<QRectF> resolveOverlaps(QList<QRectF> rects, int fixed, double width, double height, double gap, double minWidth)
+{
+    for (int attempt = 0; attempt < 40; ++attempt) {
+        if (settle(rects, fixed, width, height, gap))
+            return rects;
+        bool shrunk = false;
+        for (int i = 0; i < rects.size(); ++i) {
+            QRectF &r = rects[i];
+            if (i == fixed || r.width() <= minWidth)
+                continue;
+            const double w = std::max(minWidth, r.width() * 0.94);
+            const double h = r.height() * w / r.width();
+            r = QRectF(r.x() + (r.width() - w) / 2, r.y() + (r.height() - h) / 2, w, h);
+            shrunk = true;
+        }
+        if (!shrunk)
+            return {};
+    }
+    return {};
+}
+
 QRectF rectFromFraction(double fx, double fy, double fw, double aspect, double width, double height)
 {
     const double w = std::min({fw * width, width, height * aspect});
@@ -164,6 +231,17 @@ QVariantMap StreamLayout::moveRect(const QVariantMap &rect, double dx, double dy
 QVariantMap StreamLayout::resizeRect(const QVariantMap &rect, bool left, bool top, double dx, double dy, double width, double height) const
 {
     return toMap(openspeak::resizeRect(toRect(rect), left, top, dx, dy, width, height));
+}
+
+QVariantList StreamLayout::resolveOverlaps(const QVariantList &rects, int fixed, double width, double height, double gap) const
+{
+    QList<QRectF> in;
+    for (const QVariant &r : rects)
+        in.append(toRect(r.toMap()));
+    QVariantList out;
+    for (const QRectF &r : openspeak::resolveOverlaps(in, fixed, width, height, gap))
+        out.append(toMap(r));
+    return out;
 }
 
 QVariantMap StreamLayout::rectToFraction(const QVariantMap &rect, double width, double height) const

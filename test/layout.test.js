@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gridLayout, focusLayout, moveRect, resizeRect, rectToFraction, rectFromFraction, MIN_TILE_HEIGHT, MIN_CUSTOM_WIDTH } from '../public/js/video/layout.js';
+import { gridLayout, focusLayout, moveRect, resizeRect, resolveOverlaps, rectToFraction, rectFromFraction, MIN_TILE_HEIGHT, MIN_CUSTOM_WIDTH } from '../public/js/video/layout.js';
 
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
@@ -65,6 +65,37 @@ test('mover: vai a qualquer lugar da área, sem sair dela', () => {
   const rect = { x: 100, y: 100, w: 320, h: 180 };
   assert.deepEqual(moveRect(rect, 50, -20, 1000, 800), { x: 150, y: 80, w: 320, h: 180 });
   assert.deepEqual(moveRect(rect, -500, 5000, 1000, 800), { x: 0, y: 620, w: 320, h: 180 });
+});
+
+const clear = (rects, gap = 8) => rects.every((a, i) => rects.every((b, j) => j <= i
+  || a.x + a.w + gap <= b.x + 0.02 || b.x + b.w + gap <= a.x + 0.02 || a.y + a.h + gap <= b.y + 0.02 || b.y + b.h + gap <= a.y + 0.02));
+
+test('sem sobreposição: o preview arrastado empurra o outro e não sai do lugar', () => {
+  const a = { x: 100, y: 100, w: 320, h: 180 };
+  const b = { x: 200, y: 150, w: 320, h: 180 };
+  const out = resolveOverlaps([a, b], 0, 1200, 700);
+  assert.deepEqual(out[0], a);
+  assert.ok(clear(out));
+});
+
+test('sem sobreposição: previews já separados ficam onde estão', () => {
+  const rects = [{ x: 0, y: 0, w: 320, h: 180 }, { x: 400, y: 0, w: 320, h: 180 }];
+  assert.deepEqual(resolveOverlaps(rects, 0, 1200, 700), rects);
+});
+
+test('sem sobreposição: empurra em cadeia e encolhe quando falta espaço', () => {
+  const { tiles } = gridLayout(4, 1200, 700);
+  const rects = tiles.map(({ x, y, w, h }) => ({ x, y, w, h }));
+  rects[0] = { ...rects[0], x: 300, y: 170 };
+  const out = resolveOverlaps(rects, 0, 1200, 700);
+  assert.ok(out);
+  assert.ok(clear(out));
+  for (const r of out) assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= 1200 && r.y + r.h <= 700);
+});
+
+test('sem sobreposição: sem tamanho mínimo que caiba, recusa', () => {
+  const rects = [{ x: 0, y: 0, w: 400, h: 225 }, { x: 10, y: 10, w: 400, h: 225 }];
+  assert.equal(resolveOverlaps(rects, 0, 400, 225), null);
 });
 
 test('posição guardada em frações acompanha a área e não sai dela', () => {

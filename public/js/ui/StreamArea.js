@@ -4,7 +4,7 @@ import { h, replaceChildren } from './dom.js';
 import { icon } from './icons.js';
 import { t } from './i18n.js';
 import { StreamTile } from './StreamTile.js';
-import { gridLayout, focusLayout, moveRect, resizeRect, rectToFraction, rectFromFraction } from '../video/layout.js';
+import { gridLayout, focusLayout, moveRect, resizeRect, resolveOverlaps, rectToFraction, rectFromFraction } from '../video/layout.js';
 import { Severity } from '../core/protocol.js';
 
 const GAP = 8;
@@ -28,7 +28,6 @@ export class StreamArea {
     this.perPage = 0;
     // Previews ajustados à mão, em frações da área (ver rectToFraction).
     this.customRects = new Map();
-    this.topZ = 0;
 
     this.stage = h('div.stream-stage');
     this.empty = h('div.stream-empty');
@@ -122,34 +121,45 @@ export class StreamArea {
       : gridLayout(items.length, width, height, { gap: GAP, offset: this.offset });
     this.perPage = result.perPage;
     const visible = new Set();
-    for (const rect of result.tiles) {
-      const item = items[rect.index];
-      const id = item.info.streamIdentifier;
-      const tile = this.tiles.get(id);
-      const custom = focusIndex < 0 ? this.customRects.get(id) : null;
-      tile.setRect(custom ? rectFromFraction(custom, width, height) : rect, rect.focused);
+    const ids = result.tiles.map(rect => items[rect.index].info.streamIdentifier);
+    const custom = focusIndex < 0 && this.customRects.size
+      ? resolveOverlaps(result.tiles.map((rect, i) => {
+        const saved = this.customRects.get(ids[i]);
+        return saved ? rectFromFraction(saved, width, height) : { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+      }), -1, width, height, GAP)
+      : null;
+    result.tiles.forEach((rect, i) => {
+      const tile = this.tiles.get(ids[i]);
+      tile.setRect(custom?.[i] ?? rect, rect.focused);
       tile.setArrangeable(focusIndex < 0);
       tile.setHidden(false);
-      visible.add(id);
-    }
+      visible.add(ids[i]);
+    });
     for (const [id, tile] of this.tiles) if (!visible.has(id)) tile.setHidden(true);
     const pageable = focusIndex >= 0 ? items.length - 1 : items.length;
     this.pagerPrev.hidden = this.offset <= 0;
     this.pagerNext.hidden = this.offset + this.perPage >= pageable || this.perPage === 0;
   }
 
-  /** Traz o preview para a frente e devolve o retângulo em que o gesto começa. */
+  /** Guarda como os previews estão no início do gesto e devolve o do ponteiro. */
   #beginArrange(id) {
-    const tile = this.tiles.get(id);
-    tile.el.style.zIndex = String(++this.topZ);
-    return tile.rect;
+    this.arrangeStart = [...this.tiles].filter(([, tile]) => !tile.el.hidden).map(([tileId, tile]) => ({ id: tileId, rect: tile.rect }));
+    return this.tiles.get(id).rect;
   }
 
-  #setCustomRect(id, rect) {
+  /** A conta parte sempre do início do gesto: quem foi empurrado volta se o preview sair de cima. */
+  #arrangeTo(id, rect) {
     const { clientWidth: width, clientHeight: height } = this.stage;
-    this.customRects.set(id, rectToFraction(rect, width, height));
-    this.tiles.get(id).setRect(rect);
-    if (this.customRects.size === 1) this.#renderToolbar();
+    const start = this.arrangeStart;
+    const fixed = start.findIndex(s => s.id === id);
+    const rects = resolveOverlaps(start.map((s, i) => (i === fixed ? rect : s.rect)), fixed, width, height, GAP);
+    if (!rects) return;
+    const firstChange = !this.customRects.size;
+    start.forEach((s, i) => {
+      this.customRects.set(s.id, rectToFraction(rects[i], width, height));
+      this.tiles.get(s.id).setRect(rects[i]);
+    });
+    if (firstChange) this.#renderToolbar();
   }
 
   #page(dir) {
@@ -224,9 +234,9 @@ export class StreamArea {
         this.render();
       },
       beginArrange: id => this.#beginArrange(id),
-      moveTile: (id, start, dx, dy) => this.#setCustomRect(id,
+      moveTile: (id, start, dx, dy) => this.#arrangeTo(id,
         moveRect(start, dx, dy, this.stage.clientWidth, this.stage.clientHeight)),
-      resizeTile: (id, start, left, top, dx, dy) => this.#setCustomRect(id,
+      resizeTile: (id, start, left, top, dx, dy) => this.#arrangeTo(id,
         resizeRect(start, left, top, dx, dy, this.stage.clientWidth, this.stage.clientHeight)),
     };
   }

@@ -22,9 +22,13 @@ Rectangle {
     // Previews ajustados à mão: streamIdentifier -> frações da área (rectToFraction).
     property var customRects: ({})
     readonly property bool hasCustomRects: Object.keys(customRects).length > 0
-    property int topZ: 0
+    // Como os previews estavam no início do arrasto.
+    property var arrangeStart: []
     readonly property int previewScale: Settings.previewScale
-    onPreviewScaleChanged: relayout()
+    onPreviewScaleChanged: {
+        customRects = {}
+        relayout()
+    }
 
     function focusStream(id) {
         if (!hasItem(id))
@@ -81,12 +85,23 @@ Rectangle {
         customRects = kept
         relayout()
     }
-    function setCustomRect(id, rect) {
-        const custom = Object.assign({}, customRects)
-        custom[id] = StreamLayout.rectToFraction(rect, stage.width, stage.height)
+    function beginArrange() {
+        arrangeStart = Object.keys(rects).map(id => ({ id: id, rect: rects[id] }))
+    }
+    // A conta parte sempre do início do arrasto: quem foi empurrado volta se o preview sair de cima.
+    function arrangeTo(id, rect) {
+        const fixed = arrangeStart.findIndex(s => s.id === id)
+        const resolved = StreamLayout.resolveOverlaps(arrangeStart.map((s, i) => i === fixed ? rect : s.rect),
+                                                      fixed, stage.width, stage.height, gap)
+        if (!resolved.length)
+            return
+        const custom = {}
+        const map = {}
+        arrangeStart.forEach((s, i) => {
+            map[s.id] = resolved[i]
+            custom[s.id] = StreamLayout.rectToFraction(resolved[i], stage.width, stage.height)
+        })
         customRects = custom
-        const map = Object.assign({}, rects)
-        map[id] = rect
         rects = map
     }
     function autoArrange() {
@@ -110,10 +125,14 @@ Rectangle {
             map[streams.get(t.index).streamIdentifier] = {
                 x: left + t.x * scale, y: top + t.y * scale, w: t.w * scale, h: t.h * scale
             }
-        if (!focusId)
-            for (const id in customRects)
-                if (map[id])
-                    map[id] = StreamLayout.rectFromFraction(customRects[id], stage.width, stage.height)
+        if (!focusId && hasCustomRects) {
+            const ids = Object.keys(map)
+            const resolved = StreamLayout.resolveOverlaps(ids.map(id => customRects[id]
+                ? StreamLayout.rectFromFraction(customRects[id], stage.width, stage.height) : map[id]),
+                -1, stage.width, stage.height, gap)
+            if (resolved.length)
+                ids.forEach((id, i) => map[id] = resolved[i])
+        }
         rects = map
         perPage = r.perPage
     }
@@ -158,10 +177,10 @@ Rectangle {
                         focused: root.focusId === streamIdentifier
                         arrangeable: root.focusId === ""
                         property var arrangeStart: null
-                        onArrangeBegun: { arrangeStart = rect; z = ++root.topZ }
-                        onMoveDragged: (dx, dy) => root.setCustomRect(streamIdentifier,
+                        onArrangeBegun: { arrangeStart = rect; root.beginArrange() }
+                        onMoveDragged: (dx, dy) => root.arrangeTo(streamIdentifier,
                             StreamLayout.moveRect(arrangeStart, dx, dy, stage.width, stage.height))
-                        onResizeDragged: (left, top, dx, dy) => root.setCustomRect(streamIdentifier,
+                        onResizeDragged: (left, top, dx, dy) => root.arrangeTo(streamIdentifier,
                             StreamLayout.resizeRect(arrangeStart, left, top, dx, dy, stage.width, stage.height))
                         Behavior on x { enabled: !arranging; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         Behavior on y { enabled: !arranging; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }

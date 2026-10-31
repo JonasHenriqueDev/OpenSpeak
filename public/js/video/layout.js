@@ -7,6 +7,7 @@ export const ASPECT = 16 / 9;
 export const MIN_TILE_HEIGHT = 100;
 const STRIP_HEIGHT = 100;
 export const MIN_CUSTOM_WIDTH = 160;
+const EPSILON = 0.01;
 
 function fit(count, rows, width, height, gap) {
   const cols = Math.ceil(count / rows);
@@ -138,4 +139,65 @@ export function rectFromFraction(f, width, height) {
     y: Math.min(Math.max(0, f.y * height), height - h),
     w, h,
   };
+}
+
+const overlapping = (a, b, gap) => a.x < b.x + b.w + gap - EPSILON && b.x < a.x + a.w + gap - EPSILON
+  && a.y < b.y + b.h + gap - EPSILON && b.y < a.y + a.h + gap - EPSILON;
+
+/** Menor deslocamento que tira `mover` de cima de `other` sem sair da área. */
+function pushAway(mover, other, width, height, gap) {
+  const options = [
+    { x: other.x - gap - mover.w, y: mover.y },
+    { x: other.x + other.w + gap, y: mover.y },
+    { x: mover.x, y: other.y - gap - mover.h },
+    { x: mover.x, y: other.y + other.h + gap },
+  ].filter(p => p.x >= 0 && p.y >= 0 && p.x + mover.w <= width && p.y + mover.h <= height);
+  if (!options.length) return false;
+  const cost = p => Math.abs(p.x - mover.x) + Math.abs(p.y - mover.y);
+  const best = options.reduce((a, b) => (cost(b) < cost(a) ? b : a));
+  mover.x = best.x;
+  mover.y = best.y;
+  return true;
+}
+
+function settle(rects, fixed, width, height, gap) {
+  for (let pass = 0; pass < 32; pass++) {
+    let clear = true;
+    for (let i = 0; i < rects.length; i++) {
+      for (let j = i + 1; j < rects.length; j++) {
+        if (!overlapping(rects[i], rects[j], gap)) continue;
+        clear = false;
+        const moverIsI = j === fixed;
+        pushAway(moverIsI ? rects[i] : rects[j], moverIsI ? rects[j] : rects[i], width, height, gap);
+      }
+    }
+    if (clear) return true;
+  }
+  return false;
+}
+
+/**
+ * Tira os previews de cima uns dos outros: empurra os demais e, se não houver
+ * espaço, encolhe-os aos poucos. `fixed` é o índice do preview que está sendo
+ * arrastado, que não sai do lugar (-1 para nenhum).
+ * @returns {{x:number,y:number,w:number,h:number}[]|null} null se não couberem
+ */
+export function resolveOverlaps(rects, fixed, width, height, gap = 8, minWidth = MIN_CUSTOM_WIDTH) {
+  const out = rects.map(r => ({ ...r }));
+  for (let attempt = 0; attempt < 40; attempt++) {
+    if (settle(out, fixed, width, height, gap)) return out;
+    let shrunk = false;
+    out.forEach((r, i) => {
+      if (i === fixed || r.w <= minWidth) return;
+      const w = Math.max(minWidth, r.w * 0.94);
+      const h = r.h * w / r.w;
+      r.x += (r.w - w) / 2;
+      r.y += (r.h - h) / 2;
+      r.w = w;
+      r.h = h;
+      shrunk = true;
+    });
+    if (!shrunk) return null;
+  }
+  return null;
 }

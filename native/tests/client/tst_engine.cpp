@@ -251,6 +251,19 @@ private slots:
         // Mover: qualquer lugar da área, sem sair dela.
         QCOMPARE(moveRect(QRectF(100, 100, 320, 180), 50, -20, 1000, 800), QRectF(150, 80, 320, 180));
         QCOMPARE(moveRect(QRectF(100, 100, 320, 180), -500, 5000, 1000, 800), QRectF(0, 620, 320, 180));
+        // Sem sobreposição: o arrastado fica no lugar, os outros saem e encolhem se faltar espaço.
+        const QRectF held(300, 170, 594, 334);
+        QList<QRectF> placed;
+        for (const auto &t : gridLayout(4, 1200, 700).tiles)
+            placed.append(t.rect);
+        placed[0] = held;
+        const auto settled = resolveOverlaps(placed, 0, 1200, 700);
+        QCOMPARE(settled.size(), 4);
+        QCOMPARE(settled[0], held);
+        for (int i = 0; i < settled.size(); ++i)
+            for (int j = i + 1; j < settled.size(); ++j)
+                QVERIFY(!settled[i].intersects(settled[j]));
+        QVERIFY(resolveOverlaps({QRectF(0, 0, 400, 225), QRectF(10, 10, 400, 225)}, 0, 400, 225).isEmpty());
         // Redimensionar: proporção e canto oposto fixos, dentro da área, com tamanho mínimo.
         const QRectF rect(300, 200, 320, 180);
         QCOMPARE(resizeRect(rect, false, false, 160, 0, 1000, 800), QRectF(300, 200, 480, 270));

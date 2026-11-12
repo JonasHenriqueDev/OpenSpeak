@@ -35,7 +35,7 @@ import {
   renderAnswer, renderBuild, renderCounterReasons, renderBuildId, renderCode, renderCounterItems, renderCounters, renderHero, renderInfo, renderItem,
   renderNotes, renderRanking, selectedBuild, withoutAnnotations,
 } from './dlview.js';
-import { LINK_NETWORKS, chooseLinkAction, linkSettings, linksApplyTo, rewriteLinks, webhookName } from './xlinks.js';
+import { LINK_NETWORKS, XMediaChecker, chooseLinkAction, linkSettings, linksApplyTo, rewriteLinks, webhookName, xStatusIds } from './xlinks.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_FILE = path.resolve(process.env.OPENSPEAK_BOT_CONFIG ?? path.join(ROOT, 'config.json'));
@@ -215,6 +215,7 @@ class LiveBot {
     this.deletedOriginals = new Set();
     // Uma resposta por mensagem e prévia tirada mesmo quando chega depois (src/linkguard.js).
     this.linkGuard = new LinkGuard();
+    this.xMedia = new XMediaChecker(); // posts do X: só os com vídeo vão para o fxtwitter
     this.dl = new DeadlockData({ log }); // dados de Deadlock (deadlock-api.com), com cache
     // ia-gateway (rodízio de IA compartilhado): só para perguntas livres que o bot não entende sozinho.
     const gw = baseConfig.iaGateway ?? {};
@@ -571,13 +572,20 @@ class LiveBot {
   }
 
   /** Links a corrigir nesta mensagem (servidor ligado e a pessoa no alcance), ou null. */
-  linkFix(message) {
+  async linkFix(message) {
     // Bots e webhooks (inclusive os nossos reenvios) nunca: evita loop.
     if (!message.inGuild() || message.author?.bot || message.webhookId || message.system) return null;
     if (message.type !== MessageType.Default && message.type !== MessageType.Reply) return null;
     const settings = this.links(message.guildId);
     if (!linksApplyTo(settings, this.state.users[message.author.id]?.links)) return null;
-    const { content, links } = rewriteLinks(message.content, settings);
+    // Posts do X só com imagem ou texto: o link original já tem prévia boa, fica como a pessoa mandou.
+    const keepX = new Set();
+    if (settings.networks.x) {
+      const ids = xStatusIds(message.content).slice(0, 10);
+      const videos = await Promise.all(ids.map(id => this.xMedia.hasVideo(id)));
+      ids.forEach((id, i) => { if (videos[i] === false) keepX.add(id); });
+    }
+    const { content, links } = rewriteLinks(message.content, settings, { keepX });
     return links.length ? { settings, content, links } : null;
   }
 
@@ -734,7 +742,7 @@ class LiveBot {
 
   /** Mensagem nova em algum servidor: corrige os links (X, TikTok, Instagram) se o servidor ligou. */
   async onMessage(message) {
-    const fix = this.linkFix(message);
+    const fix = await this.linkFix(message);
     if (!fix) return;
     if (!this.linkGuard.claim(message.id)) return; // já tratada: nunca responde duas vezes
     const { settings, content, links } = fix;
@@ -840,12 +848,12 @@ class LiveBot {
     const tracked = this.linkReplies.get(message.id);
     if (!tracked) {
       // Link novo numa edição: corrige (o onMessage trava, então é uma vez só).
-      if (!hadLinks && !this.linkGuard.isHandled(message.id) && this.linkFix(message)) await this.onMessage(message);
+      if (!hadLinks && !this.linkGuard.isHandled(message.id) && await this.linkFix(message)) await this.onMessage(message);
       return;
     }
     if (tracked.content === message.content) return;
     tracked.content = message.content;
-    const fix = this.linkFix(message);
+    const fix = await this.linkFix(message);
     try {
       if (!fix) {
         this.linkReplies.delete(message.id);

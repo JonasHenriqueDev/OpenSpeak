@@ -162,7 +162,7 @@ export function renderPanel(page, v) {
     const embed = baseEmbed(v, '🔗 Links (X, TikTok, Instagram)', l.enabled)
       .setDescription(describe(v, 'O Discord costuma mostrar a prévia de posts do X, vídeos do TikTok e reels do Instagram quebrada. '
         + 'O bot troca o link por um serviço que mostra a prévia certa (vídeo tocando no Discord, fotos e texto) e tira o rastreio: '
-        + 'X → fxtwitter (ou o serviço escolhido), TikTok → tnktok.com, Instagram → uuinstagram.com. '
+        + 'X → fxtwitter (ou o serviço escolhido) só em posts com vídeo (foto e texto ficam com o link original), TikTok → tnktok.com, Instagram → uuinstagram.com. '
         + 'Com o alcance **Só quem ativar**, cada pessoa liga para si com `/links`.'))
       .addFields(
         { name: 'Situação', value: onOff(l.enabled), inline: true },

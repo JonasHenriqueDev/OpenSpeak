@@ -1,6 +1,6 @@
 // Correção de links para a prévia funcionar no Discord: X/Twitter (fxtwitter.com por
-// padrão), TikTok (tnktok.com) e reels/posts do Instagram (uuinstagram.com). Só funções
-// puras aqui; o envio (resposta ou webhook) fica no bot.js.
+// padrão, só em posts com vídeo), TikTok (tnktok.com) e reels/posts do Instagram
+// (uuinstagram.com). O envio (resposta ou webhook) fica no bot.js.
 
 /** Serviços aceitos (menu do painel). */
 export const LINK_SERVICES = ['fxtwitter.com', 'fixupx.com', 'vxtwitter.com'];
@@ -13,7 +13,7 @@ export const LINK_SCOPES = ['usuarios', 'todos'];
 
 /** Redes corrigidas (cada servidor escolhe no painel; todas ligadas por padrão). */
 export const LINK_NETWORKS = {
-  x: { label: 'X/Twitter', emoji: '🐦', description: 'x.com e twitter.com → fxtwitter (ou o serviço escolhido)' },
+  x: { label: 'X/Twitter', emoji: '🐦', description: 'posts com vídeo do x.com/twitter.com → fxtwitter (ou o serviço escolhido)' },
   tiktok: { label: 'TikTok', emoji: '🎵', description: 'tiktok.com → tnktok.com' },
   instagram: { label: 'Instagram', emoji: '📸', description: 'reels e posts → uuinstagram.com' },
 };
@@ -64,11 +64,69 @@ const TIKTOK_LINK = /(<)?https?:\/\/(?:(vm|vt)\.|www\.|m\.)?tiktok\.com\/([\w@.\
  */
 const INSTAGRAM_LINK = /(<)?https?:\/\/(?:www\.|m\.)?instagram\.com\/(?:[\w.]+\/)?(reels?|p|tv)\/([\w-]+)\/?(?:\?[^\s<>#]*)?(?:#[^\s<>]*)?/gi;
 
+/** Ids dos posts do X no texto (sem os entre < >, sem repetidos). */
+export function xStatusIds(content) {
+  const ids = [];
+  for (const m of String(content ?? '').matchAll(X_LINK)) if (!m[1] && !ids.includes(m[3])) ids.push(m[3]);
+  return ids;
+}
+
+/**
+ * O post (resposta da API do fxtwitter, campo `tweet`) tem vídeo ou GIF, nele ou no post
+ * citado? Só esses precisam do fxtwitter: imagem e texto o Discord já mostra com o link original.
+ */
+export function tweetHasVideo(tweet) {
+  const videos = t => (Array.isArray(t?.media?.videos) && t.media.videos.length > 0)
+    || (Array.isArray(t?.media?.all) && t.media.all.some(m => m?.type === 'video' || m?.type === 'gif'));
+  return videos(tweet) || videos(tweet?.quote);
+}
+
+/**
+ * Pergunta à API pública do fxtwitter se um post tem vídeo, com cache. `hasVideo(id)` devolve
+ * true, false ou null (não deu para saber: API fora, post apagado/privado), e null conta como
+ * "troca" para não perder a prévia de um vídeo.
+ */
+export class XMediaChecker {
+  constructor({ fetch: fetchFn = globalThis.fetch, timeoutMs = 4000, max = 500 } = {}) {
+    this.fetch = fetchFn;
+    this.timeoutMs = timeoutMs;
+    this.max = max;
+    this.cache = new Map(); // id -> Promise<boolean|null>
+  }
+
+  hasVideo(id) {
+    let pending = this.cache.get(id);
+    if (!pending) {
+      pending = this.lookup(id);
+      this.cache.set(id, pending);
+      // Falha não fica em cache: tenta de novo na próxima vez.
+      pending.then(v => { if (v === null) this.cache.delete(id); });
+      while (this.cache.size > this.max) this.cache.delete(this.cache.keys().next().value);
+    }
+    return pending;
+  }
+
+  async lookup(id) {
+    try {
+      const res = await this.fetch(`https://api.fxtwitter.com/status/${id}`, {
+        signal: AbortSignal.timeout(this.timeoutMs),
+        headers: { accept: 'application/json', 'user-agent': 'FrisquilaBot/1.0' },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data?.tweet ? tweetHasVideo(data.tweet) : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
 /**
  * Troca os links das redes ligadas. Links entre < > ficam como estão (o autor pediu
- * para não ter prévia). Devolve o texto novo e a lista de links trocados (sem repetidos).
+ * para não ter prévia), assim como os posts do X cujo id está em `keepX` (sem vídeo).
+ * Devolve o texto novo e a lista de links trocados (sem repetidos).
  */
-export function rewriteLinks(content, settings = DEFAULT_LINK_SETTINGS) {
+export function rewriteLinks(content, settings = DEFAULT_LINK_SETTINGS, { keepX } = {}) {
   const service = settings.service ?? DEFAULT_LINK_SETTINGS.service;
   const networks = settings.networks ?? DEFAULT_LINK_SETTINGS.networks;
   const links = [];
@@ -78,7 +136,10 @@ export function rewriteLinks(content, settings = DEFAULT_LINK_SETTINGS) {
     return link;
   };
   let text = String(content ?? '');
-  if (networks.x) text = text.replace(X_LINK, (m, angle, user, id, rest) => keep(m, angle, `https://${service}/${user}/status/${id}${rest}`));
+  if (networks.x) {
+    text = text.replace(X_LINK, (m, angle, user, id, rest) =>
+      keepX?.has(id) ? m : keep(m, angle, `https://${service}/${user}/status/${id}${rest}`));
+  }
   if (networks.tiktok) {
     text = text.replace(TIKTOK_LINK, (m, angle, sub, path) => {
       // Só vídeo, foto ou link curto (vm./vt., /t/…): perfil e página inicial ficam como estão.

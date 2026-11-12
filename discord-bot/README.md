@@ -71,7 +71,7 @@ O bot corrige links de três redes para a prévia (com o vídeo tocando) funcion
 
 | Rede | Vira | Quais links |
 |---|---|---|
-| X/Twitter | `fxtwitter.com` (ou `fixupx.com` / `vxtwitter.com`) | posts (`/usuario/status/ID`) |
+| X/Twitter | `fxtwitter.com` (ou `fixupx.com` / `vxtwitter.com`) | posts com vídeo ou GIF (`/usuario/status/ID`); posts só com foto ou texto ficam com o link original |
 | TikTok | [`tnktok.com`](https://github.com/okdargy/fxtiktok) | vídeos, fotos e links curtos (`vm.`/`vt.tiktok.com`, `/t/…`); perfis ficam como estão |
 | Instagram | [`uuinstagram.com`](https://uuinstagram.com) | reels, posts e IGTV (`/reel/`, `/reels/`, `/p/`, `/tv/`, com ou sem o perfil antes) |
 
@@ -84,7 +84,10 @@ O Discord costuma mostrar a prévia de posts do X quebrada. Ligando em
 (`x.com`/`twitter.com`, com ou sem `www.`/`mobile.`, formato
 `/usuario/status/ID`) por `fxtwitter.com` (ou `fixupx.com` / `vxtwitter.com`
 no painel), mantendo o caminho (`/photo/1`…) e tirando o rastreio
-(`?s=20`, `?t=…`). Vale **por servidor** e vem **desligado** em todos; a escolha
+(`?s=20`, `?t=…`). Só troca posts com vídeo ou GIF (nele ou no post citado):
+o bot pergunta à API pública do fxtwitter (`api.fxtwitter.com/status/ID`, com cache)
+e deixa o link do jeito que a pessoa mandou quando é só foto ou texto, que o Discord
+já mostra bem; se a API não responder, troca como antes. Vale **por servidor** e vem **desligado** em todos; a escolha
 fica no `state.json` (`guilds.<servidor>.links`), e não depende do `guildId` da config.
 
 **Quem tem os links corrigidos** (alcance, no painel):

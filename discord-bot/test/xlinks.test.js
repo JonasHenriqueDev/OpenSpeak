@@ -82,3 +82,49 @@ test('TikTok vira tnktok.com (vídeo, foto e link curto) e Instagram vira uuinst
   assert.equal(rewriteLinks(mixed, s).links.length, 3);
   assert.deepEqual(rewriteLinks(mixed, linkSettings({ networks: { tiktok: false, instagram: false } })).links, ['https://fxtwitter.com/a/status/1']);
 });
+
+test('posts do X sem vídeo ficam com o link original', async () => {
+  const { rewriteLinks, xStatusIds } = await import('../src/xlinks.js');
+  const text = 'foto https://x.com/a/status/1?s=20 vídeo https://x.com/b/status/2 <https://x.com/c/status/3>';
+  assert.deepEqual(xStatusIds(text), ['1', '2']);
+  const { content, links } = rewriteLinks(text, linkSettings({}), { keepX: new Set(['1']) });
+  assert.equal(content, 'foto https://x.com/a/status/1?s=20 vídeo https://fxtwitter.com/b/status/2 <https://x.com/c/status/3>');
+  assert.deepEqual(links, ['https://fxtwitter.com/b/status/2']);
+  assert.deepEqual(rewriteLinks('https://x.com/a/status/1', linkSettings({}), { keepX: new Set(['1']) }).links, []);
+});
+
+test('tweetHasVideo: vídeo ou GIF no post ou no citado', async () => {
+  const { tweetHasVideo } = await import('../src/xlinks.js');
+  assert.equal(tweetHasVideo({ media: { videos: [{ type: 'video' }] } }), true);
+  assert.equal(tweetHasVideo({ media: { all: [{ type: 'gif' }] } }), true);
+  assert.equal(tweetHasVideo({ media: { photos: [{ type: 'photo' }], all: [{ type: 'photo' }] } }), false);
+  assert.equal(tweetHasVideo({ text: 'só texto' }), false);
+  assert.equal(tweetHasVideo({ media: { photos: [{}] }, quote: { media: { videos: [{}] } } }), true);
+});
+
+test('XMediaChecker consulta o fxtwitter, guarda em cache e devolve null quando falha', async () => {
+  const { XMediaChecker } = await import('../src/xlinks.js');
+  const calls = [];
+  const answers = {
+    1: { ok: true, json: async () => ({ code: 200, tweet: { media: { videos: [{ type: 'video' }] } } }) },
+    2: { ok: true, json: async () => ({ code: 200, tweet: { media: { photos: [{}] } } }) },
+    3: { ok: false, json: async () => ({ code: 404 }) },
+  };
+  const checker = new XMediaChecker({
+    fetch: async url => {
+      calls.push(url);
+      const id = url.split('/').pop();
+      if (id === '4') throw new Error('rede');
+      return answers[id];
+    },
+  });
+  assert.equal(await checker.hasVideo('1'), true);
+  assert.equal(await checker.hasVideo('2'), false);
+  assert.equal(await checker.hasVideo('3'), null);
+  assert.equal(await checker.hasVideo('4'), null);
+  assert.equal(await checker.hasVideo('1'), true);
+  assert.equal(calls.filter(u => u.endsWith('/1')).length, 1, 'cache');
+  assert.equal(calls[0], 'https://api.fxtwitter.com/status/1');
+  await checker.hasVideo('3');
+  assert.equal(calls.filter(u => u.endsWith('/3')).length, 2, 'falha não fica em cache');
+});

@@ -310,6 +310,36 @@ select.input { padding-right: 4px; }
 .video-stream.paused .tile-video { filter: grayscale(.8) brightness(.45); }
 .tile-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; }
 
+/* Desenho na transmissão: o canvas fica entre o vídeo e os controles. */
+.tile-drawing { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.tile-drawing[hidden] { display: none; }
+.video-stream.drawing .tile-drawing { pointer-events: auto; cursor: crosshair; touch-action: none; }
+.video-stream.drawing .tile-overlay { pointer-events: none; }
+.video-stream.drawing .tile-overlay > .tile-top,
+.video-stream.drawing .tile-overlay > .tile-actions,
+.video-stream.drawing .tile-overlay > .draw-toolbar { pointer-events: auto; }
+.draw-toolbar {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 2;
+  display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 999px;
+  background: rgba(13, 15, 23, .88); border: 1px solid var(--border);
+}
+.video-stream.small .draw-toolbar { top: 30px; }
+.draw-swatch { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .35); padding: 0; cursor: pointer; }
+.draw-swatch.current { border: 3px solid var(--accent); }
+.draw-sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+.draw-wrap { position: relative; display: inline-flex; }
+.tile-btn.dim { opacity: .55; }
+.draw-menu {
+  position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 5; min-width: 190px;
+  display: flex; flex-direction: column; padding: 4px; border-radius: 8px;
+  background: var(--panel, #161a22); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0, 0, 0, .5);
+}
+.draw-menu__item {
+  text-align: left; padding: 7px 10px; border: 0; border-radius: 5px; background: none; color: var(--text);
+  font: inherit; cursor: pointer; white-space: nowrap;
+}
+.draw-menu__item:hover { background: rgba(255, 255, 255, .1); }
+
 .tile-top {
   display: flex; align-items: center; gap: 8px; padding: 8px 10px; min-width: 0;
   background: linear-gradient(rgba(0, 0, 0, .65), transparent); font-size: 13px;

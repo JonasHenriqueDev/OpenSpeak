@@ -129,6 +129,7 @@ public:
     bool hasProfiles() const { return m_capabilities.contains(CapProfiles); }
     bool hasProfileMedia() const { return m_capabilities.contains(CapProfileMedia); }
     bool hasClientLogs() const { return m_capabilities.contains(CapClientLogs); }
+    bool hasStreamDraw() const { return m_capabilities.contains(CapStreamDraw); }
     /// O último login foi recusado por falta da senha do perfil (ou senha errada).
     bool profilePasswordRequired() const { return m_profilePasswordRequired; }
     QVariantMap ownProfile() const;

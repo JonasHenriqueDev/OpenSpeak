@@ -27,6 +27,8 @@ class Settings : public QObject {
     Q_PROPERTY(bool automaticUpdates READ automaticUpdates WRITE setAutomaticUpdates NOTIFY changed)
     Q_PROPERTY(bool sendLogs READ sendLogs WRITE setSendLogs NOTIFY changed)
     Q_PROPERTY(bool pipPinned READ pipPinned WRITE setPipPinned NOTIFY changed)
+    Q_PROPERTY(bool showDrawings READ showDrawings WRITE setShowDrawings NOTIFY changed)
+    Q_PROPERTY(QString drawColor READ drawColor WRITE setDrawColor NOTIFY changed)
     Q_PROPERTY(bool prereleaseUpdates READ prereleaseUpdates WRITE setPrereleaseUpdates NOTIFY changed)
     Q_PROPERTY(QString updateEdition READ updateEdition WRITE setUpdateEdition NOTIFY changed)
     Q_PROPERTY(bool minimizeToTray READ minimizeToTray WRITE setMinimizeToTray NOTIFY changed)
@@ -82,6 +84,12 @@ public:
     /// Janela picture-in-picture por cima de todos os apps.
     bool pipPinned() const { return value("pipPinned", true).toBool(); }
     void setPipPinned(bool v) { set("pipPinned", v); }
+    /// Mostra os desenhos dos espectadores por cima das transmissões assistidas.
+    bool showDrawings() const { return value("showDrawings", true).toBool(); }
+    void setShowDrawings(bool v) { set("showDrawings", v); }
+    /// Cor do pincel ao desenhar na transmissão (#rrggbb).
+    QString drawColor() const { return value("drawColor", QStringLiteral("#ff3b30")).toString(); }
+    void setDrawColor(const QString &v) { set("drawColor", v); }
     bool prereleaseUpdates() const { return value("prereleaseUpdates", false).toBool(); }
     void setPrereleaseUpdates(bool v) { set("prereleaseUpdates", v); }
     /// Edição recebida nas atualizações: "lite", "full" ou vazio (a instalada).

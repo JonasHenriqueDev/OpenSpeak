@@ -52,6 +52,14 @@ inline const QString CapProfileMedia = QStringLiteral("PROFILE_MEDIA"); // banne
 /// {version, lines: [texto]}, para investigar bugs. Até ClientLogMaxLines por comando.
 inline const QString CapClientLogs = QStringLiteral("CLIENT_LOGS");
 constexpr int ClientLogMaxLines = 500;
+/// Desenho na transmissão: espectadores mandam traços com `streamdraw` e o servidor
+/// repassa (`notifystreamdraw`) aos outros espectadores; o transmissor nunca recebe.
+/// {action:'stroke', stroke, color:'#rrggbb', width, points:[x,y,...], end} ou {action:'clear'}.
+inline const QString CapStreamDraw = QStringLiteral("STREAM_DRAW");
+constexpr int DrawMaxCoords = 512;   // x,y,x,y... por mensagem (256 pontos)
+constexpr int DrawCoordMax = 10000;  // coordenadas normalizadas 0..10000 no quadro do vídeo
+constexpr int DrawWidthMax = 40;     // espessura em milésimos da altura do vídeo
+constexpr int DrawRatePerSec = 30;   // mensagens por segundo por cliente (balde com folga de 2 s)
 
 /// clid reservado do servidor como par WebRTC nos streams SFU (`streamsignaling`/`peerClid`).
 constexpr int RelayClid = 0;

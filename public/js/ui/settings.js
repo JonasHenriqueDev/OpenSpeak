@@ -47,6 +47,8 @@ const DEFAULTS = {
   soundEffects: true,
   soundTheme: 'suave', // ver SOUND_THEMES em ui/sounds.js
   soundVolume: 60,
+  showDrawings: true, // desenhos dos espectadores por cima das transmissões
+  drawColor: '#ff3b30',
 };
 
 class Settings extends EventEmitter {

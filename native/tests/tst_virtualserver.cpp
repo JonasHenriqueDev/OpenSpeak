@@ -420,6 +420,63 @@ private slots:
         QCOMPARE(expectError(a, "setClientLatency", {{"pingMs", 0}}), rc::UnknownCommand);
     }
 
+    void drawingGoesOnlyToOtherViewers()
+    {
+        const int host = login("host"), a = login("a"), b = login("b"), outsider = login("fora");
+        const QString id = setup(host);
+        for (const int v : {a, b}) {
+            server->handle(v, "joinstreamrequest", {{"streamIdentifier", id}});
+            server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", id}, {"clid", v}, {"accept", true}});
+        }
+        const QJsonObject stroke{{"streamIdentifier", id}, {"action", "stroke"}, {"stroke", 7}, {"color", "#FF0000"},
+                                 {"width", 4}, {"points", QJsonArray{0, 0, 5000, 10000}}, {"end", false}};
+        server->handle(a, "streamdraw", stroke);
+        const auto got = notes(b, "notifystreamdraw");
+        QCOMPARE(got.size(), 1);
+        QCOMPARE(got[0].value("clid").toInt(), a);
+        QCOMPARE(got[0].value("color").toString(), QStringLiteral("#ff0000"));
+        QCOMPARE(got[0].value("points").toArray(), (QJsonArray{0, 0, 5000, 10000}));
+        QVERIFY(notes(host, "notifystreamdraw").isEmpty());
+        QVERIFY(notes(a, "notifystreamdraw").isEmpty());
+        QVERIFY(notes(outsider, "notifystreamdraw").isEmpty());
+
+        server->handle(a, "streamdraw", {{"streamIdentifier", id}, {"action", "clear"}});
+        QCOMPARE(notes(b, "notifystreamdraw").last().value("action").toString(), QStringLiteral("clear"));
+
+        QCOMPARE(expectError(host, "streamdraw", stroke), rc::PermissionDenied);
+        QCOMPARE(expectError(outsider, "streamdraw", stroke), rc::PermissionDenied);
+    }
+
+    void drawingValidatesAndLimitsRate()
+    {
+        const int host = login("host"), a = login("a"), b = login("b");
+        const QString id = setup(host);
+        for (const int v : {a, b}) {
+            server->handle(v, "joinstreamrequest", {{"streamIdentifier", id}});
+            server->handle(host, "respondjoinstreamrequest", {{"streamIdentifier", id}, {"clid", v}, {"accept", true}});
+        }
+        const QJsonObject base{{"streamIdentifier", id}, {"action", "stroke"}, {"stroke", 1}, {"color", "#00ff00"},
+                               {"width", 4}, {"points", QJsonArray{1, 2}}};
+        QJsonArray tooMany;
+        for (int i = 0; i < 514; ++i)
+            tooMany.append(1);
+        const QList<std::pair<QString, QJsonValue>> bad = {
+            {"color", "red"}, {"width", 0}, {"width", 41}, {"points", QJsonArray{1, 2, 3}},
+            {"points", QJsonArray{1, 10001}}, {"points", tooMany}, {"stroke", 0}, {"action", "apagar"}, {"points", QJsonArray{}},
+        };
+        for (const auto &[key, value] : bad) {
+            QJsonObject args = base;
+            args[key] = value;
+            QCOMPARE(expectError(a, "streamdraw", args), rc::InvalidArgs);
+        }
+        int dropped = 0;
+        for (int i = 0; i < 100; ++i)
+            if (server->handle(a, "streamdraw", base).value("dropped").toBool())
+                ++dropped;
+        QVERIFY2(dropped >= 30, qPrintable(QString::number(dropped)));
+        QCOMPARE(notes(b, "notifystreamdraw").size(), 100 - dropped);
+    }
+
     void fullFlow()
     {
         const int host = login("host"), viewer = login("viewer");
@@ -536,7 +593,7 @@ private slots:
         // Sem relay, só STREAM_P2P é anunciado.
         const int other = server->connect();
         const QJsonObject view = server->handle(other, "login", {{"nickname", "x"}, {"uid", "uid-x"}});
-        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapProfiles, CapProfileMedia}));
+        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapStreamP2P, CapProfiles, CapProfileMedia, CapStreamDraw}));
     }
 
     // ------------------------------------------------------------ modo SFU
@@ -547,7 +604,7 @@ private slots:
         server->setRelay(&relay);
         const int host = server->connect();
         const QJsonObject view = server->handle(host, "login", {{"nickname", "host"}, {"uid", "uid-host"}});
-        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapProfiles, CapProfileMedia, CapStreamSFU, CapStreamSimulcast}));
+        QCOMPARE(view.value("server").toObject().value("capabilityExtensions").toArray(), (QJsonArray{CapProfiles, CapProfileMedia, CapStreamSFU, CapStreamSimulcast, CapStreamDraw}));
 
         const QString sid = setup(host, {{"mode", int(StreamMode::SFU)}, {"bitrate", 2'000'000}});
         QCOMPARE(relay.calls, QStringList{QStringLiteral("open %1 %2 2000000").arg(sid).arg(host)});

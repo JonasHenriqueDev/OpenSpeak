@@ -14,6 +14,7 @@ import { SessionInbound } from './SessionInbound.js';
 import { SessionState } from './StreamBase.js';
 import { StatsCollector } from './StatsCollector.js';
 import { localDecodeCodecs } from './codecs.js';
+import { DrawingBoard } from './drawings.js';
 
 const THUMBNAIL_INTERVAL_MS = 10_000;
 const EARLY_SIGNAL_TTL_MS = 5_000;
@@ -193,6 +194,14 @@ export class ScreenshareManager extends EventEmitter {
       simulcast: false,
       layer: 'high',
       qualityPreference: 'auto',
+      // Desenhos dos espectadores (STREAM_DRAW); o transmissor não recebe.
+      drawing: new DrawingBoard({
+        ownClid: () => this.handler.ownClid,
+        send: args => {
+          if (this.handler.hasStreamDraw) this.connection.sendCommand('streamdraw', { streamIdentifier, ...args }).catch(() => {});
+        },
+        onChange: () => this.emit('drawingschanged', streamIdentifier),
+      }),
     };
     this.inbound.set(streamIdentifier, view);
     this.emit('changed');
@@ -244,6 +253,7 @@ export class ScreenshareManager extends EventEmitter {
     c.on('notifystreamattendees', a => this.#onAttendees(a));
     c.on('notifyrespondjoinstreamrequest', a => this.#onJoinResponse(a));
     c.on('notifystreamsignaling', a => this.#onSignaling(a));
+    c.on('notifystreamdraw', a => this.inbound.get(a.streamIdentifier)?.drawing?.apply(a));
     c.on('notifystreambanadded', ({ streamIdentifier, uid }) => {
       this.ownStreams.get(streamIdentifier)?.banned.add(uid);
       this.emit('changed');
@@ -398,6 +408,7 @@ export class ScreenshareManager extends EventEmitter {
     const view = this.inbound.get(streamIdentifier);
     if (view) {
       view.attendees = [...viewers];
+      view.drawing?.prune(viewers);
       this.emit('changed');
     }
   }
@@ -545,6 +556,11 @@ export class ScreenshareManager extends EventEmitter {
   }
 
   #disposeInbound(view) {
+    if (view.drawing?.strokes.length) {
+      view.drawing.dispose();
+      this.emit('drawingschanged', view.streamIdentifier);
+    }
+    view.drawing?.dispose();
     view.stats?.stop();
     view.session?.close();
     view.session = null;

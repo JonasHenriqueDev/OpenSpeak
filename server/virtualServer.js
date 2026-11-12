@@ -7,7 +7,8 @@
 
 import {
   StreamAccess, StreamMode, StreamType, LeaveReason, ReturnCode, CAPABILITIES,
-  CAP_PROFILES, CAP_PROFILE_MEDIA, CAP_CLIENT_LOGS, CLIENT_LOG_MAX_LINES, MAX_STREAMS_PER_CLIENT, MAX_THUMBNAIL_BYTES, MAX_SIGNALING_BYTES, MAX_AVATAR_BYTES, MAX_PROFILE_MEDIA_BYTES,
+  CAP_PROFILES, CAP_PROFILE_MEDIA, CAP_CLIENT_LOGS, CLIENT_LOG_MAX_LINES, CAP_STREAM_DRAW,
+  DRAW_MAX_COORDS, DRAW_COORD_MAX, DRAW_WIDTH_MAX, DRAW_RATE_PER_SEC, MAX_STREAMS_PER_CLIENT, MAX_THUMBNAIL_BYTES, MAX_SIGNALING_BYTES, MAX_AVATAR_BYTES, MAX_PROFILE_MEDIA_BYTES,
 } from './protocol.js';
 import { profileKey } from './profileStore.js';
 
@@ -38,6 +39,25 @@ const LIVE_COMMANDS = new Set(['notifystreamstarted', 'notifystreamupdated', 'no
 function cleanString(value, maxLength, fallback = '') {
   if (typeof value !== 'string') return fallback;
   return value.replace(/[\u0000-\u001f]/g, '').trim().slice(0, maxLength);
+}
+
+/**
+ * Valida um `streamdraw`. Devolve só os campos repassados, ou null se inválido.
+ * action 'stroke': {stroke, color, width, points:[x,y,...], end}; 'clear': apaga os traços do autor.
+ */
+export function sanitizeDraw(args) {
+  if (args.action === 'clear') return { action: 'clear' };
+  if (args.action !== 'stroke') return null;
+  const stroke = Number(args.stroke);
+  if (!Number.isInteger(stroke) || stroke < 1 || stroke > 0x7fffffff) return null;
+  if (typeof args.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(args.color)) return null;
+  const width = Number(args.width);
+  if (!Number.isInteger(width) || width < 1 || width > DRAW_WIDTH_MAX) return null;
+  const points = args.points;
+  if (!Array.isArray(points) || points.length % 2 !== 0 || points.length > DRAW_MAX_COORDS) return null;
+  if (!points.every(v => Number.isInteger(v) && v >= 0 && v <= DRAW_COORD_MAX)) return null;
+  if (!points.length && !args.end) return null;
+  return { action: 'stroke', stroke, color: args.color.toLowerCase(), width, points: [...points], end: !!args.end };
 }
 
 export class VirtualServer {
@@ -451,12 +471,38 @@ export class VirtualServer {
       });
       return {};
     },
+
+    // Desenho por cima do vídeo: só espectadores aceitos desenham, e o traço vai
+    // para os outros espectadores. O dono nunca recebe (a prévia dele não mostra).
+    streamdraw(client, args) {
+      const stream = this.#stream(args.streamIdentifier);
+      if (!stream.viewers.has(client.clid)) fail(ReturnCode.PERMISSION_DENIED);
+      const draw = sanitizeDraw(args);
+      if (!draw) fail(ReturnCode.INVALID_ARGS);
+      if (!this.#takeDrawToken(client)) return { dropped: true };
+      const message = { type: 'notify', cmd: 'notifystreamdraw',
+        args: { streamIdentifier: stream.streamIdentifier, clid: client.clid, ...draw } };
+      for (const clid of stream.viewers) if (clid !== client.clid) this.send(clid, message);
+      return {};
+    },
   };
 
   // ------------------------------------------------------------- auxiliares
 
+  /** Balde de fichas: DRAW_RATE_PER_SEC por segundo, acumulando até 2 s. */
+  #takeDrawToken(client, now = Date.now()) {
+    const capacity = DRAW_RATE_PER_SEC * 2;
+    const last = client.drawAt ?? now;
+    client.drawTokens = Math.min(capacity, (client.drawTokens ?? capacity) + (now - last) * DRAW_RATE_PER_SEC / 1000);
+    client.drawAt = now;
+    if (client.drawTokens < 1) return false;
+    client.drawTokens -= 1;
+    return true;
+  }
+
   #capabilities() {
     const caps = this.profiles ? [...CAPABILITIES, CAP_PROFILES, CAP_PROFILE_MEDIA] : [...CAPABILITIES];
+    caps.push(CAP_STREAM_DRAW);
     if (this.clientLog) caps.push(CAP_CLIENT_LOGS);
     return caps;
   }

@@ -94,6 +94,16 @@ public:
     /// Qualidade de um stream assistido no SFU com simulcast: "auto", "high" ou "low".
     Q_INVOKABLE void setQualityPreference(const QString &id, const QString &preference);
 
+    // --- desenho na transmissão (STREAM_DRAW): só entre espectadores
+    /// Traços visíveis: [{color, width, points:[x,y,...], ages:[ms por ponto]}], coordenadas
+    /// 0..DrawCoordMax. Cada ponto fica DrawHoldMs inteiro e some em DrawFadeMs.
+    Q_INVOKABLE QVariantList drawings(const QString &id) const;
+    /// Continua o meu traço até (x, y) em 0..1 no quadro do vídeo; `start` começa outro.
+    Q_INVOKABLE void drawTo(const QString &id, double x, double y, bool start);
+    Q_INVOKABLE void endDrawing(const QString &id);
+    Q_INVOKABLE void clearMyDrawings(const QString &id);
+    Q_INVOKABLE bool hasMyDrawings(const QString &id) const;
+
     // --- estatísticas
     Q_INVOKABLE QVariantMap stats(const QString &id, int viewerClid) const;
 
@@ -102,6 +112,7 @@ signals:
     void previewChanged();
     void audioMutedChanged();
     void statsChanged(const QString &id);
+    void drawingsChanged(const QString &id);
     void joinRequest(const QString &id, int clid, const QString &nickname);
     void joinRequestResolved(const QString &id, int clid);
     /// A janela transmitida está preta há ~10 s: pergunta se usa a captura alternativa.
@@ -161,6 +172,14 @@ private:
                 encoderLow->pushFrame(f);
         }
     };
+    struct Stroke {
+        int clid = 0;
+        qint64 id = 0;
+        QString color;
+        int width = 4;
+        QList<int> points; // x,y,x,y... em 0..DrawCoordMax
+        QList<qint64> times; // quando cada ponto chegou (o fade é por ponto)
+    };
     enum class InStatus { Waiting, Connecting, Playing, Reconnecting, Error };
     struct InboundView {
         QString id;
@@ -177,6 +196,9 @@ private:
         bool simulcast = false;
         QString layer = QStringLiteral("high");
         QString qualityPreference = QStringLiteral("auto");
+        QList<Stroke> strokes;   // ordem de chegada (o mais novo por cima)
+        qint64 myStroke = 0;     // meu traço em andamento
+        QList<int> drawPending;  // pontos dele ainda não enviados
     };
 
     static StreamConfig configFromMap(const QVariantMap &m, const StreamConfig &base);
@@ -191,6 +213,12 @@ private:
     void onJoinResponse(const QJsonObject &a);
     void onSignaling(const QJsonObject &a);
     void sendQualityPreference(const InboundView &view);
+    void onDraw(const QJsonObject &a);
+    void flushDrawing(InboundView &view, bool end);
+    void flushAllDrawings();
+    static void capStrokes(InboundView &view, int clid);
+    void expireDrawings();
+    void startDrawFade();
     void startMedia(OwnStream &own);
     void startAudioFor(OwnStream &own);
     void watchCaptureFallback(OwnStream &own);
@@ -218,6 +246,9 @@ private:
     QMap<QString, InboundView> m_inbound;
     QMap<QString, QList<QJsonObject>> m_earlySignals;
     QTimer m_statsTimer;
+    QTimer m_drawFlush; // junta os pontos do traço em mensagens de ~40 ms
+    QTimer m_drawFade;  // anima o fade e descarta os pontos vencidos
+    qint64 m_nextStroke = 1;
     QTimer m_fullscreenTimer;
     QTimer m_changeDebounce;
     // Com o Discord excluído, o OpenSpeak entra na captura da tela: o áudio de quem

@@ -41,6 +41,13 @@ export const CAP_PROFILE_MEDIA = 'PROFILE_MEDIA';
 // O servidor guarda os registros que o cliente manda com `clientlog` {version, lines}.
 export const CAP_CLIENT_LOGS = 'CLIENT_LOGS';
 export const CLIENT_LOG_MAX_LINES = 500;
+// Desenho na transmissão: espectadores mandam traços com `streamdraw` e o servidor
+// repassa (`notifystreamdraw`) aos outros espectadores. O transmissor nunca recebe.
+export const CAP_STREAM_DRAW = 'STREAM_DRAW';
+export const DRAW_MAX_COORDS = 512;   // x,y,x,y... por mensagem (256 pontos)
+export const DRAW_COORD_MAX = 10000;  // coordenadas normalizadas 0..10000 no quadro do vídeo
+export const DRAW_WIDTH_MAX = 40;     // espessura em milésimos da altura do vídeo
+export const DRAW_RATE_PER_SEC = 30;  // mensagens por segundo por cliente (balde com folga de 2 s)
 
 export const MAX_STREAMS_PER_CLIENT = 3;
 export const MAX_THUMBNAIL_BYTES = 256 * 1024;

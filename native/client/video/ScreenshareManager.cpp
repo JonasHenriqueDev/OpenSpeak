@@ -1,10 +1,14 @@
 #include "ScreenshareManager.h"
 #include "Presets.h"
 
+#include <QDateTime>
+#include <QJsonArray>
 #include <QLoggingCategory>
+#include <QRegularExpression>
 #include <QUrl>
 
 #include <algorithm>
+#include <cmath>
 
 Q_LOGGING_CATEGORY(lcShare, "openspeak.screenshare")
 
@@ -65,6 +69,11 @@ ScreenshareManager::ScreenshareManager(ConnectionHandler *handler, Settings *set
     : QObject(parent), m_handler(handler), m_conn(handler->connection()), m_settings(settings)
 {
     connect(m_conn, &ServerConnection::notification, this, &ScreenshareManager::onNotification);
+    m_drawFlush.setInterval(40);
+    m_drawFlush.setSingleShot(true);
+    connect(&m_drawFlush, &QTimer::timeout, this, &ScreenshareManager::flushAllDrawings);
+    m_drawFade.setInterval(33);
+    connect(&m_drawFade, &QTimer::timeout, this, &ScreenshareManager::expireDrawings);
     connect(m_handler, &ConnectionHandler::changed, this, &ScreenshareManager::notifyChanged);
     connect(m_handler, &ConnectionHandler::streamUpdated, this, &ScreenshareManager::notifyChanged);
     connect(m_settings, &Settings::changed, this, &ScreenshareManager::notifyChanged);
@@ -849,6 +858,8 @@ void ScreenshareManager::onNotification(const QString &cmd, const QJsonObject &a
         onJoinResponse(a);
     else if (cmd == QLatin1String("notifystreamsignaling"))
         onSignaling(a);
+    else if (cmd == QLatin1String("notifystreamdraw"))
+        onDraw(a);
     else if (cmd == QLatin1String("notifystreamattendees")) {
         auto it = m_own.find(a.value("streamIdentifier").toString());
         if (it != m_own.end()) {
@@ -864,6 +875,12 @@ void ScreenshareManager::onNotification(const QString &cmd, const QJsonObject &a
             for (const QJsonValue &v : a.value("viewers").toArray())
                 in->attendees.append(v.toInt());
             in->attendeesKnown = true;
+            // Quem saiu leva os desenhos junto.
+            const qsizetype before = in->strokes.size();
+            const int me = m_handler->ownClid();
+            in->strokes.removeIf([&](const Stroke &s) { return s.clid != me && !in->attendees.contains(s.clid); });
+            if (in->strokes.size() != before)
+                emit drawingsChanged(in->id);
             notifyChanged();
         }
     } else if (cmd == QLatin1String("notifystreambanadded") || cmd == QLatin1String("notifystreambanremoved")) {
@@ -1169,12 +1186,243 @@ void ScreenshareManager::disposeOwn(const QString &id)
 
 void ScreenshareManager::disposeInbound(InboundView &view)
 {
+    if (!view.strokes.isEmpty()) {
+        view.strokes.clear();
+        emit drawingsChanged(view.id);
+    }
+    view.myStroke = 0;
+    view.drawPending.clear();
     if (view.session) {
         view.session->close();
         view.session->deleteLater();
         view.session = nullptr;
     }
     view.history = {};
+}
+
+// ============================================================ desenho
+
+namespace {
+constexpr int DrawWidth = 5;              // milésimos da altura do vídeo
+constexpr int DrawMinStep = 12;           // ignora movimentos menores (0,12% do quadro)
+constexpr int MaxStrokesPerAuthor = 300;  // os mais antigos somem
+constexpr int MaxCoordsPerStroke = 4000;
+// Cada ponto fica inteiro por DrawHoldMs e some num fade de DrawFadeMs: a parte
+// mais velha do traço vai sumindo primeiro e o desenho todo some em 10 s.
+constexpr qint64 DrawHoldMs = 6000;
+constexpr qint64 DrawFadeMs = 4000;
+qint64 drawNow() { return QDateTime::currentMSecsSinceEpoch(); }
+} // namespace
+
+QVariantList ScreenshareManager::drawings(const QString &id) const
+{
+    QVariantList out;
+    auto it = m_inbound.constFind(id);
+    if (it == m_inbound.constEnd())
+        return out;
+    out.reserve(it->strokes.size());
+    const qint64 now = drawNow();
+    for (const Stroke &s : it->strokes) {
+        QVariantList points, ages;
+        points.reserve(s.points.size());
+        ages.reserve(s.times.size());
+        for (int v : s.points)
+            points.append(v);
+        for (qint64 t : s.times)
+            ages.append(double(now - t));
+        out.append(QVariantMap{{"color", s.color}, {"width", s.width}, {"points", points}, {"ages", ages},
+                               {"hold", double(DrawHoldMs)}, {"fade", double(DrawFadeMs)}});
+    }
+    return out;
+}
+
+void ScreenshareManager::drawTo(const QString &id, double x, double y, bool start)
+{
+    auto it = m_inbound.find(id);
+    if (it == m_inbound.end() || !m_handler->hasStreamDraw() || !m_settings->showDrawings())
+        return;
+    InboundView &view = *it;
+    const int px = int(std::lround(std::clamp(x, 0.0, 1.0) * DrawCoordMax));
+    const int py = int(std::lround(std::clamp(y, 0.0, 1.0) * DrawCoordMax));
+    const int me = m_handler->ownClid();
+    Stroke *stroke = nullptr;
+    if (!start && view.myStroke) {
+        for (Stroke &s : view.strokes)
+            if (s.clid == me && s.id == view.myStroke)
+                stroke = &s;
+    }
+    if (!stroke) {
+        if (view.myStroke)
+            flushDrawing(view, true);
+        static const QRegularExpression hex(QStringLiteral("^#[0-9a-fA-F]{6}$"));
+        QString color = m_settings->drawColor().toLower();
+        if (!hex.match(color).hasMatch())
+            color = QStringLiteral("#ff3b30");
+        view.myStroke = m_nextStroke++;
+        view.strokes.append(Stroke{me, view.myStroke, color, DrawWidth, {}});
+        capStrokes(view, me);
+        stroke = &view.strokes.last();
+    } else if (stroke->points.size() >= 2) {
+        const int lx = stroke->points[stroke->points.size() - 2], ly = stroke->points.last();
+        if (std::abs(px - lx) < DrawMinStep && std::abs(py - ly) < DrawMinStep)
+            return;
+    }
+    if (stroke->points.size() >= MaxCoordsPerStroke)
+        return;
+    stroke->points << px << py;
+    stroke->times << drawNow();
+    view.drawPending << px << py;
+    startDrawFade();
+    emit drawingsChanged(id);
+    if (view.drawPending.size() >= DrawMaxCoords)
+        flushDrawing(view, false);
+    else if (!m_drawFlush.isActive())
+        m_drawFlush.start();
+}
+
+void ScreenshareManager::endDrawing(const QString &id)
+{
+    auto it = m_inbound.find(id);
+    if (it != m_inbound.end() && it->myStroke) {
+        flushDrawing(*it, true);
+        it->myStroke = 0;
+    }
+}
+
+void ScreenshareManager::clearMyDrawings(const QString &id)
+{
+    auto it = m_inbound.find(id);
+    if (it == m_inbound.end())
+        return;
+    it->myStroke = 0;
+    it->drawPending.clear();
+    const int me = m_handler->ownClid();
+    it->strokes.removeIf([me](const Stroke &s) { return s.clid == me; });
+    emit drawingsChanged(id);
+    if (m_handler->hasStreamDraw())
+        m_conn->sendCommand(QStringLiteral("streamdraw"), {{"streamIdentifier", id}, {"action", "clear"}});
+}
+
+bool ScreenshareManager::hasMyDrawings(const QString &id) const
+{
+    auto it = m_inbound.constFind(id);
+    if (it == m_inbound.constEnd())
+        return false;
+    const int me = m_handler->ownClid();
+    return std::any_of(it->strokes.begin(), it->strokes.end(), [me](const Stroke &s) { return s.clid == me; });
+}
+
+void ScreenshareManager::flushDrawing(InboundView &view, bool end)
+{
+    if (!view.myStroke || (view.drawPending.isEmpty() && !end))
+        return;
+    const int me = m_handler->ownClid();
+    QString color;
+    int width = DrawWidth;
+    for (const Stroke &s : view.strokes)
+        if (s.clid == me && s.id == view.myStroke) {
+            color = s.color;
+            width = s.width;
+        }
+    if (color.isEmpty()) { // apagado no meio do traço
+        view.drawPending.clear();
+        return;
+    }
+    QJsonArray points;
+    for (int v : view.drawPending)
+        points.append(v);
+    view.drawPending.clear();
+    m_conn->sendCommand(QStringLiteral("streamdraw"),
+                        {{"streamIdentifier", view.id}, {"action", "stroke"}, {"stroke", view.myStroke}, {"color", color},
+                         {"width", width}, {"points", points}, {"end", end}});
+}
+
+void ScreenshareManager::flushAllDrawings()
+{
+    for (InboundView &view : m_inbound)
+        flushDrawing(view, false);
+}
+
+void ScreenshareManager::startDrawFade()
+{
+    if (!m_drawFade.isActive())
+        m_drawFade.start();
+}
+
+void ScreenshareManager::expireDrawings()
+{
+    const qint64 limit = drawNow() - DrawHoldMs - DrawFadeMs;
+    bool any = false;
+    for (InboundView &view : m_inbound) {
+        if (view.strokes.isEmpty())
+            continue;
+        for (Stroke &s : view.strokes) {
+            qsizetype drop = 0;
+            while (drop < s.times.size() && s.times[drop] < limit)
+                ++drop;
+            if (drop) {
+                s.times.remove(0, drop);
+                s.points.remove(0, drop * 2);
+            }
+        }
+        view.strokes.removeIf([](const Stroke &s) { return s.points.isEmpty(); });
+        any = any || !view.strokes.isEmpty();
+        emit drawingsChanged(view.id); // redesenha o fade
+    }
+    if (!any)
+        m_drawFade.stop();
+}
+
+void ScreenshareManager::capStrokes(InboundView &view, int clid)
+{
+    int count = 0;
+    for (const Stroke &s : view.strokes)
+        count += s.clid == clid;
+    for (auto it = view.strokes.begin(); count > MaxStrokesPerAuthor && it != view.strokes.end();) {
+        if (it->clid == clid) {
+            it = view.strokes.erase(it);
+            --count;
+        } else {
+            ++it;
+        }
+    }
+}
+
+void ScreenshareManager::onDraw(const QJsonObject &a)
+{
+    const QString id = a.value("streamIdentifier").toString();
+    auto it = m_inbound.find(id);
+    if (it == m_inbound.end())
+        return;
+    InboundView &view = *it;
+    const int clid = a.value("clid").toInt();
+    if (clid == m_handler->ownClid())
+        return;
+    if (a.value("action").toString() == QLatin1String("clear")) {
+        view.strokes.removeIf([clid](const Stroke &s) { return s.clid == clid; });
+        emit drawingsChanged(id);
+        return;
+    }
+    const qint64 strokeId = qint64(a.value("stroke").toDouble());
+    const QJsonArray points = a.value("points").toArray();
+    Stroke *stroke = nullptr;
+    for (Stroke &s : view.strokes)
+        if (s.clid == clid && s.id == strokeId)
+            stroke = &s;
+    if (!stroke) {
+        if (points.isEmpty())
+            return;
+        view.strokes.append(Stroke{clid, strokeId, a.value("color").toString(), std::clamp(a.value("width").toInt(DrawWidth), 1, DrawWidthMax), {}});
+        capStrokes(view, clid);
+        stroke = &view.strokes.last();
+    }
+    const qint64 now = drawNow();
+    for (qsizetype i = 0; i + 1 < points.size() && stroke->points.size() < MaxCoordsPerStroke; i += 2) {
+        stroke->points << std::clamp(points[i].toInt(), 0, DrawCoordMax) << std::clamp(points[i + 1].toInt(), 0, DrawCoordMax);
+        stroke->times << now;
+    }
+    startDrawFade();
+    emit drawingsChanged(id);
 }
 
 // ============================================================ estatísticas
@@ -1333,6 +1581,7 @@ QVariantList ScreenshareManager::items() const
             item["simulcast"] = v->simulcast && v->peerClid == RelayClid;
             item["layer"] = v->layer;
             item["qualityPreference"] = v->qualityPreference;
+            item["canDraw"] = m_handler->hasStreamDraw() && v->status != InStatus::Waiting && v->status != InStatus::Error;
             if (v->session)
                 severity = std::max(v->session->videoStats().worstSeverity(), v->session->audioStats().worstSeverity());
         }

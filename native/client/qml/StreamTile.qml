@@ -41,6 +41,11 @@ Rectangle {
     readonly property bool hasQuality: !own && !!data_.sfu
     readonly property bool simulcast: !own && !!data_.simulcast
     readonly property string qualityPreference: data_.qualityPreference || "auto"
+    // Desenho na transmissão (STREAM_DRAW): só quem assiste desenha e vê.
+    readonly property bool canDraw: !own && !!data_.canDraw
+    property bool drawMode: false
+    readonly property bool drawing: drawMode && canDraw && Settings.showDrawings
+    onCanDrawChanged: if (!canDraw) drawMode = false
     readonly property string qualityAutoText: I18n.t("video.quality.auto")
     readonly property string qualityTip: !simulcast ? I18n.t("video.quality") + ": " + I18n.t("video.quality.single")
         : I18n.t("video.quality") + ": "
@@ -117,6 +122,22 @@ Rectangle {
         opacity: tile.data_.paused ? 0.35 : 1
     }
 
+    DrawingLayer {
+        id: tileDrawing
+        objectName: "tileDrawing"
+        x: video.x
+        y: video.y
+        width: video.width
+        height: video.height
+        streamId: tile.streamId
+        content: video.contentRect
+        visible: tile.canDraw && video.visible && Settings.showDrawings
+        drawMode: tile.drawing
+        toolbarTop: tile.small ? 30 : 42
+        onFinished: tile.drawMode = false
+    }
+    Shortcut { sequence: "Esc"; enabled: tile.drawing; onActivated: tile.drawMode = false }
+
     ColumnLayout {
         anchors.centerIn: parent
         visible: tile.inPip
@@ -156,13 +177,14 @@ Rectangle {
     HoverHandler { id: hover }
     TapHandler {
         acceptedButtons: Qt.LeftButton
+        enabled: !tile.drawing
         onDoubleTapped: tile.openFullscreen()
     }
 
     // Arrastar o quadro o move para qualquer lugar da área.
     DragHandler {
         target: null
-        enabled: tile.arrangeable
+        enabled: tile.arrangeable && !tile.drawing
         // Sem isso o arrasto rouba o gesto dos cantos, dos botões e do volume.
         grabPermissions: PointerHandler.CanTakeOverFromHandlersOfDifferentType | PointerHandler.ApprovesTakeOverByAnything
         cursorShape: Qt.ClosedHandCursor
@@ -255,7 +277,17 @@ Rectangle {
             onPositionChanged: { fullscreenWindow.controlsShown = true; fullscreenIdle.restart() }
         }
         Shortcut { sequence: "Esc"; onActivated: fullscreenWindow.close() }
-        TapHandler { onDoubleTapped: fullscreenWindow.close() }
+        TapHandler { enabled: !tile.drawing; onDoubleTapped: fullscreenWindow.close() }
+        DrawingLayer {
+            anchors.fill: parent
+            streamId: tile.streamId
+            content: fullscreenVideo.contentRect
+            visible: tile.canDraw && fullscreenWindow.visible && Settings.showDrawings
+            drawMode: tile.drawing
+            toolbarTop: 64
+            onFinished: tile.drawMode = false
+            onPointerMoved: { fullscreenWindow.controlsShown = true; fullscreenIdle.restart() }
+        }
 
         Rectangle {
             anchors.centerIn: parent
@@ -337,6 +369,14 @@ Rectangle {
                     from: 0; to: tile.maxVolume
                     onVolumeEdited: v => volumeSlider.value = v
                     Binding { target: fullscreenVolume; property: "value"; value: volumeSlider.value }
+                }
+                FullscreenButton {
+                    visible: tile.canDraw
+                    iconName: "pen"
+                    iconColor: tile.drawing ? Theme.accent : Settings.showDrawings ? "white" : Qt.rgba(1, 1, 1, 0.55)
+                    tip: I18n.t("video.draw")
+                    onClicked: fullscreenDrawMenu.open()
+                    DrawMenu { id: fullscreenDrawMenu }
                 }
                 FullscreenButton {
                     id: fullscreenQuality
@@ -433,6 +473,12 @@ Rectangle {
             anchors.fill: parent
             fillMode: VideoOutput.PreserveAspectFit
             opacity: tile.data_.paused ? 0.35 : 1
+        }
+        DrawingLayer {
+            anchors.fill: parent
+            streamId: tile.streamId
+            content: pipVideo.contentRect
+            visible: tile.canDraw && pipWindow.visible && Settings.showDrawings
         }
         HoverHandler { id: pipHover }
         // Arrasta a janela por qualquer ponto do vídeo; duplo clique volta ao app.
@@ -801,6 +847,32 @@ Rectangle {
         }
     }
 
+    component DrawMenu: Menu {
+        y: -implicitHeight
+        MenuItem {
+            objectName: "drawToggle"
+            text: tile.drawing ? I18n.t("video.draw.stop") : I18n.t("video.draw.start")
+            onTriggered: {
+                if (!tile.drawing)
+                    Settings.showDrawings = true
+                tile.drawMode = !tile.drawing
+            }
+        }
+        MenuItem {
+            objectName: "drawShow"
+            text: Settings.showDrawings ? I18n.t("video.draw.hide") : I18n.t("video.draw.show")
+            onTriggered: {
+                Settings.showDrawings = !Settings.showDrawings
+                if (!Settings.showDrawings)
+                    tile.drawMode = false
+            }
+        }
+        MenuItem {
+            text: I18n.t("video.draw.clear_mine")
+            onTriggered: Screenshare.clearMyDrawings(tile.streamId)
+        }
+    }
+
     component TileButton: ToolButton {
         padding: 3
         property string iconName
@@ -896,6 +968,15 @@ Rectangle {
                 tip: tile.qualityTip
                 onClicked: qualityMenu.open()
                 QualityMenu { id: qualityMenu }
+            }
+            TileButton {
+                objectName: "drawButton"
+                visible: tile.canDraw && tile.playing
+                iconName: "pen"
+                iconColor: tile.drawing ? Theme.accent : Settings.showDrawings ? "white" : Qt.rgba(1, 1, 1, 0.55)
+                tip: I18n.t("video.draw")
+                onClicked: drawMenu.open()
+                DrawMenu { id: drawMenu }
             }
             TileButton { visible: tile.playing; iconName: "chart"; tip: I18n.t("video.action.stats"); onClicked: tile.statsRequested() }
             Item { Layout.fillWidth: true }

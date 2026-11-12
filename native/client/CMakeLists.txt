@@ -73,6 +73,7 @@ qt_add_qml_module(OpenSpeak
         qml/ChannelTree.qml
         qml/StreamArea.qml
         qml/StreamTile.qml
+        qml/DrawingLayer.qml
         qml/SetupStreamDialog.qml
         qml/ViewersPanel.qml
         qml/StatsPanel.qml

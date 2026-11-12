@@ -171,7 +171,7 @@ test('modo SFU é recusado (servidor só anuncia STREAM_P2P)', () => {
   // O relay de mídia só existe no servidor nativo: aqui STREAM_SFU nunca é anunciado.
   const other = server.connect();
   const view = server.handle(other, 'login', { nickname: 'x', uid: 'uid-x' });
-  assert.deepEqual(view.server.capabilityExtensions, ['STREAM_P2P']);
+  assert.deepEqual(view.server.capabilityExtensions, ['STREAM_P2P', 'STREAM_DRAW']);
 });
 
 test('aceite informa peerClid (P2P: o próprio dono)', () => {
@@ -376,4 +376,50 @@ test('perfil: hash no formato compartilhado com o servidor nativo', () => {
   assert.equal(stored, 'pbkdf2-sha256$1000$MDEyMzQ1Njc4OWFiY2RlZg==$yNWjOB5+y96EHOKAn3xp3CM7YwtRLFxNMPHfhb8vN8c=');
   assert.equal(checkPassword('senha', stored), true);
   assert.equal(checkPassword('outra', stored), false);
+});
+
+test('desenho: espectador desenha, os outros espectadores veem e o dono não recebe', () => {
+  const { server, login, notes } = setup();
+  const host = login('host'), a = login('a'), b = login('b'), outsider = login('fora');
+  assert.ok(server.view(a).server.capabilityExtensions.includes('STREAM_DRAW'));
+  const { streamIdentifier } = server.handle(host, 'setupstream', { name: 'Tela' });
+  for (const v of [a, b]) {
+    server.handle(v, 'joinstreamrequest', { streamIdentifier });
+    server.handle(host, 'respondjoinstreamrequest', { streamIdentifier, clid: v, accept: true });
+  }
+  const stroke = { streamIdentifier, action: 'stroke', stroke: 7, color: '#FF0000', width: 4, points: [0, 0, 5000, 10000], end: false };
+  server.handle(a, 'streamdraw', stroke);
+  const [note] = notes(b, 'notifystreamdraw');
+  assert.deepEqual(note.args, { streamIdentifier, clid: a, action: 'stroke', stroke: 7, color: '#ff0000', width: 4, points: [0, 0, 5000, 10000], end: false });
+  assert.equal(notes(host, 'notifystreamdraw').length, 0);
+  assert.equal(notes(a, 'notifystreamdraw').length, 0);
+  assert.equal(notes(outsider, 'notifystreamdraw').length, 0);
+
+  server.handle(a, 'streamdraw', { streamIdentifier, action: 'clear' });
+  assert.equal(notes(b, 'notifystreamdraw').at(-1).args.action, 'clear');
+
+  // o dono e quem não assiste não desenham
+  assert.throws(() => server.handle(host, 'streamdraw', stroke), { code: 'permission_denied' });
+  assert.throws(() => server.handle(outsider, 'streamdraw', stroke), { code: 'permission_denied' });
+});
+
+test('desenho: dados inválidos são recusados e o excesso de mensagens é descartado', () => {
+  const { server, login, notes } = setup();
+  const host = login('host'), a = login('a'), b = login('b');
+  const { streamIdentifier } = server.handle(host, 'setupstream', {});
+  for (const v of [a, b]) {
+    server.handle(v, 'joinstreamrequest', { streamIdentifier });
+    server.handle(host, 'respondjoinstreamrequest', { streamIdentifier, clid: v, accept: true });
+  }
+  const base = { streamIdentifier, action: 'stroke', stroke: 1, color: '#00ff00', width: 4, points: [1, 2] };
+  for (const bad of [
+    { color: 'red' }, { width: 0 }, { width: 41 }, { points: [1, 2, 3] }, { points: [1, 10001] },
+    { points: new Array(514).fill(1) }, { stroke: 0 }, { action: 'apagar' }, { points: [] },
+  ]) {
+    assert.throws(() => server.handle(a, 'streamdraw', { ...base, ...bad }), { code: 'invalid_args' }, JSON.stringify(bad));
+  }
+  let dropped = 0;
+  for (let i = 0; i < 100; i++) if (server.handle(a, 'streamdraw', base).dropped) dropped++;
+  assert.ok(dropped >= 30, `descartadas: ${dropped}`);
+  assert.equal(notes(b, 'notifystreamdraw').length, 100 - dropped);
 });

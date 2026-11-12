@@ -29,6 +29,10 @@ export class ConnectionHandler extends EventEmitter {
     return this.capabilities.includes(Capability.STREAM_SFU);
   }
 
+  get hasStreamDraw() {
+    return this.capabilities.includes(Capability.STREAM_DRAW);
+  }
+
   get hasProfiles() {
     return this.capabilities.includes(Capability.PROFILES);
   }

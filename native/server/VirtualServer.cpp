@@ -138,6 +138,7 @@ const QHash<QString, VirtualServer::Handler> &VirtualServer::handlers()
         {QStringLiteral("removeclientfromstream"), &VirtualServer::cmdRemoveClientFromStream},
         {QStringLiteral("streamunban"), &VirtualServer::cmdStreamUnban},
         {QStringLiteral("streamsignaling"), &VirtualServer::cmdStreamSignaling},
+        {QStringLiteral("streamdraw"), &VirtualServer::cmdStreamDraw},
     };
     return map;
 }
@@ -356,6 +357,7 @@ QJsonObject VirtualServer::view(const Client &client) const
         caps.append(CapStreamSFU);
         caps.append(CapStreamSimulcast);
     }
+    caps.append(CapStreamDraw);
     for (const auto &[cid, ch] : m_channels)
         channels.append(QJsonObject{{"cid", ch.cid}, {"order", ch.order}, {"name", ch.name}, {"description", ch.description}});
     for (const auto &[id, c] : m_clients)
@@ -712,6 +714,81 @@ QJsonObject VirtualServer::cmdStreamSignaling(Client &client, const QJsonObject 
     notify(target, QStringLiteral("notifystreamsignaling"),
            {{"streamIdentifier", s.id}, {"clid", client.clid}, {"payload", payload}});
     return {};
+}
+
+namespace {
+/// Inteiro JSON em [min, max]; -1 se não for.
+qint64 drawInt(const QJsonValue &v, double min, double max)
+{
+    if (!v.isDouble())
+        return -1;
+    const double d = v.toDouble();
+    if (!std::isfinite(d) || d != std::floor(d) || d < min || d > max)
+        return -1;
+    return qint64(d);
+}
+} // namespace
+
+// Desenho por cima do vídeo: só espectadores aceitos desenham, e o traço vai
+// para os outros espectadores. O dono nunca recebe (a prévia dele não mostra).
+QJsonObject VirtualServer::cmdStreamDraw(Client &client, const QJsonObject &args)
+{
+    const Stream &s = stream(args.value("streamIdentifier"));
+    if (!s.viewers.contains(client.clid))
+        fail(rc::PermissionDenied);
+    QJsonObject out{{"streamIdentifier", s.id}, {"clid", client.clid}};
+    const QString action = args.value("action").toString();
+    if (action == QLatin1String("clear")) {
+        out["action"] = action;
+    } else if (action == QLatin1String("stroke")) {
+        const qint64 stroke = drawInt(args.value("stroke"), 1, 2147483647.0);
+        const qint64 width = drawInt(args.value("width"), 1, DrawWidthMax);
+        static const QRegularExpression hex(QStringLiteral("^#[0-9a-fA-F]{6}$"));
+        const QString color = args.value("color").toString();
+        const QJsonValue pointsValue = args.value("points");
+        if (stroke < 0 || width < 0 || !hex.match(color).hasMatch() || !pointsValue.isArray())
+            fail(rc::InvalidArgs);
+        const QJsonArray points = pointsValue.toArray();
+        if (points.size() % 2 != 0 || points.size() > DrawMaxCoords)
+            fail(rc::InvalidArgs);
+        QJsonArray clean;
+        for (const QJsonValue &v : points) {
+            const qint64 c = drawInt(v, 0, DrawCoordMax);
+            if (c < 0)
+                fail(rc::InvalidArgs);
+            clean.append(int(c));
+        }
+        const bool end = args.value("end").toBool();
+        if (clean.isEmpty() && !end)
+            fail(rc::InvalidArgs);
+        out["action"] = action;
+        out["stroke"] = stroke;
+        out["color"] = color.toLower();
+        out["width"] = int(width);
+        out["points"] = clean;
+        out["end"] = end;
+    } else {
+        fail(rc::InvalidArgs);
+    }
+    if (!takeDrawToken(client))
+        return {{"dropped", true}};
+    for (const int v : s.viewers)
+        if (v != client.clid)
+            notify(v, QStringLiteral("notifystreamdraw"), out);
+    return {};
+}
+
+/// Balde de fichas: DrawRatePerSec por segundo, acumulando até 2 s.
+bool VirtualServer::takeDrawToken(Client &c)
+{
+    const double capacity = DrawRatePerSec * 2;
+    const qint64 now = nowMs();
+    c.drawTokens = c.drawTokens < 0 ? capacity : std::min(capacity, c.drawTokens + double(now - c.drawAt) * DrawRatePerSec / 1000.0);
+    c.drawAt = now;
+    if (c.drawTokens < 1)
+        return false;
+    c.drawTokens -= 1;
+    return true;
 }
 
 // --------------------------------------------------------------- auxiliares

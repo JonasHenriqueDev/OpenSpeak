@@ -43,6 +43,9 @@ export const OPENSPEAK_FACTS = [
   'Áudio: vem ligado em toda transmissão nova (desligar vale só para aquela). Na janela, vai o som do próprio programa, inclusive '
     + 'apps da Microsoft Store. O áudio do Discord nunca vai junto. Volume de quem você assiste vai até 500%, e dá para mudar com a roda do mouse.',
   'Quedas de internet curtas pausam a transmissão em vez de desconectar (o servidor espera até 90 s para retomar).',
+  'Desenhar na transmissão (1.0.43): quem assiste pode desenhar por cima do vídeo (botão de lápis › Desenhar, '
+    + 'com cores e "Apagar meus desenhos"); os outros espectadores veem ao vivo, quem transmite não vê. "Ocultar desenhos" fica no mesmo menu. '
+    + 'O traço some sozinho em 10 s, a parte mais antiga primeiro (como o desenho no mapa do Dota 2/CS2).',
   'Perfis (1.0.22+): defina uma senha em Preferências › Perfil para reservar seu apelido; depois o login pede essa senha. '
     + 'O perfil tem nome de exibição, cor, descrição, foto (pode ser GIF de até 320 KB) e banner (imagem ou GIF), mostrados num card.',
   'Interface: previews livres (arrastar e redimensionar), botão Organizar (alinha; um segundo clique deixa todos do mesmo tamanho), '

@@ -89,6 +89,8 @@ private:
         QString resumeToken; // só para quem entrou com `resumable`
         bool suspended = false;
         QString profile; // chave do perfil, se o cliente provou a senha
+        double drawTokens = -1; // balde do `streamdraw` (-1 = cheio)
+        qint64 drawAt = 0;
     };
     struct Channel {
         int cid = 0;
@@ -150,6 +152,8 @@ private:
     QJsonObject cmdRemoveClientFromStream(Client &, const QJsonObject &);
     QJsonObject cmdStreamUnban(Client &, const QJsonObject &);
     QJsonObject cmdStreamSignaling(Client &, const QJsonObject &);
+    QJsonObject cmdStreamDraw(Client &, const QJsonObject &);
+    bool takeDrawToken(Client &c);
 
     void applyConfig(Stream &s, const QJsonObject &args);
     Stream &stream(const QJsonValue &id);

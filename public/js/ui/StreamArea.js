@@ -41,6 +41,8 @@ export class StreamArea {
       this.toolbar);
 
     new ResizeObserver(() => this.layout()).observe(this.stage);
+    manager.on('drawingschanged', id => this.tiles.get(id)?.paintDrawings());
+    settings.on?.('changed', key => { if (key === 'showDrawings' || key === 'drawColor') this.render(); });
     document.addEventListener('fullscreenchange', () => this.render());
   }
 
@@ -253,6 +255,17 @@ export class StreamArea {
       manageViewers: id => a.manageViewers(id),
       showStats: id => a.showStats(id),
       setQuality: (id, pref) => m.setQualityPreference(id, pref),
+      // Desenho na transmissão (STREAM_DRAW): só para quem assiste.
+      canDraw: () => this.handler.hasStreamDraw,
+      drawSettings: () => ({ show: this.settings.get('showDrawings') !== false, color: this.settings.get('drawColor') }),
+      setDrawSetting: (key, value) => this.settings.set(key, value),
+      drawings: id => m.inbound.get(id)?.drawing?.expire() ?? [],
+      drawTo: (id, x, y, start) => {
+        if (this.settings.get('showDrawings') === false) return;
+        m.inbound.get(id)?.drawing?.drawTo(x, y, start, this.settings.get('drawColor'));
+      },
+      endDrawing: id => m.inbound.get(id)?.drawing?.end(),
+      clearMyDrawings: id => m.inbound.get(id)?.drawing?.clearMine(),
       hideStream: id => {
         const list = this.settings.get('hiddenStreams');
         if (!list.includes(id)) this.settings.set('hiddenStreams', [...list, id]);

@@ -1,3 +1,16 @@
+# OpenSpeak 1.0.43 — desenhar na transmissão
+
+- **Desenhe na transmissão:** quem está assistindo pode rabiscar por cima do
+  vídeo (botão de lápis › Desenhar) e todos os outros espectadores veem o traço
+  ao vivo, no mesmo ponto da imagem. Dá para escolher a cor e apagar os próprios
+  desenhos. Quem transmite não vê os desenhos.
+- O desenho **some sozinho**, como no mapa do Dota 2, do Deadlock ou do CS2: a
+  parte mais antiga do traço vai sumindo primeiro, num fade, e em 10 segundos
+  ele desaparece.
+- **Ocultar desenhos:** no mesmo menu do lápis. A escolha fica salva e vale para
+  todas as transmissões. Quando alguém sai da transmissão, os desenhos dele somem.
+- Funciona também pelo navegador.
+
 # OpenSpeak 1.0.42 — registros para resolver bugs
 
 - O app agora guarda **registros** (o que ele faz e os erros que encontra) num

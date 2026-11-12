@@ -8,6 +8,7 @@ import { StreamAccess, StreamType, Severity, RELAY_CLID } from '../core/protocol
 import { InboundStatus } from '../video/ScreenshareManager.js';
 import { installFullscreenIdle } from './fullscreenIdle.js';
 import { viewerCount } from './viewerCount.js';
+import { DRAW_PALETTE, paintStrokes, videoContentRect } from '../video/drawings.js';
 
 const ACCESS_ICON = { [StreamAccess.PUBLIC]: 'globe', [StreamAccess.CONTACTS_ONLY]: 'contacts', [StreamAccess.PRIVATE]: 'lock' };
 const MOVE_THRESHOLD = 4;
@@ -35,10 +36,18 @@ export class StreamTile {
     this.muted = false;
     this.video = h('video.tile-video', { autoplay: true, playsInline: true });
     this.overlay = h('div.tile-overlay');
-    this.el = h('div.video-stream', { dataset: { stream: streamIdentifier } }, this.video, this.overlay,
+    // Desenhos dos espectadores (STREAM_DRAW): fica vivo entre atualizações, como o vídeo.
+    this.canvas = h('canvas.tile-drawing', { hidden: true });
+    this.drawMode = false;
+    this.drawMenuOpen = false;
+    this.el = h('div.video-stream', { dataset: { stream: streamIdentifier } }, this.video, this.canvas, this.overlay,
       this.#grip(true, true), this.#grip(false, true), this.#grip(true, false), this.#grip(false, false));
     this.el.addEventListener('pointerdown', ev => this.#startMove(ev));
-    this.el.addEventListener('dblclick', () => (this.pipWindow ? this.togglePip() : this.toggleFullscreen()));
+    this.el.addEventListener('dblclick', () => {
+      if (this.drawMode) return;
+      if (this.pipWindow) this.togglePip(); else this.toggleFullscreen();
+    });
+    this.#installDrawing();
     this._disposeFullscreenIdle = installFullscreenIdle(this.el);
     this._srcObject = null;
     this.pipWindow = null;
@@ -76,7 +85,7 @@ export class StreamTile {
 
   /** Arrastar o quadro o move; a folga deixa o duplo clique continuar valendo. */
   #startMove(ev) {
-    if (ev.button !== 0 || !this.el.classList.contains('arrangeable') || this.pipWindow) return;
+    if (ev.button !== 0 || !this.el.classList.contains('arrangeable') || this.pipWindow || this.drawMode) return;
     if (document.fullscreenElement === this.el || ev.target.closest('button, input, a, .tile-grip')) return;
     let rect = null;
     this.#track(ev, (dx, dy) => {
@@ -198,6 +207,103 @@ export class StreamTile {
     this.video.hidden = !mediaStream;
   }
 
+  // ------------------------------------------------------------ desenho
+
+  #installDrawing() {
+    const c = this.canvas;
+    let drawingPointer = null;
+    const at = (ev, start) => {
+      const box = c.getBoundingClientRect();
+      const r = videoContentRect(box.width, box.height, this.video.videoWidth, this.video.videoHeight);
+      if (r.w <= 0 || r.h <= 0) return;
+      this.actions.drawTo(this.streamIdentifier, (ev.clientX - box.left - r.x) / r.w, (ev.clientY - box.top - r.y) / r.h, start);
+    };
+    c.addEventListener('pointerdown', ev => {
+      if (!this.drawMode || ev.button !== 0) return;
+      ev.stopPropagation();
+      ev.preventDefault();
+      drawingPointer = ev.pointerId;
+      c.setPointerCapture(ev.pointerId);
+      at(ev, true);
+    });
+    c.addEventListener('pointermove', ev => {
+      if (ev.pointerId !== drawingPointer) return;
+      // A lista vem vazia em alguns navegadores e em eventos sintéticos.
+      const coalesced = ev.getCoalescedEvents?.();
+      for (const e of coalesced?.length ? coalesced : [ev]) at(e, false);
+    });
+    const end = ev => {
+      if (ev.pointerId !== drawingPointer) return;
+      drawingPointer = null;
+      this.actions.endDrawing(this.streamIdentifier);
+    };
+    c.addEventListener('pointerup', end);
+    c.addEventListener('pointercancel', end);
+    this._drawResize = new ResizeObserver(() => this.paintDrawings());
+    this._drawResize.observe(this.el);
+    this.video.addEventListener('resize', () => this.paintDrawings());
+  }
+
+  /** Redesenha os traços (chamado a cada `drawingschanged` do stream). */
+  paintDrawings() {
+    const c = this.canvas;
+    if (c.hidden) return;
+    const dpr = (this.pipWindow ?? window).devicePixelRatio || 1;
+    const w = Math.round(c.clientWidth * dpr), hgt = Math.round(c.clientHeight * dpr);
+    if (c.width !== w || c.height !== hgt) Object.assign(c, { width: w, height: hgt });
+    const rect = videoContentRect(w, hgt, this.video.videoWidth, this.video.videoHeight);
+    const strokes = this.actions.drawings(this.streamIdentifier);
+    paintStrokes(c.getContext('2d'), strokes, rect);
+    // Enquanto houver traço, o fade anima a cada quadro.
+    if (strokes.length && !this._drawFrame) {
+      const win = this.pipWindow ?? window;
+      this._drawFrame = win.requestAnimationFrame(() => { this._drawFrame = 0; this.paintDrawings(); });
+    }
+  }
+
+  #setDrawing(canDraw, show) {
+    const visible = canDraw && show;
+    if (!canDraw || !show) this.drawMode = false;
+    this.canvas.hidden = !visible;
+    this.el.classList.toggle('drawing', this.drawMode);
+    if (visible) this.paintDrawings();
+  }
+
+  #drawButton(id) {
+    const a = this.actions;
+    const { show } = a.drawSettings();
+    const item = (label, onClick) => h('button.draw-menu__item', {
+      on: { click: ev => { ev.stopPropagation(); this.drawMenuOpen = false; onClick(); this.update(this.model); } },
+    }, label);
+    return h('span.draw-wrap',
+      btn('pen', t('video.draw'), () => { this.drawMenuOpen = !this.drawMenuOpen; this.update(this.model); },
+        this.drawMode ? 'active' : show ? '' : 'dim'),
+      this.drawMenuOpen ? h('div.draw-menu', { on: { pointerdown: ev => ev.stopPropagation() } },
+        item(t(this.drawMode ? 'video.draw.stop' : 'video.draw.start'), () => {
+          if (!this.drawMode && !show) a.setDrawSetting('showDrawings', true);
+          this.drawMode = !this.drawMode;
+        }),
+        item(t(show ? 'video.draw.hide' : 'video.draw.show'), () => {
+          if (show) this.drawMode = false;
+          a.setDrawSetting('showDrawings', !show);
+        }),
+        item(t('video.draw.clear_mine'), () => a.clearMyDrawings(id))) : null);
+  }
+
+  #drawToolbar(id) {
+    if (!this.drawMode) return null;
+    const a = this.actions;
+    const { color } = a.drawSettings();
+    return h('div.draw-toolbar', { on: { pointerdown: ev => ev.stopPropagation(), dblclick: ev => ev.stopPropagation() } },
+      ...DRAW_PALETTE.map(c => h('button.draw-swatch', {
+        class: c === color ? 'current' : '', title: c, style: { background: c },
+        on: { click: ev => { ev.stopPropagation(); a.setDrawSetting('drawColor', c); } },
+      })),
+      h('span.draw-sep'),
+      btn('eraser', t('video.draw.clear_mine'), () => a.clearMyDrawings(id)),
+      btn('check', t('video.draw.stop'), () => { this.drawMode = false; this.update(this.model); }, 'active'));
+  }
+
   /**
    * @param {object} m
    * @param {'own'|'remote'} m.kind
@@ -221,6 +327,7 @@ export class StreamTile {
 
   #renderOwn(m) {
     const { own } = m;
+    this.#setDrawing(false, false);
     this.#attach(own.source.stream, { muted: true });
     const pending = own.joinRequests.size;
     const a = this.actions;
@@ -255,14 +362,19 @@ export class StreamTile {
 
     if (status === InboundStatus.PLAYING || status === InboundStatus.RECONNECTING) {
       this.#attach(view.session?.mediaStream ?? null, { muted: false });
+      const canDraw = a.canDraw();
+      this.#setDrawing(canDraw, a.drawSettings().show);
+      if (!canDraw) this.drawMenuOpen = false;
       replaceChildren(this.overlay,
         this.#topBar(m),
+        this.#drawToolbar(id),
         info.paused ? h('div.tile-center', h('div.paused-label', icon('pause'), t('video.stream.paused'))) : null,
         status === InboundStatus.RECONNECTING
           ? h('div.tile-center', h('div.status-pill', h('span.spinner'), t('video.join.status.reconnecting'))) : null,
         h('div.tile-actions',
           this.#volumeControl(),
           view.peerClid === RELAY_CLID ? this.#qualityControl(view, id) : null,
+          canDraw ? this.#drawButton(id) : null,
           btn('chart', t('video.action.stats'), () => a.showStats(id)),
           h('span.spacer'),
           this.pipWindow ? null : btn('eyeOff', t('video.stream.hide_stream'), () => a.hideStream(id)),
@@ -276,6 +388,8 @@ export class StreamTile {
     }
 
     this.#attach(null, { muted: true });
+    this.#setDrawing(false, false);
+    this.drawMenuOpen = false;
     this.pipWindow?.close(); // parou de assistir
     const thumb = info.thumbnail;
     const card = h('div.stream-preview',
@@ -390,6 +504,7 @@ export class StreamTile {
     this.pipWindow?.close();
     if (document.pictureInPictureElement === this.video) document.exitPictureInPicture().catch(() => {});
     this._disposeFullscreenIdle();
+    this._drawResize?.disconnect();
     this.video.srcObject = null;
     this.placeholder.remove();
     this.el.remove();

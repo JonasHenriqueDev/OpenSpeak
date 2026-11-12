@@ -45,7 +45,12 @@ Rectangle {
     readonly property bool canDraw: !own && !!data_.canDraw
     property bool drawMode: false
     readonly property bool drawing: drawMode && canDraw && Settings.showDrawings
-    onCanDrawChanged: if (!canDraw) drawMode = false
+    onCanDrawChanged: {
+        if (!canDraw)
+            drawMode = false
+        else
+            console.info("desenho disponível no stream", streamId)
+    }
     readonly property string qualityAutoText: I18n.t("video.quality.auto")
     readonly property string qualityTip: !simulcast ? I18n.t("video.quality") + ": " + I18n.t("video.quality.single")
         : I18n.t("video.quality") + ": "

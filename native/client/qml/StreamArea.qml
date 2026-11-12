@@ -53,7 +53,9 @@ Rectangle {
         status: "", errorKey: "", severity: 0, pendingRequests: 0, volume: 1.0, hasVideo: false, ownerClid: 0,
         previewClosed: false, audioBlocked: false,
         // qualidade (simulcast no SFU)
-        sfu: false, simulcast: false, layer: "high", qualityPreference: "auto"
+        sfu: false, simulcast: false, layer: "high", qualityPreference: "auto",
+        // desenho na transmissão (STREAM_DRAW)
+        canDraw: false
     })
 
     function sync() {

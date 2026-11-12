@@ -300,8 +300,7 @@ export class StreamTile {
         on: { click: ev => { ev.stopPropagation(); a.setDrawSetting('drawColor', c); } },
       })),
       h('span.draw-sep'),
-      btn('eraser', t('video.draw.clear_mine'), () => a.clearMyDrawings(id)),
-      btn('check', t('video.draw.stop'), () => { this.drawMode = false; this.update(this.model); }, 'active'));
+      btn('eraser', t('video.draw.clear_mine'), () => a.clearMyDrawings(id)));
   }
 
   /**

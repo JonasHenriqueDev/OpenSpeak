@@ -19,7 +19,7 @@ Item {
     signal pointerMoved()
     signal finished()
 
-    readonly property var palette: ["#ff3b30", "#ffcc00", "#34c759", "#00c7ff", "#0a84ff", "#ff2d92", "#ffffff", "#000000"]
+    readonly property var drawColors: ["#ff3b30", "#ffcc00", "#34c759", "#00c7ff", "#0a84ff", "#ff2d92", "#ffffff", "#000000"]
 
     onContentChanged: canvas.requestPaint()
     onVisibleChanged: if (visible) canvas.requestPaint()
@@ -129,7 +129,7 @@ Item {
             anchors.centerIn: parent
             spacing: 4
             Repeater {
-                model: layer.palette
+                model: layer.drawColors
                 delegate: Rectangle {
                     required property string modelData
                     readonly property bool current: Settings.drawColor.toLowerCase() === modelData
@@ -156,16 +156,6 @@ Item {
                 ToolTip.visible: hovered
                 ToolTip.text: I18n.t("video.draw.clear_mine")
                 onClicked: Screenshare.clearMyDrawings(layer.streamId)
-            }
-            ToolButton {
-                padding: 3
-                implicitWidth: 30
-                implicitHeight: 30
-                contentItem: Item {}
-                Icon { anchors.centerIn: parent; name: "check"; color: Theme.accent; size: 17 }
-                ToolTip.visible: hovered
-                ToolTip.text: I18n.t("video.draw.stop")
-                onClicked: layer.finished()
             }
         }
     }

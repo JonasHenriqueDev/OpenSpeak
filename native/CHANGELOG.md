@@ -1,3 +1,8 @@
+# OpenSpeak 1.0.45 — botão para sair do desenho
+
+- A barra de cores do desenho ganhou o botão **✕ Sair**, para voltar ao normal
+  depois de desenhar. O **Esc** também sai, agora inclusive no navegador.
+
 # OpenSpeak 1.0.44 — lápis do desenho aparecendo no app
 
 - **Corrigido:** na 1.0.43 o botão de lápis para desenhar não aparecia no app

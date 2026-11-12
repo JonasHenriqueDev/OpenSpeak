@@ -1,3 +1,12 @@
+# OpenSpeak 1.0.44 — lápis do desenho aparecendo no app
+
+- **Corrigido:** na 1.0.43 o botão de lápis para desenhar não aparecia no app
+  (no navegador funcionava). Agora ele fica na barra de baixo da transmissão
+  que você está assistindo, ao lado da qualidade.
+- A barra de cores não tem mais o botão de confirmar: o traço já vai para os
+  outros enquanto você desenha. Para parar, aperte Esc ou use o lápis ›
+  Parar de desenhar.
+
 # OpenSpeak 1.0.43 — desenhar na transmissão
 
 - **Desenhe na transmissão:** quem está assistindo pode rabiscar por cima do

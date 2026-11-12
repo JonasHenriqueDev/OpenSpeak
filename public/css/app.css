@@ -328,6 +328,12 @@ select.input { padding-right: 4px; }
 .draw-swatch.current { border: 3px solid var(--accent); }
 .draw-sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
 .draw-wrap { position: relative; display: inline-flex; }
+.draw-exit {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px 0 6px; border: 0; border-radius: 999px;
+  background: none; color: #fff; font: inherit; font-size: 12px; cursor: pointer;
+}
+.draw-exit:hover { background: rgba(255, 255, 255, .14); }
+.draw-exit .icon { width: 15px; height: 15px; }
 .tile-btn.dim { opacity: .55; }
 .draw-menu {
   position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 5; min-width: 190px;

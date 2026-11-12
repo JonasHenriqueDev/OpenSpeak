@@ -106,6 +106,8 @@ const STRINGS = {
   'video.draw.hide': 'Ocultar desenhos',
   'video.draw.show': 'Mostrar desenhos',
   'video.draw.clear_mine': 'Apagar meus desenhos',
+  'video.draw.exit': 'Sair',
+  'video.draw.exit.tip': 'Sair do modo desenho (Esc)',
   'video.quality.single.hint': 'Esta transmissão tem uma qualidade só (transmitida pelo site, por versão antiga do app ou abaixo de 540p / 1,2 Mbps)',
   'video.action.focus': 'Destacar',
   'video.action.unfocus': 'Voltar à grade',

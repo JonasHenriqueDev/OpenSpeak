@@ -239,6 +239,8 @@ export class StreamTile {
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
+    this._drawKey = ev => { if (ev.key === 'Escape' && this.drawMode) this.#exitDrawing(); };
+    document.addEventListener('keydown', this._drawKey);
     this._drawResize = new ResizeObserver(() => this.paintDrawings());
     this._drawResize.observe(this.el);
     this.video.addEventListener('resize', () => this.paintDrawings());
@@ -300,7 +302,19 @@ export class StreamTile {
         on: { click: ev => { ev.stopPropagation(); a.setDrawSetting('drawColor', c); } },
       })),
       h('span.draw-sep'),
-      btn('eraser', t('video.draw.clear_mine'), () => a.clearMyDrawings(id)));
+      btn('eraser', t('video.draw.clear_mine'), () => a.clearMyDrawings(id)),
+      h('span.draw-sep'),
+      // Sai do modo desenho (o traço já foi enviado enquanto era feito).
+      h('button.draw-exit', {
+        title: t('video.draw.exit.tip'),
+        on: { click: ev => { ev.stopPropagation(); this.#exitDrawing(); } },
+      }, icon('close'), t('video.draw.exit')));
+  }
+
+  #exitDrawing() {
+    if (!this.drawMode) return;
+    this.drawMode = false;
+    this.update(this.model);
   }
 
   /**
@@ -504,6 +518,7 @@ export class StreamTile {
     if (document.pictureInPictureElement === this.video) document.exitPictureInPicture().catch(() => {});
     this._disposeFullscreenIdle();
     this._drawResize?.disconnect();
+    document.removeEventListener('keydown', this._drawKey);
     this.video.srcObject = null;
     this.placeholder.remove();
     this.el.remove();

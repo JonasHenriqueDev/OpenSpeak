@@ -157,6 +157,21 @@ Item {
                 ToolTip.text: I18n.t("video.draw.clear_mine")
                 onClicked: Screenshare.clearMyDrawings(layer.streamId)
             }
+            Rectangle { width: 1; height: 22; color: Theme.border }
+            // Sai do modo desenho (o traço já foi enviado enquanto era feito).
+            ToolButton {
+                objectName: "drawExit"
+                padding: 4
+                implicitHeight: 30
+                contentItem: RowLayout {
+                    spacing: 4
+                    Icon { name: "close"; color: "white"; size: 15 }
+                    Label { text: I18n.t("video.draw.exit"); color: "white"; font.pixelSize: 12 }
+                }
+                ToolTip.visible: hovered
+                ToolTip.text: I18n.t("video.draw.exit.tip")
+                onClicked: layer.finished()
+            }
         }
     }
 }

@@ -86,6 +86,8 @@ private:
         QJsonObject clientInfo;
         qint64 pingMs = -1;
         qint64 pingUpdatedAt = 0;
+        qint64 annotationSecond = -1;
+        int annotationBatches = 0;
         QString resumeToken; // só para quem entrou com `resumable`
         bool suspended = false;
         QString profile; // chave do perfil, se o cliente provou a senha
@@ -150,6 +152,7 @@ private:
     QJsonObject cmdRemoveClientFromStream(Client &, const QJsonObject &);
     QJsonObject cmdStreamUnban(Client &, const QJsonObject &);
     QJsonObject cmdStreamSignaling(Client &, const QJsonObject &);
+    QJsonObject cmdStreamAnnotation(Client &, const QJsonObject &);
 
     void applyConfig(Stream &s, const QJsonObject &args);
     Stream &stream(const QJsonValue &id);

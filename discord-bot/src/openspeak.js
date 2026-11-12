@@ -22,6 +22,10 @@ export const OPENSPEAK_FACTS = [
     + 'senha, se o servidor for privado; o app lembra os dois. Captura e codifica na placa de vídeo (NVENC da NVIDIA, AMF da AMD, Quick Sync da Intel).',
   'Não existe app para Mac, Linux nem celular. Pelo navegador há o cliente web (o site do servidor), que transmite e assiste. '
     + 'No celular e no tablet o site abre numa versão só para assistir.',
+  'No cliente web, Arquivos permite compartilhar um vídeo local. Em servidores Node compatíveis, YouTube permite assistir juntos, '
+    + 'com play, pausa e posição sincronizados pelo anfitrião. Cada navegador recebe o vídeo do YouTube.',
+  'Com um servidor próprio compatível, anfitrião e espectadores podem desenhar nas fontes capturadas pelo cliente web. '
+    + 'O lápis ativa o desenho e o olho controla a visibilidade por participante. Os traços duram cinco segundos.',
   'Atividade do Discord: dá para assistir às transmissões dentro de um canal de voz do Discord, pelo lançador de atividades. '
     + 'Ela só assiste (não transmite). Lá o botão de tela cheia não aparece (o Discord bloqueia); o botão Preencher ou um duplo '
     + 'clique no vídeo corta as bordas.',

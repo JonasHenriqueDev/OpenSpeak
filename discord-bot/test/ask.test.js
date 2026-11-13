@@ -101,6 +101,8 @@ test('marcas das habilidades e itens pelo texto oficial', async () => {
   assert.deepEqual(itemTags('Ganha uma barreira quando for atordoado, acorrentado ou silenciado.'), ['CONTRA_CONTROLE', 'DEFESA_DE_DANO']);
   assert.deepEqual(itemTags('Reduz o efeito de desacelerações de movimento causadas pelos inimigos.'), ['CONTRA_LENTIDÃO']);
   assert.deepEqual(itemTags('O seu dano espiritual reduz as curas recebidas por inimigos.'), ['ANTICURA']);
+  assert.deepEqual(itemTags('Entra em um estado vazio, tornando-se invulnerável por uma curta duração.'), ['INVULNERÁVEL']);
+  assert.deepEqual(itemTags('A sua próxima aparada protege você do dano e efeitos de habilidades e itens de inimigos.'), ['INVULNERÁVEL']);
 });
 
 test('"Por quê?" dos itens contra: só itens da lista, ligados a habilidades do herói', async () => {
@@ -239,7 +241,7 @@ test('pesquisa na web pelo ia-gateway: texto, fontes e consultas', async () => {
   const got = await searchGateway({ url: 'http://gw/', token: 't', fetchImpl }, 'itens contra lash', { instrucao: 'breve' });
   assert.equal(calls[0].url, 'http://gw/v1/pesquisa');
   assert.equal(calls[0].auth, 'Bearer t');
-  assert.deepEqual(calls[0].body, { consulta: 'itens contra lash', instrucao: 'breve', timeout_s: 20 });
+  assert.deepEqual(calls[0].body, { consulta: 'itens contra lash', instrucao: 'breve', timeout_s: 25 });
   assert.equal(got.texto, 'Compre Unstoppable.');
   assert.deepEqual(got.fontes, [{ title: 'reddit.com', host: 'vertexaisearch.cloud.google.com', url: 'https://vertexaisearch.cloud.google.com/a' }]);
   await assert.rejects(searchGateway({ url: 'http://gw', token: 't', fetchImpl: async () => ({ ok: false, status: 503 }) }, 'x'), /503/);

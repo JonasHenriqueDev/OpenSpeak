@@ -48,6 +48,8 @@ const PRESENCE_MIN_MS = 5000;
 const ASK_COOLDOWN_MS = 4000;
 /** Explicação do "Por quê?" por herói+rank: guardada por 30 min (os números mudam devagar). */
 const COUNTER_WHY_TTL_MS = 30 * 60_000;
+/** Pesquisa na web de "itens contra" por herói+habilidade: 6 h (cada busca gasta muitos tokens do gateway). */
+const WEB_COUNTER_TTL_MS = 6 * 3600_000;
 /** Respostas de links lembradas para refletir edição/exclusão da original (as mais recentes). */
 const LINK_REPLIES_MAX = 2000;
 /** Rascunho de issue esperando o "Abrir issue" de quem relatou. */
@@ -231,6 +233,7 @@ class LiveBot {
     this.lastAsk = new Map(); // usuário -> quando perguntou
     this.noSuppressWarned = new Set(); // canais onde já avisou no log que falta "Gerenciar mensagens"
     this.counterWhy = new Map(); // "heroi|rank" -> {at, reasons} do botão Por quê?
+    this.webCache = new Map(); // "heroi|habilidade" -> {at, web} da pesquisa de itens contra
     this.messageIntent = true; // false se o Message Content Intent não está ativo no portal
   }
 
@@ -1318,7 +1321,7 @@ class LiveBot {
     try {
       const ability = findAbilityInText(text, hero);
       const [list, items, web] = await Promise.all([this.dl.counterItems(hero.id, rank), this.dl.items(),
-        this.webSearch(counterSearchQuery(hero, ability))]);
+        this.webSearch(counterSearchQuery(hero, ability), `${hero.id}|${ability?.slot ?? '-'}`)]);
       const candidates = counterCandidates(list, items.values());
       const answer = await counterAnswerGateway(this.gateway, text, hero, candidates, { ability, web: web?.texto ?? '' });
       log(`deadlock: conversa contra ${hero.name}${ability ? ` (${ability.name})` : ''}${web ? ' +web' : ''}: ${answer.items.map(x => x.item.name).join(', ')}`);
@@ -1329,11 +1332,21 @@ class LiveBot {
     }
   }
 
-  /** Pesquisa na web pelo ia-gateway; null se falhar (a resposta segue só com os dados oficiais). */
-  async webSearch({ consulta, instrucao }) {
+  /**
+   * Pesquisa na web pelo ia-gateway; null se falhar (a resposta segue só com os dados oficiais).
+   * Com `cacheKey`, guarda o resultado por WEB_COUNTER_TTL_MS (falhas não ficam guardadas).
+   */
+  async webSearch({ consulta, instrucao }, cacheKey = null) {
     if (!this.gateway) return null;
+    const hit = cacheKey && this.webCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < WEB_COUNTER_TTL_MS) return hit.web;
     try {
-      return await searchGateway(this.gateway, consulta, { instrucao });
+      const web = await searchGateway(this.gateway, consulta, { instrucao });
+      if (cacheKey) {
+        this.webCache.set(cacheKey, { at: Date.now(), web });
+        if (this.webCache.size > 200) this.webCache.delete(this.webCache.keys().next().value);
+      }
+      return web;
     } catch (err) {
       log('pesquisa na web:', err.message);
       return null;

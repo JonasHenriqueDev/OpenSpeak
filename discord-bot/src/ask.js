@@ -247,7 +247,7 @@ export async function askGateway(cfg, messages) {
  * Pesquisa na web pelo ia-gateway (/v1/pesquisa: Gemini + Google Search). Devolve
  * { texto, fontes: [{ title, host, url }] }; lança erro se o gateway não conseguir.
  */
-export async function searchGateway({ url, token, fetchImpl = fetch }, consulta, { instrucao = '', timeoutS = 20 } = {}) {
+export async function searchGateway({ url, token, fetchImpl = fetch }, consulta, { instrucao = '', timeoutS = 25 } = {}) {
   const res = await fetchImpl(`${url.replace(/\/$/, '')}/v1/pesquisa`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
@@ -320,7 +320,7 @@ export const HELP_TEXT = 'Pode me perguntar qualquer coisa de **Deadlock** ou do
 // ------------------------------------------------ "Por quê?" dos itens contra
 
 /** Palavras que marcam item de "ferramenta" (stun, silêncio, barreira, anticura…) nas descrições oficiais. */
-const UTILITY_WORDS = /congel|atordo|silenci|barreira|escudo|malef[ií]cio|imun|anticura|cura[s]? recebida|interromp|canaliz|desarm|enraiz|adormec|desaceler|lentid|reduzid|instância de|stun|silence|barrier|immun|debuff|heal reduction|interrupt|channel/i;
+const UTILITY_WORDS = /congel|atordo|silenci|barreira|escudo|malef[ií]cio|imun|invulner|aparad|protege você|anticura|cura[s]? recebida|interromp|canaliz|desarm|enraiz|adormec|desaceler|lentid|reduzid|instância de|stun|silence|barrier|immun|debuff|heal reduction|interrupt|channel/i;
 
 const flat = s => String(s ?? '').replace(/\s+/g, ' ').trim();
 
@@ -366,12 +366,16 @@ export function itemTags(desc) {
   const antiSlow = /reduz .*(desacelera|lentid)/.test(d);
   if (/desaceler|lentid|slow/.test(d) && !antiSlow) tags.push('DESACELERA');
   if (antiSlow) tags.push('CONTRA_LENTIDÃO');
+  // Fica fora do alcance de tudo por um instante (Ethereal Shift, Counterspell…).
+  if (/invulner|protege você do dano e efeitos|imune a dano/.test(d)) tags.push('INVULNERÁVEL');
   return tags;
 }
 
 /** Regras de ligação habilidade → item (marcas de abilityTags/itemTags). */
-const COUNTER_RULES = '- habilidade CANALIZADA → item que ATORDOA ou SILENCIA (interrompe o canal);\n'
-  + '- habilidade de CONTROLE (atordoa, silencia, congela, puxa, agarra, troca de lugar…) ou que aplica MALEFÍCIO → item CONTRA_CONTROLE;\n'
+const COUNTER_RULES = '- habilidade CANALIZADA → item que ATORDOA ou SILENCIA (interrompe o canal, mas exige timing);\n'
+  + '- habilidade de CONTROLE (atordoa, silencia, congela, puxa, agarra, acorrenta, troca de lugar…) ou que aplica MALEFÍCIO → '
+  + 'item CONTRA_CONTROLE ou INVULNERÁVEL (o counter mais direto: ativar quando ela vier);\n'
+  + '- habilidade CANALIZADA e de CONTROLE ao mesmo tempo → primeiro CONTRA_CONTROLE/INVULNERÁVEL, depois os que interrompem;\n'
   + '- habilidade de LENTIDÃO → item CONTRA_LENTIDÃO;\n'
   + '- habilidade com CURA → item ANTICURA (nunca anticura contra habilidade sem CURA);\n'
   + '- habilidade de DANO forte (a principal fonte de dano) → item DEFESA_DE_DANO que combine com o tipo do dano '
@@ -508,10 +512,10 @@ export function counterAnswerMessages(question, hero, candidates, { ability = nu
         + 'que tem ganho de win rate. '
         + (web ? 'Em WEB vão trechos de páginas da internet sobre o assunto: use como pista do que a comunidade recomenda, mas '
           + 'só cite item que está na LISTA. ' : '')
-        + 'Escreva em português do Brasil, direto e descontraído, como um amigo explicando: no motivo, uma frase dizendo quando '
-        + 'ativar ou por que funciona contra ele. Responda SÓ com JSON: {"intro":"<uma frase curta abrindo a resposta>",'
+        + 'Escreva em português do Brasil, direto e descontraído, como um amigo explicando: no motivo, diga o que o item faz '
+        + 'contra ele e quando ativar (nada de motivo telegráfico como "Atordoa o inimigo"). Responda SÓ com JSON: {"intro":"<uma frase curta abrindo a resposta>",'
         + '"itens":[{"item":"<nome em inglês exatamente como na lista>","habilidade":"<habilidade do herói que o item responde, '
-        + 'ou null>","motivo":"<até 35 palavras>"}],"escolha":{"item":"<o melhor de todos, um dos itens acima>",'
+        + 'ou null>","motivo":"<1 ou 2 frases, de 15 a 35 palavras>"}],"escolha":{"item":"<o melhor de todos, um dos itens acima>",'
         + '"motivo":"<uma frase: por que, se fosse só um>"},"dica":"<opcional: uma frase extra de jogo (posicionamento, timing) ou null>"}',
     },
     {

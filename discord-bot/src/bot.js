@@ -23,7 +23,8 @@ import {
 import { startWebhook } from './webhook.js';
 import { LinkGuard, SUPPRESS_RECHECK_MS } from './linkguard.js';
 import { PAGES, openButtonRow, renderPanel, renderUserLinks } from './panel.js';
-import { HELP_TEXT, counterAnswerGateway, counterCandidates, counterReasonGateway, counterSearchQuery, findAbilityInText, openSearchQuery, searchGateway, isBeginnerQuestion, answerGateway, answerMessages, askGateway, findHeroInText, findItemInText, gatewayMessages, jsonAnswerGateway, officialContext, parseQuestion } from './ask.js';
+import { AnswerCache, questionWords } from './answercache.js';
+import { HELP_TEXT, packCounterAnswer, unpackCounterAnswer, counterAnswerGateway, counterCandidates, counterReasonGateway, counterSearchQuery, findAbilityInText, openSearchQuery, searchGateway, isBeginnerQuestion, answerGateway, answerMessages, askGateway, findHeroInText, findItemInText, gatewayMessages, jsonAnswerGateway, officialContext, parseQuestion } from './ask.js';
 import {
   DOWNLOAD_URL, GitHubIssues, KIND_LABEL, REPO, duplicateComment, fallbackDraft, issueBody, issueMessages, latestChanges, mentionsOpenSpeak,
   openspeakMessages, parseIssueDraft, parseOpenSpeakQuestion, renderIssueDone, renderIssueDraft, renderOpenSpeakAnswer, takeIssueQuota,
@@ -40,6 +41,7 @@ import { LINK_NETWORKS, XMediaChecker, chooseLinkAction, linkSettings, linksAppl
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG_FILE = path.resolve(process.env.OPENSPEAK_BOT_CONFIG ?? path.join(ROOT, 'config.json'));
 const STATE_FILE = path.resolve(process.env.OPENSPEAK_BOT_STATE ?? path.join(ROOT, 'state.json'));
+const CACHE_FILE = path.resolve(process.env.OPENSPEAK_BOT_CACHE ?? path.join(ROOT, 'cache.json'));
 /** Falhas seguidas ao consultar o servidor até considerar que ninguém está ao vivo. */
 const OFFLINE_AFTER_FAILURES = 4;
 /** Intervalo mínimo entre trocas do status do bot (limite do Discord). */
@@ -48,8 +50,11 @@ const PRESENCE_MIN_MS = 5000;
 const ASK_COOLDOWN_MS = 4000;
 /** Explicação do "Por quê?" por herói+rank: guardada por 30 min (os números mudam devagar). */
 const COUNTER_WHY_TTL_MS = 30 * 60_000;
-/** Pesquisa na web de "itens contra" por herói+habilidade: 6 h (cada busca gasta muitos tokens do gateway). */
-const WEB_COUNTER_TTL_MS = 6 * 3600_000;
+/**
+ * Quanto tempo cada resposta da IA fica no cache (answercache.js). Itens contra e pesquisa na
+ * web mudam com o patch e as estatísticas; perguntas de lore quase nunca; o OpenSpeak, a cada versão.
+ */
+const CACHE_TTL = { counter: 6 * 3600_000, web: 6 * 3600_000, pergunta: 24 * 3600_000, openspeak: 6 * 3600_000 };
 /** Respostas de links lembradas para refletir edição/exclusão da original (as mais recentes). */
 const LINK_REPLIES_MAX = 2000;
 /** Rascunho de issue esperando o "Abrir issue" de quem relatou. */
@@ -233,7 +238,7 @@ class LiveBot {
     this.lastAsk = new Map(); // usuário -> quando perguntou
     this.noSuppressWarned = new Set(); // canais onde já avisou no log que falta "Gerenciar mensagens"
     this.counterWhy = new Map(); // "heroi|rank" -> {at, reasons} do botão Por quê?
-    this.webCache = new Map(); // "heroi|habilidade" -> {at, web} da pesquisa de itens contra
+    this.cache = new AnswerCache({ file: CACHE_FILE, log }); // respostas da IA, para perguntas iguais/parecidas
     this.messageIntent = true; // false se o Message Content Intent não está ativo no portal
   }
 
@@ -693,12 +698,28 @@ class LiveBot {
       if (q.kind === 'issue') return await this.prepareIssue(text, user);
       if (q.kind === 'openspeak') {
         if (!this.gateway) return { content: `Baixe o OpenSpeak em <${DOWNLOAD_URL}>. Para outras dúvidas eu preciso da IA, que não está configurada agora.` };
-        const answer = await answerGateway(this.gateway, openspeakMessages(text, await latestChanges()));
+        const words = questionWords(text);
+        let answer = this.cache.get('openspeak', words.join(' '), { words });
+        if (answer) log('cache: resposta do OpenSpeak reaproveitada');
+        else {
+          answer = await answerGateway(this.gateway, openspeakMessages(text, await latestChanges()));
+          this.cache.set('openspeak', words.join(' '), answer, { ttl: CACHE_TTL.openspeak, words });
+        }
         return renderOpenSpeakAnswer({ question: text, answer });
       }
       if (q.kind === 'pergunta') {
+        // Mesma pergunta (ou parecida) sobre o mesmo herói/item: reaproveita a resposta.
+        const words = questionWords(text);
+        const about = findHeroInText(text, heroes)?.id ?? findItemInText(text, items)?.id;
+        const scope = about != null ? String(about) : null;
+        const hit = this.cache.get('pergunta', words.join(' '), { words, scope });
+        if (hit) {
+          log(`cache: pergunta aberta reaproveitada (${words.join(' ')})`);
+          return renderAnswer({ question: text, answer: hit.answer, sources: hit.sources });
+        }
         const web = await this.webSearch(openSearchQuery(text));
         const answer = await answerGateway(this.gateway, answerMessages(text, officialContext(text, heroes, items), web?.texto ?? ''));
+        this.cache.set('pergunta', words.join(' '), { answer, sources: web?.fontes ?? [] }, { ttl: CACHE_TTL.pergunta, words, scope });
         return renderAnswer({ question: text, answer, sources: web?.fontes ?? [] });
       }
       if (q.kind === 'itens_contra' && this.gateway) {
@@ -1320,12 +1341,25 @@ class LiveBot {
   async counterChat(text, hero, rank) {
     try {
       const ability = findAbilityInText(text, hero);
+      // A pergunta muda ("item bom contra haze", "o que compro contra o haze"), mas a resposta
+      // depende só do herói, da habilidade e do rank: é essa a chave do cache.
+      const key = `${hero.id}|${ability?.slot ?? '-'}|${rank}`;
+      const cached = this.cache.get('counter', key);
+      if (cached) {
+        const answer = unpackCounterAnswer(cached.answer, hero, await this.dl.items());
+        if (answer) {
+          log(`cache: itens contra ${hero.name}${ability ? ` (${ability.name})` : ''} reaproveitados`);
+          return renderCounterAnswer({ question: text, hero, rank, ability, answer, sources: cached.sources });
+        }
+      }
       const [list, items, web] = await Promise.all([this.dl.counterItems(hero.id, rank), this.dl.items(),
-        this.webSearch(counterSearchQuery(hero, ability), `${hero.id}|${ability?.slot ?? '-'}`)]);
+        this.webSearch(counterSearchQuery(hero, ability))]);
       const candidates = counterCandidates(list, items.values());
       const answer = await counterAnswerGateway(this.gateway, text, hero, candidates, { ability, web: web?.texto ?? '' });
       log(`deadlock: conversa contra ${hero.name}${ability ? ` (${ability.name})` : ''}${web ? ' +web' : ''}: ${answer.items.map(x => x.item.name).join(', ')}`);
-      return renderCounterAnswer({ question: text, hero, rank, ability, answer, sources: web?.fontes ?? [] });
+      const sources = web?.fontes ?? [];
+      this.cache.set('counter', key, { answer: packCounterAnswer(answer), sources }, { ttl: CACHE_TTL.counter });
+      return renderCounterAnswer({ question: text, hero, rank, ability, answer, sources });
     } catch (err) {
       log('deadlock: conversa dos itens contra:', explain(err));
       return null;
@@ -1334,18 +1368,19 @@ class LiveBot {
 
   /**
    * Pesquisa na web pelo ia-gateway; null se falhar (a resposta segue só com os dados oficiais).
-   * Com `cacheKey`, guarda o resultado por WEB_COUNTER_TTL_MS (falhas não ficam guardadas).
+   * Consultas iguais ou parecidas usam o cache (falhas não ficam guardadas).
    */
-  async webSearch({ consulta, instrucao }, cacheKey = null) {
+  async webSearch({ consulta, instrucao }) {
     if (!this.gateway) return null;
-    const hit = cacheKey && this.webCache.get(cacheKey);
-    if (hit && Date.now() - hit.at < WEB_COUNTER_TTL_MS) return hit.web;
+    const words = questionWords(consulta);
+    const hit = this.cache.get('web', words.join(' '), { words });
+    if (hit) {
+      log('cache: pesquisa na web reaproveitada');
+      return hit;
+    }
     try {
       const web = await searchGateway(this.gateway, consulta, { instrucao });
-      if (cacheKey) {
-        this.webCache.set(cacheKey, { at: Date.now(), web });
-        if (this.webCache.size > 200) this.webCache.delete(this.webCache.keys().next().value);
-      }
+      this.cache.set('web', words.join(' '), web, { ttl: CACHE_TTL.web, words });
       return web;
     } catch (err) {
       log('pesquisa na web:', err.message);
@@ -1420,6 +1455,7 @@ class LiveBot {
   }
 
   async shutdown() {
+    this.cache.saveNow(); // respostas que ainda esperavam a gravação
     this.voiceText = '';
     await this.syncVoice().catch(() => {});
   }

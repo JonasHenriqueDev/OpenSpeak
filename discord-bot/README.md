@@ -313,7 +313,8 @@ DISCORD_TOKEN=seu-token npm start
 `DISCORD_TOKEN` também pode ir em `"token"` no `config.json` (que fica fora
 do git). Outros caminhos: `OPENSPEAK_BOT_CONFIG` (config) e
 `OPENSPEAK_BOT_STATE` (arquivo onde o bot lembra as mensagens publicadas, para
-editá-las mesmo depois de reiniciar).
+editá-las mesmo depois de reiniciar)), e `OPENSPEAK_BOT_CACHE` (padrão `cache.json`: respostas da IA guardadas para
+perguntas iguais ou parecidas — itens contra por 6 h, perguntas abertas por 24 h —, sem gastar tokens de novo).
 
 ## Configuração
 

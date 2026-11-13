@@ -12,3 +12,4 @@ web-dist/
 .env*
 discord-bot/config.json
 discord-bot/state.json
+discord-bot/cache.json

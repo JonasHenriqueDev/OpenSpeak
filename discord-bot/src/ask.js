@@ -567,3 +567,27 @@ export async function counterReasonGateway(cfg, hero, candidates) {
   }
   throw new Error('ia-gateway: nenhuma resposta válida');
 }
+
+/** Resposta de itens contra só com ids e textos (para o cache em arquivo). */
+export function packCounterAnswer(answer) {
+  return {
+    intro: answer.intro,
+    items: answer.items.map(x => ({ id: x.item.id, gain: x.gain, slot: x.ability?.slot ?? null, motivo: x.motivo })),
+    best: { id: answer.best.item.id, motivo: answer.best.motivo },
+    tip: answer.tip,
+  };
+}
+
+/** Volta a resposta guardada com os itens e habilidades atuais; null se algum item sumiu do jogo. */
+export function unpackCounterAnswer(packed, hero, items) {
+  const abilities = [...(hero.abilities?.values?.() ?? [])];
+  const out = [];
+  for (const x of packed?.items ?? []) {
+    const item = items.get(x.id);
+    if (!item) return null;
+    out.push({ item, gain: x.gain ?? null, ability: abilities.find(a => a.slot === x.slot) ?? null, motivo: x.motivo });
+  }
+  const best = items.get(packed?.best?.id);
+  if (out.length < 2 || !best) return null;
+  return { intro: packed.intro ?? '', items: out, best: { item: best, motivo: packed.best.motivo }, tip: packed.tip ?? '' };
+}

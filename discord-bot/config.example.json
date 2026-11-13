@@ -30,6 +30,8 @@
     "idle": "Ninguém ao vivo no OpenSpeak",
     "server": "👥 {usuarios} online · 👀 {assistindo} assistindo{trafego}",
     "rotateSeconds": 20,
+    "tips": true,
+    "tipSeconds": 60,
     "type": "custom"
   }
 }

@@ -174,6 +174,27 @@ export function planVoiceUpdates(current, targets, text) {
 }
 
 /** Aviso -> seção da config. */
+/**
+ * Dicas do que o Frisquila faz, no status do bot enquanto ninguém transmite no OpenSpeak
+ * (presence.tips). Até 128 caracteres cada (limite do status personalizado).
+ */
+export const PRESENCE_TIPS = [
+  '💬 Me marca: @Frisquila item bom contra o Haze',
+  '🧪 @Frisquila item pra counterar a ult do Lash',
+  '🛠️ /build Seven → build mais usada + código pra importar no jogo',
+  '🛡️ /counter Billy → quem ganha dele',
+  '📊 /heroi Haze → win rate e pick rate do momento',
+  '🏆 /ranking → heróis mais fortes do patch',
+  '🔎 /item Toxic Bullets → o que faz e se vale a pena',
+  '📖 @Frisquila qual a lore do Cultista?',
+  '❓ /frisquila pergunta: … → qualquer dúvida de Deadlock',
+  '📺 /aovivo → quem tá transmitindo no OpenSpeak',
+  '🔗 /links → eu arrumo links do X, TikTok e Instagram',
+  '🐞 @Frisquila bug: … → vira issue pro dev do OpenSpeak',
+  '⬇️ @Frisquila como baixo o OpenSpeak?',
+  '⚙️ /painel → me configure no seu servidor',
+];
+
 export const NOTICES = { chat: 'chat', voz: 'voiceStatus', status: 'presence' };
 
 /**
@@ -275,8 +296,10 @@ export function checkConfig(config) {
   config.chat = { enabled: false, mention: '', onEnd: 'edit', ...config.chat };
   config.presence = {
     enabled: false, type: 'custom', live: '{quem} transmitindo {app}', liveMany: '', idle: '',
-    server: '👥 {usuarios} online · 👀 {assistindo} assistindo{trafego}', rotateSeconds: 20, ...config.presence,
+    server: '👥 {usuarios} online · 👀 {assistindo} assistindo{trafego}', rotateSeconds: 20, tips: true, tipSeconds: 60,
+    ...config.presence,
   };
+  config.presence.tipSeconds = Math.min(3600, Math.max(30, Number(config.presence.tipSeconds) || 60));
   // O Discord limita trocas de status; abaixo de 15 s não vale a pena.
   config.presence.rotateSeconds = Math.min(600, Math.max(15, Number(config.presence.rotateSeconds) || 20));
   if (!PRESENCE_TYPES.includes(config.presence.type)) problems.push(`presence.type deve ser ${PRESENCE_TYPES.join(', ')}`);

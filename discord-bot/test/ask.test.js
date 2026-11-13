@@ -158,3 +158,96 @@ test('"Por quê?" dos itens contra: só itens da lista, ligados a habilidades do
   const buttons = renderCounterItems({ hero, rank: 'alto', list }).components[0].toJSON().components;
   assert.equal(buttons[0].custom_id, 'dl:why:9:alto');
 });
+
+test('acha a habilidade citada: nome, "ult" ou número', async () => {
+  const { findAbilityInText } = await import('../src/ask.js');
+  const lash = { name: 'Lash', namePt: 'Lash', abilities: new Map([
+    [1, { slot: 1, name: 'Ground Strike', namePt: 'Golpe no Chão' }],
+    [2, { slot: 2, name: 'Grapple', namePt: 'Gancho' }],
+    [4, { slot: 4, name: 'Death Slam', namePt: 'Pancada Mortal' }],
+  ]) };
+  assert.equal(findAbilityInText('item bom para counterar ult do lash', lash).slot, 4);
+  assert.equal(findAbilityInText('o que comprar contra o death slam', lash).slot, 4);
+  assert.equal(findAbilityInText('item contra o gancho do lash', lash).slot, 2);
+  assert.equal(findAbilityInText('item contra a habilidade 1 do lash', lash).slot, 1);
+  assert.equal(findAbilityInText('item bom contra lash', lash), null);
+  assert.equal(findAbilityInText('item bom contra lash', { abilities: new Map() }), null);
+});
+
+test('"item bom contra X" em conversa: só itens da lista, com a escolha final', async () => {
+  const { counterAnswerMessages, parseCounterAnswer, counterAnswerGateway } = await import('../src/ask.js');
+  const { renderCounterAnswer } = await import('../src/dlview.js');
+  const it = (id, name, namePt, desc) => ({ id, name, namePt, desc, tier: 2, slot: 'vitality', shopable: true });
+  const unstoppable = it(1, 'Unstoppable', 'Imparável', 'Fica imune a atordoamentos, silêncios e malefícios de controle.');
+  const metal = it(2, 'Metal Skin', 'Pele de Metal', 'Fica imune a balas por alguns segundos.');
+  const healbane = it(3, 'Healbane', 'Maldição Anticura', 'O seu dano espiritual reduz as curas recebidas por inimigos.');
+  const cand = [{ item: metal, gain: 0.021 }, { item: unstoppable, gain: null }, { item: healbane, gain: null }];
+  const ult = { slot: 4, name: 'Death Slam', namePt: 'Pancada Mortal', desc: 'Agarra os inimigos, puxa e atordoa ao bater no chão.' };
+  const lash = { id: 12, name: 'Lash', namePt: 'Lash', abilities: new Map([[4, ult]]) };
+
+  const msgs = counterAnswerMessages('item contra ult do lash', lash, cand, { ability: ult });
+  assert.match(msgs[0].content, /ESPECIFICAMENTE a habilidade 4 do herói, Pancada Mortal \(Death Slam\), a ult/);
+  assert.match(msgs[1].content, /Metal Skin \(Pele de Metal\).*\+2\.1 pp/);
+  assert.doesNotMatch(msgs[1].content, /WEB:/);
+  assert.match(counterAnswerMessages('x', lash, cand, { web: 'reddit: compre unstoppable' })[1].content, /WEB:\nreddit/);
+
+  const answer = JSON.stringify({
+    intro: 'Contra a ult do Lash, vai de:',
+    itens: [
+      { item: 'Unstoppable', habilidade: null, motivo: 'Ative quando ele pular e ele não te pega.' },
+      { item: 'Inventado', habilidade: null, motivo: 'não existe' },
+      { item: 'Healbane', habilidade: null, motivo: 'corta cura' }, // ult sem cura: descartado
+      { item: 'pele de metal', habilidade: 'Death Slam', motivo: 'Segura o dano das balas depois.' },
+    ],
+    escolha: { item: 'Unstoppable', motivo: 'É o counter mais direto.' },
+    dica: 'null',
+  });
+  const got = parseCounterAnswer(answer, lash, cand, { ability: ult });
+  assert.deepEqual(got.items.map(x => x.item.name), ['Unstoppable', 'Metal Skin']);
+  assert.equal(got.items[0].ability, ult);
+  assert.equal(got.best.item.name, 'Unstoppable');
+  assert.equal(got.tip, '');
+  // Escolha que não está entre os itens: fica o primeiro.
+  assert.equal(parseCounterAnswer(answer.replace('"item":"Unstoppable","motivo":"É', '"item":"Nada","motivo":"É'), lash, cand).best.item.name, 'Unstoppable');
+  assert.throws(() => parseCounterAnswer('{"itens":[{"item":"Unstoppable","motivo":"x"}]}', lash, cand), /de menos/);
+
+  let n = 0;
+  const fetchImpl = async () => ({ ok: true, json: async () => ({ provedor: `p${++n}`, texto: n === 1 ? '{}' : answer }) });
+  const viaGateway = await counterAnswerGateway({ url: 'http://x', token: 't', fetchImpl }, 'q', lash, cand, { ability: ult });
+  assert.equal(viaGateway.items.length, 2);
+
+  const view = renderCounterAnswer({ question: 'item contra ult do lash', hero: lash, rank: 'todos', ability: ult, answer: got,
+    sources: [{ title: 'Reddit', host: 'reddit.com', url: 'https://reddit.com/r/x' }] });
+  const e = view.embeds[0].toJSON();
+  assert.match(e.description, /^Contra a ult do Lash, vai de:/);
+  assert.match(e.description, /🥇 \*\*Unstoppable\*\* \(Imparável\) — Ative/);
+  assert.match(e.description, /🥈 \*\*Metal Skin\*\* \(Pele de Metal\) — .*\+2,1 pp/);
+  assert.match(e.description, /Se eu tivesse que escolher só um: Unstoppable\*\* — É o counter mais direto\./);
+  assert.match(e.description, /Fontes: \[Reddit\]\(<https:\/\/reddit\.com\/r\/x>\)/);
+  assert.match(e.footer.text, /busca na web/);
+  assert.equal(view.components[0].toJSON().components[0].custom_id, 'dl:citems:12:todos');
+});
+
+test('pesquisa na web pelo ia-gateway: texto, fontes e consultas', async () => {
+  const { searchGateway, counterSearchQuery, openSearchQuery, answerMessages } = await import('../src/ask.js');
+  const calls = [];
+  const fetchImpl = async (url, opts) => {
+    calls.push({ url, body: JSON.parse(opts.body), auth: opts.headers.authorization });
+    return { ok: true, json: async () => ({ texto: ' Compre Unstoppable. ', fontes: [
+      { titulo: 'reddit.com', url: 'https://vertexaisearch.cloud.google.com/a' }, { titulo: 'x', url: 'javascript:alert(1)' }] }) };
+  };
+  const got = await searchGateway({ url: 'http://gw/', token: 't', fetchImpl }, 'itens contra lash', { instrucao: 'breve' });
+  assert.equal(calls[0].url, 'http://gw/v1/pesquisa');
+  assert.equal(calls[0].auth, 'Bearer t');
+  assert.deepEqual(calls[0].body, { consulta: 'itens contra lash', instrucao: 'breve', timeout_s: 20 });
+  assert.equal(got.texto, 'Compre Unstoppable.');
+  assert.deepEqual(got.fontes, [{ title: 'reddit.com', host: 'vertexaisearch.cloud.google.com', url: 'https://vertexaisearch.cloud.google.com/a' }]);
+  await assert.rejects(searchGateway({ url: 'http://gw', token: 't', fetchImpl: async () => ({ ok: false, status: 503 }) }, 'x'), /503/);
+
+  const lash = { name: 'Lash' };
+  assert.match(counterSearchQuery(lash).consulta, /counterar o herói Lash\?/);
+  assert.match(counterSearchQuery(lash, { name: 'Death Slam' }).consulta, /habilidade "Death Slam" do herói Lash/);
+  assert.equal(openSearchQuery('<@1> o viscous é casado?').consulta, 'Deadlock (jogo da Valve): o viscous é casado?');
+  assert.match(answerMessages('q', 'oficial', 'achei isso')[1].content, /oficial\n\nPESQUISA NA WEB \(pode estar desatualizada\):\nachei isso/);
+  assert.match(answerMessages('q', '', 'achei')[1].content, /^CONTEXTO:\nPESQUISA NA WEB/);
+});

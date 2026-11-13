@@ -319,6 +319,40 @@ export function renderCounterReasons({ hero, rank = 'todos', reasons }) {
   return { embeds: [embed], components: [] };
 }
 
+/** "-# Fontes: [reddit.com](<…>) · …" das páginas da busca na web (vazio sem fontes). */
+function sourceLine(sources) {
+  if (!sources?.length) return '';
+  return `\n\n-# Fontes: ${sources.slice(0, 4).map(s => `[${clip(s.title || s.host || 'link', 40).replace(/[[\]]/g, '')}](<${s.url}>)`).join(' · ')}`;
+}
+
+/**
+ * "Item bom contra X" em conversa: itens escolhidos pela IA da lista oficial, em ordem,
+ * e o "se fosse só um". `sources` = páginas da busca na web que ajudaram (opcional).
+ */
+export function renderCounterAnswer({ question, hero, rank = 'todos', ability = null, answer, sources = [] }) {
+  const MEDALS = ['🥇', '🥈', '🥉'];
+  const what = ability ? `${ability.slot === 4 ? 'a ult' : `a habilidade ${ability.slot}`} do ${hero.name} (**${ability.namePt}**)` : `o **${hero.name}**`;
+  const intro = answer.intro || `Para counterar ${what}, os melhores são:`;
+  const lines = answer.items.map((x, i) => {
+    const name = x.item.namePt && x.item.namePt !== x.item.name ? `**${x.item.name}** (${x.item.namePt})` : `**${x.item.name}**`;
+    const stat = x.gain != null ? ` *(+${dec(x.gain * 100)} pp contra ele)*` : '';
+    return `${MEDALS[i] ?? '•'} ${name} — ${x.motivo}${stat}`;
+  });
+  const parts = [intro, lines.join('\n'), `**Se eu tivesse que escolher só um: ${answer.best.item.name}** — ${answer.best.motivo}`];
+  if (answer.tip) parts.push(answer.tip);
+  const src = sourceLine(sources).trim();
+  if (src) parts.push(src);
+  const embed = new EmbedBuilder().setColor(COLOR).setThumbnail(hero.card)
+    .setAuthor({ name: `💬 ${clip(question.replace(/\s+/g, ' '), 200)}`, iconURL: hero.icon ?? undefined })
+    .setDescription(clip(parts.join('\n\n'), 3800))
+    .setFooter({ text: `Dica da IA com as descrições oficiais${sources.length ? ' e a busca na web' : ''} · pode errar · ${footer(rank).text}` });
+  const buttons = row(
+    new ButtonBuilder().setCustomId(`dl:citems:${hero.id}:${rank}`).setLabel('Estatísticas dos itens').setEmoji('📊').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`dl:counter:${hero.id}:${rank}`).setLabel(`Quem ganha do ${hero.name}`).setEmoji('🛡️').setStyle(ButtonStyle.Secondary),
+  );
+  return { embeds: [embed], components: [buttons] };
+}
+
 /** Ranking de heróis por win rate (o "meta" do patch). */
 export function renderRanking({ rank, list, heroes }) {
   const line = (x, i) => `${i + 1}. **${heroes.get(x.heroId)?.name ?? `#${x.heroId}`}** — ${pct(x.winRate)} · pick ${pct(x.pickRate)}`;
@@ -351,10 +385,10 @@ export function renderItem({ item, stats, rank = 'todos' }) {
 }
 
 /** Resposta livre da IA (lore, mecânicas…), marcada como tal. */
-export function renderAnswer({ question, answer }) {
+export function renderAnswer({ question, answer, sources = [] }) {
   const embed = new EmbedBuilder().setColor(COLOR)
     .setAuthor({ name: `💬 ${clip(question.replace(/\s+/g, ' '), 200)}` })
-    .setDescription(clip(answer, 3500))
-    .setFooter({ text: 'Resposta da IA (ia-gateway), com os textos oficiais do jogo quando há · pode errar' });
+    .setDescription(clip(answer, 3500) + sourceLine(sources))
+    .setFooter({ text: `Resposta da IA (ia-gateway), com os textos oficiais do jogo quando há${sources.length ? ' e a busca na web' : ''} · pode errar` });
   return { embeds: [embed], components: [] };
 }

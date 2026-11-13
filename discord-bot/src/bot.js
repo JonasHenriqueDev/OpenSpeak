@@ -18,12 +18,12 @@ import {
 } from 'discord.js';
 import {
   appLabel, applySettings, checkConfig, diff, guildNotices, migrateMessages, migrateSettings, formatDuration, parseLive, parseStats, planVoiceUpdates,
-  mediaText, presenceText, serverText, statsVars, streamKey, voiceStatusText, watchersText,
+  mediaText, PRESENCE_TIPS, presenceText, serverText, statsVars, streamKey, voiceStatusText, watchersText,
 } from './live.js';
 import { startWebhook } from './webhook.js';
 import { LinkGuard, SUPPRESS_RECHECK_MS } from './linkguard.js';
 import { PAGES, openButtonRow, renderPanel, renderUserLinks } from './panel.js';
-import { HELP_TEXT, counterCandidates, counterReasonGateway, isBeginnerQuestion, answerGateway, answerMessages, askGateway, findHeroInText, findItemInText, gatewayMessages, jsonAnswerGateway, officialContext, parseQuestion } from './ask.js';
+import { HELP_TEXT, counterAnswerGateway, counterCandidates, counterReasonGateway, counterSearchQuery, findAbilityInText, openSearchQuery, searchGateway, isBeginnerQuestion, answerGateway, answerMessages, askGateway, findHeroInText, findItemInText, gatewayMessages, jsonAnswerGateway, officialContext, parseQuestion } from './ask.js';
 import {
   DOWNLOAD_URL, GitHubIssues, KIND_LABEL, REPO, duplicateComment, fallbackDraft, issueBody, issueMessages, latestChanges, mentionsOpenSpeak,
   openspeakMessages, parseIssueDraft, parseOpenSpeakQuestion, renderIssueDone, renderIssueDraft, renderOpenSpeakAnswer, takeIssueQuota,
@@ -200,6 +200,8 @@ class LiveBot {
     this.presenceTexts = [];
     this.presenceIndex = 0;
     this.presenceMain = null;
+    this.presenceMode = null; // 'live', 'tips' ou 'off'
+    this.tipAt = 0;
     this.presenceLive = false;
     this.lastPresenceLive = null;
     this.pendingPresence = null;
@@ -343,7 +345,7 @@ class LiveBot {
     // Sempre: os servidores com o status de voz desligado simplesmente não têm canais na lista.
     this.voiceText = voiceStatusText(this.config.voiceStatus, streams, stats);
     await this.syncVoice();
-    if (this.config.presence.enabled) this.updatePresence(streams, stats);
+    this.updatePresence(streams, stats);
   }
 
   /**
@@ -504,22 +506,44 @@ class LiveBot {
 
   // ------------------------------------------------------ status do bot
 
+  /**
+   * Com alguém ao vivo (e o status do bot ligado): quem transmite e a carga do servidor,
+   * alternando a cada presence.rotateSeconds. Sem transmissão: as dicas do que o Frisquila
+   * faz (presence.tips), uma a cada presence.tipSeconds; sem dicas, o status fica vazio.
+   */
   updatePresence(streams, stats) {
-    const main = presenceText(this.config.presence, streams, stats);
-    if (main !== this.presenceMain) this.presenceIndex = 0; // mudou quem está ao vivo: mostra na hora
-    this.presenceMain = main;
-    const server = serverText(this.config.presence, stats);
-    // Só alterna com alguém ao vivo. Sem transmissão, um texto fixo: a carga do
-    // servidor se tem gente conectada, senão o "idle".
-    // Sem ninguém transmitindo, o status fica sem texto (só a bolinha de ausente).
-    this.presenceTexts = streams.length ? [main, server].filter(Boolean) : [];
-    this.presenceLive = streams.length > 0;
+    const p = this.config.presence;
+    const live = p.enabled && streams.length > 0;
+    if (live) {
+      const main = presenceText(p, streams, stats);
+      if (main !== this.presenceMain || this.presenceMode !== 'live') this.presenceIndex = 0; // mudou quem está ao vivo: mostra na hora
+      this.presenceMain = main;
+      this.presenceMode = 'live';
+      this.presenceTexts = [main, serverText(p, stats)].filter(Boolean);
+    } else if (p.tips) {
+      if (this.presenceMode !== 'tips') { // acabou de ficar sem live: começa numa dica qualquer
+        this.presenceIndex = Math.floor(Math.random() * PRESENCE_TIPS.length);
+        this.tipAt = Date.now();
+      }
+      this.presenceMain = null;
+      this.presenceMode = 'tips';
+      this.presenceTexts = PRESENCE_TIPS;
+    } else {
+      this.presenceMain = null;
+      this.presenceMode = 'off';
+      this.presenceTexts = [];
+    }
+    this.presenceLive = live;
     this.showPresence();
   }
 
-  /** Chamado a cada presence.rotateSeconds. */
+  /** Chamado a cada presence.rotateSeconds; as dicas trocam a cada presence.tipSeconds. */
   rotatePresence() {
-    if (!this.config.presence.enabled || this.presenceTexts.length < 2) return;
+    if (this.presenceTexts.length < 2) return;
+    if (this.presenceMode === 'tips') {
+      if (Date.now() - this.tipAt < this.config.presence.tipSeconds * 1000) return;
+      this.tipAt = Date.now();
+    }
     this.presenceIndex = (this.presenceIndex + 1) % this.presenceTexts.length;
     this.showPresence();
   }
@@ -545,7 +569,7 @@ class LiveBot {
 
   flushPresence() {
     const { text, live } = this.pendingPresence;
-    if (!this.config.presence.enabled || (text === this.lastPresence && live === this.lastPresenceLive)) return;
+    if (text === this.lastPresence && live === this.lastPresenceLive) return;
     this.lastPresence = text;
     this.lastPresenceLive = live;
     this.presenceAt = Date.now();
@@ -670,8 +694,13 @@ class LiveBot {
         return renderOpenSpeakAnswer({ question: text, answer });
       }
       if (q.kind === 'pergunta') {
-        const answer = await answerGateway(this.gateway, answerMessages(text, officialContext(text, heroes, items)));
-        return renderAnswer({ question: text, answer });
+        const web = await this.webSearch(openSearchQuery(text));
+        const answer = await answerGateway(this.gateway, answerMessages(text, officialContext(text, heroes, items), web?.texto ?? ''));
+        return renderAnswer({ question: text, answer, sources: web?.fontes ?? [] });
+      }
+      if (q.kind === 'itens_contra' && this.gateway) {
+        const chat = await this.counterChat(text, q.hero, q.rank ?? 'todos');
+        if (chat) return chat;
       }
       return await this.deadlockView(q.kind, q);
     } catch (err) {
@@ -958,11 +987,9 @@ class LiveBot {
     this.state.settings.presence = { ...this.state.settings.presence, enabled };
     saveState(this.state);
     this.config = applySettings(this.baseConfig, this.state.settings);
-    if (!enabled) {
-      this.lastPresence = this.presenceMain = null;
-      this.presenceTexts = [];
-      this.client.user.setPresence({ status: 'online', activities: [] });
-    } else this.enqueue(() => this.apply(this.streams));
+    // Desligado: volta para as dicas (ou vazio, sem presence.tips).
+    if (!enabled) this.updatePresence(this.streams ?? [], this.stats);
+    else this.enqueue(() => this.apply(this.streams));
   }
 
   /** Quem pode mexer no status do bot, que aparece em todos os servidores. */
@@ -1280,6 +1307,36 @@ class LiveBot {
       const msg = 'A deadlock-api não respondeu agora. Tenta de novo em alguns instantes.';
       if (interaction.deferred || interaction.replied) await interaction.editReply({ content: msg, embeds: [], components: [] }).catch(() => {});
       else await interaction.reply({ content: msg, flags: MessageFlags.Ephemeral }).catch(() => {});
+    }
+  }
+
+  /**
+   * "Item bom contra o haze" / "item pra counterar a ult do lash": resposta em conversa,
+   * com itens da lista oficial (estatística + ferramentas). null se a IA falhar (aí vai a tela).
+   */
+  async counterChat(text, hero, rank) {
+    try {
+      const ability = findAbilityInText(text, hero);
+      const [list, items, web] = await Promise.all([this.dl.counterItems(hero.id, rank), this.dl.items(),
+        this.webSearch(counterSearchQuery(hero, ability))]);
+      const candidates = counterCandidates(list, items.values());
+      const answer = await counterAnswerGateway(this.gateway, text, hero, candidates, { ability, web: web?.texto ?? '' });
+      log(`deadlock: conversa contra ${hero.name}${ability ? ` (${ability.name})` : ''}${web ? ' +web' : ''}: ${answer.items.map(x => x.item.name).join(', ')}`);
+      return renderCounterAnswer({ question: text, hero, rank, ability, answer, sources: web?.fontes ?? [] });
+    } catch (err) {
+      log('deadlock: conversa dos itens contra:', explain(err));
+      return null;
+    }
+  }
+
+  /** Pesquisa na web pelo ia-gateway; null se falhar (a resposta segue só com os dados oficiais). */
+  async webSearch({ consulta, instrucao }) {
+    if (!this.gateway) return null;
+    try {
+      return await searchGateway(this.gateway, consulta, { instrucao });
+    } catch (err) {
+      log('pesquisa na web:', err.message);
+      return null;
     }
   }
 

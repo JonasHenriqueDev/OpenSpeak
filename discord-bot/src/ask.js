@@ -189,7 +189,8 @@ export function officialContext(text, heroes, items = []) {
 }
 
 /** Mensagens para o ia-gateway responder uma pergunta aberta (texto). */
-export function answerMessages(text, context) {
+export function answerMessages(text, context, web = '') {
+  if (web) context = `${context ? `${context}\n\n` : ''}PESQUISA NA WEB (pode estar desatualizada):\n${String(web).slice(0, 3000)}`;
   return [
     {
       role: 'system',
@@ -204,7 +205,9 @@ export function answerMessages(text, context) {
         + 'afirmar nada como fato: deixe claro que o jogo não diz e que é só especulação sua (pode usar o que o CONTEXTO conta '
         + 'do personagem como base da piada). Opiniões gerais de estratégia podem, deixando claro que é dica. '
         + 'Números de desempenho (win rate, melhor build, counters) não: indique /build, /counter, /heroi, /ranking ou /item. '
-        + 'Se não for sobre Deadlock, diga em uma frase que você só fala de Deadlock e do OpenSpeak.\n\nFATOS:\n' + DEADLOCK_FACTS,
+        + 'Se não for sobre Deadlock, diga em uma frase que você só fala de Deadlock e do OpenSpeak. '
+        + 'Pode vir no CONTEXTO uma PESQUISA NA WEB (resumo de páginas da internet): use para responder, mas se ela contradisser '
+        + 'os textos oficiais, fique com os oficiais; ela pode estar desatualizada.\n\nFATOS:\n' + DEADLOCK_FACTS,
     },
     { role: 'user', content: context ? `CONTEXTO:\n${context}\n\nPERGUNTA: ${String(text).slice(0, 500)}` : String(text).slice(0, 500) },
   ];
@@ -240,6 +243,45 @@ export async function askGateway(cfg, messages) {
   throw new Error('ia-gateway: nenhuma resposta válida');
 }
 
+/**
+ * Pesquisa na web pelo ia-gateway (/v1/pesquisa: Gemini + Google Search). Devolve
+ * { texto, fontes: [{ title, host, url }] }; lança erro se o gateway não conseguir.
+ */
+export async function searchGateway({ url, token, fetchImpl = fetch }, consulta, { instrucao = '', timeoutS = 20 } = {}) {
+  const res = await fetchImpl(`${url.replace(/\/$/, '')}/v1/pesquisa`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({ consulta: String(consulta).slice(0, 2000), instrucao, timeout_s: timeoutS }),
+    signal: AbortSignal.timeout((timeoutS + 10) * 1000),
+  });
+  if (!res.ok) throw new Error(`ia-gateway pesquisa HTTP ${res.status}`);
+  const data = await res.json();
+  const texto = String(data.texto ?? '').trim();
+  if (!texto) throw new Error('ia-gateway pesquisa: resposta vazia');
+  const fontes = (Array.isArray(data.fontes) ? data.fontes : [])
+    .filter(f => typeof f?.url === 'string' && f.url.startsWith('https://'))
+    .map(f => {
+      let host = '';
+      try { host = new URL(f.url).hostname; } catch { /* sem host */ }
+      return { title: flat(f.titulo), host, url: f.url };
+    });
+  return { texto, fontes };
+}
+
+const SEARCH_RULES = 'Responda em português do Brasil, em até 150 palavras, só com o que as páginas encontradas dizem. '
+  + 'Escreva os nomes de heróis, habilidades e itens em inglês, como estão no jogo. Se as páginas não falarem disso, diga que não achou.';
+
+/** Consulta da pesquisa na web para "item bom contra X" (ou contra uma habilidade dele). */
+export function counterSearchQuery(hero, ability = null) {
+  const alvo = ability ? `a habilidade "${ability.name}" do herói ${hero.name}` : `o herói ${hero.name}`;
+  return { consulta: `Deadlock (jogo da Valve): quais itens comprar para counterar ${alvo}? Quais itens a comunidade recomenda e por quê?`, instrucao: SEARCH_RULES };
+}
+
+/** Consulta da pesquisa na web para uma pergunta aberta de Deadlock. */
+export function openSearchQuery(text) {
+  return { consulta: `Deadlock (jogo da Valve): ${String(text).replace(/<@!?\d+>/g, ' ').trim().slice(0, 400)}`, instrucao: SEARCH_RULES };
+}
+
 /** Resposta em texto para uma pergunta aberta (tarefa "frisquila_resposta"). */
 export async function answerGateway(cfg, messages) {
   const data = await callGateway(cfg, { tarefa: 'frisquila_resposta', mensagens: messages, temperatura: 0.2, max_tokens: 600, timeout_s: 20 }, 60_000);
@@ -252,11 +294,11 @@ export async function answerGateway(cfg, messages) {
  * Resposta em JSON pela tarefa "frisquila_resposta", validada por `parse`; troca de provedor
  * quando a resposta não valida (rascunho de issue, por exemplo).
  */
-export async function jsonAnswerGateway(cfg, mensagens, parse) {
+export async function jsonAnswerGateway(cfg, mensagens, parse, { maxTokens = 700 } = {}) {
   const excluir = [];
   let rejeitado = null;
   for (let i = 0; i < 3; i++) {
-    const data = await callGateway(cfg, { tarefa: 'frisquila_resposta', mensagens, json: true, temperatura: 0.2, max_tokens: 700, excluir, rejeitado, timeout_s: 20 }, 60_000);
+    const data = await callGateway(cfg, { tarefa: 'frisquila_resposta', mensagens, json: true, temperatura: 0.2, max_tokens: maxTokens, excluir, rejeitado, timeout_s: 20 }, 60_000);
     try {
       return parse(data.texto);
     } catch (err) {
@@ -327,25 +369,39 @@ export function itemTags(desc) {
   return tags;
 }
 
+/** Regras de ligação habilidade → item (marcas de abilityTags/itemTags). */
+const COUNTER_RULES = '- habilidade CANALIZADA → item que ATORDOA ou SILENCIA (interrompe o canal);\n'
+  + '- habilidade de CONTROLE (atordoa, silencia, congela, puxa, agarra, troca de lugar…) ou que aplica MALEFÍCIO → item CONTRA_CONTROLE;\n'
+  + '- habilidade de LENTIDÃO → item CONTRA_LENTIDÃO;\n'
+  + '- habilidade com CURA → item ANTICURA (nunca anticura contra habilidade sem CURA);\n'
+  + '- habilidade de DANO forte (a principal fonte de dano) → item DEFESA_DE_DANO que combine com o tipo do dano '
+  + '(espiritual ou de balas, como está nas descrições).\n';
+
+const tagText = t => (t.length ? ` [${t.join(', ')}]` : '');
+
+/** Habilidades do herói com as marcas, para os prompts. */
+function abilityLines(hero) {
+  return [...(hero.abilities?.values?.() ?? [])].sort((a, b) => a.slot - b.slot)
+    .map(a => `${a.slot}. ${a.namePt}${a.name !== a.namePt ? ` (${a.name})` : ''}${tagText(abilityTags(a.desc))}: ${flat(a.desc).slice(0, 400)}`);
+}
+
+/** Itens candidatos com as marcas e o ganho de win rate, para os prompts. */
+function candidateLines(candidates) {
+  return candidates.map(c => `- ${c.item.name}${c.item.namePt !== c.item.name ? ` (${c.item.namePt})` : ''}${tagText(itemTags(c.item.desc))}`
+    + `${c.gain != null ? ` [+${(c.gain * 100).toFixed(1)} pp de win rate contra ele]` : ''}: ${flat(c.item.desc).slice(0, 220)}`);
+}
+
 /** Prompt do "Por quê?": habilidades oficiais do herói + itens candidatos (com marcas); resposta em JSON. */
 export function counterReasonMessages(hero, candidates) {
-  const tagText = t => (t.length ? ` [${t.join(', ')}]` : '');
-  const abilities = [...(hero.abilities?.values?.() ?? [])].sort((a, b) => a.slot - b.slot)
-    .map(a => `${a.slot}. ${a.namePt}${a.name !== a.namePt ? ` (${a.name})` : ''}${tagText(abilityTags(a.desc))}: ${flat(a.desc).slice(0, 400)}`);
-  const list = candidates.map(c => `- ${c.item.name}${c.item.namePt !== c.item.name ? ` (${c.item.namePt})` : ''}${tagText(itemTags(c.item.desc))}`
-    + `${c.gain != null ? ` [+${(c.gain * 100).toFixed(1)} pp de win rate contra ele]` : ''}: ${flat(c.item.desc).slice(0, 220)}`);
+  const abilities = abilityLines(hero);
+  const list = candidateLines(candidates);
   return [
     {
       role: 'system',
       content: 'Você é o Frisquila, bot de Discord que entende de Deadlock. Recebe as HABILIDADES oficiais de um herói e uma '
         + 'lista de ITENS com a descrição oficial; entre colchetes vão marcas tiradas desses textos. Escolha de 3 a 4 itens DA '
         + 'LISTA que respondem a uma habilidade específica do herói, seguindo estas regras:\n'
-        + '- habilidade CANALIZADA → item que ATORDOA ou SILENCIA (interrompe o canal);\n'
-        + '- habilidade de CONTROLE (atordoa, silencia, congela, puxa, troca de lugar…) ou que aplica MALEFÍCIO → item CONTRA_CONTROLE;\n'
-        + '- habilidade de LENTIDÃO → item CONTRA_LENTIDÃO;\n'
-        + '- habilidade com CURA → item ANTICURA (nunca anticura contra habilidade sem CURA);\n'
-        + '- habilidade de DANO forte (a principal fonte de dano) → item DEFESA_DE_DANO que combine com o tipo do dano '
-        + '(espiritual ou de balas, como está nas descrições).\n'
+        + COUNTER_RULES
         + 'Use só o que está escrito nas descrições, sem inventar números nem efeitos. Entre opções parecidas, prefira a que '
         + 'tem ganho de win rate. No motivo, diga em 1 ou 2 frases o que a habilidade faz e como o efeito do item responde. '
         + 'Responda SÓ com JSON: {"itens":[{"item":"<nome em inglês exatamente como na lista>","habilidade":"<nome da '
@@ -369,25 +425,126 @@ function contradicts(item, ability) {
 export function parseCounterReasons(texto, hero, candidates) {
   const m = /\{[\s\S]*\}/.exec(String(texto ?? ''));
   if (!m) throw new Error('sem JSON');
-  const d = JSON.parse(m[0]);
-  const norm = s => normalize(String(s ?? ''));
+  const out = pickCounterItems(JSON.parse(m[0]).itens, hero, candidates, { max: 4 });
+  if (!out.length) throw new Error('nenhum item válido');
+  return out;
+}
+
+const normName = s => normalize(String(s ?? ''));
+
+/**
+ * Itens da resposta da IA que existem na lista de candidatos, sem repetir e sem ligação
+ * desmentida pelas marcas. `focus` = habilidade da pergunta (vale quando a IA não cita outra).
+ */
+function pickCounterItems(list, hero, candidates, { max = 4, focus = null } = {}) {
   const byName = new Map();
-  for (const c of candidates) for (const n of [c.item.name, c.item.namePt]) byName.set(norm(n), c);
+  for (const c of candidates) for (const n of [c.item.name, c.item.namePt]) byName.set(normName(n), c);
   const abilities = [...(hero.abilities?.values?.() ?? [])];
   const seen = new Set();
   const out = [];
-  for (const x of Array.isArray(d.itens) ? d.itens : []) {
-    const c = byName.get(norm(x?.item));
+  for (const x of Array.isArray(list) ? list : []) {
+    const c = byName.get(normName(x?.item));
     const motivo = flat(x?.motivo).slice(0, 300);
     if (!c || !motivo || seen.has(c.item.id)) continue;
     seen.add(c.item.id);
-    const ability = abilities.find(a => [a.name, a.namePt].some(n => norm(n) === norm(x?.habilidade))) ?? null;
+    const ability = abilities.find(a => [a.name, a.namePt].some(n => normName(n) === normName(x?.habilidade))) ?? focus;
     if (contradicts(c.item, ability)) continue;
     out.push({ item: c.item, gain: c.gain, ability, motivo });
-    if (out.length === 4) break;
+    if (out.length === max) break;
   }
-  if (!out.length) throw new Error('nenhum item válido');
   return out;
+}
+
+// ------------------------------------------- "item bom contra X" em conversa
+
+const ULT_WORDS = ['ult', 'ulti', 'ulta', 'ultimate', 'ultimato', 'ultimates'];
+const SKILL_WORDS = ['habilidade', 'hab', 'skill', 'poder'];
+
+/**
+ * Habilidade do herói citada na pergunta: pelo nome (português ou inglês), por "ult/ulti"
+ * (a 4) ou por "habilidade 2"/"2 skill". null quando a pergunta é sobre o herói todo.
+ */
+export function findAbilityInText(text, hero) {
+  const abilities = [...(hero?.abilities?.values?.() ?? [])];
+  if (!abilities.length) return null;
+  const { words, keys } = pieces(text);
+  for (const a of abilities) {
+    for (const n of [a.name, a.namePt]) {
+      const k = normName(n);
+      if (k.length >= 4 && keys.has(k)) return a;
+    }
+  }
+  const bySlot = s => abilities.find(a => a.slot === s) ?? null;
+  if (words.some(w => ULT_WORDS.includes(w))) return bySlot(4);
+  const i = words.findIndex(w => SKILL_WORDS.includes(w));
+  if (i >= 0) {
+    for (const w of [words[i + 1], words[i - 1]]) {
+      const n = Number(w);
+      if (Number.isInteger(n) && n >= 1 && n <= 4) return bySlot(n);
+    }
+  }
+  return null;
+}
+
+/**
+ * Prompt da resposta conversada de "item bom contra X" (ou contra uma habilidade de X):
+ * a IA escolhe itens DA LISTA e escreve como num papo; `web` são trechos de páginas
+ * encontradas na busca (opcional), só para ajudar a escolher.
+ */
+export function counterAnswerMessages(question, hero, candidates, { ability = null, web = '' } = {}) {
+  const target = ability
+    ? `O jogador quer counterar ESPECIFICAMENTE a habilidade ${ability.slot} do herói, ${ability.namePt}${ability.name !== ability.namePt ? ` (${ability.name})` : ''}${ability.slot === 4 ? ', a ult' : ''}. `
+      + 'Escolha de 3 a 5 itens que respondem a ESSA habilidade. '
+    : 'O jogador quer itens bons contra o herói como um todo. Escolha de 3 a 5 itens que respondem ao que mais pesa nele: '
+      + 'a principal fonte de dano (balas ou espiritual), controle, cura, mobilidade. Misture defesa e ferramenta quando fizer sentido. ';
+  return [
+    {
+      role: 'system',
+      content: 'Você é o Frisquila, bot de um servidor de amigos no Discord que entende muito de Deadlock. Recebe a PERGUNTA, as '
+        + 'HABILIDADES oficiais de um herói inimigo e uma lista de ITENS com a descrição oficial; entre colchetes vão marcas '
+        + `tiradas desses textos e o ganho de win rate do item contra ele. ${target}`
+        + 'Ordene do melhor para o pior. Regras de ligação:\n' + COUNTER_RULES
+        + 'Use só itens DA LISTA e só efeitos que estão nas descrições; nunca invente números. Entre opções parecidas, prefira a '
+        + 'que tem ganho de win rate. '
+        + (web ? 'Em WEB vão trechos de páginas da internet sobre o assunto: use como pista do que a comunidade recomenda, mas '
+          + 'só cite item que está na LISTA. ' : '')
+        + 'Escreva em português do Brasil, direto e descontraído, como um amigo explicando: no motivo, uma frase dizendo quando '
+        + 'ativar ou por que funciona contra ele. Responda SÓ com JSON: {"intro":"<uma frase curta abrindo a resposta>",'
+        + '"itens":[{"item":"<nome em inglês exatamente como na lista>","habilidade":"<habilidade do herói que o item responde, '
+        + 'ou null>","motivo":"<até 35 palavras>"}],"escolha":{"item":"<o melhor de todos, um dos itens acima>",'
+        + '"motivo":"<uma frase: por que, se fosse só um>"},"dica":"<opcional: uma frase extra de jogo (posicionamento, timing) ou null>"}',
+    },
+    {
+      role: 'user',
+      content: `PERGUNTA: ${String(question).slice(0, 300)}\n\nHERÓI: ${hero.name} (${hero.namePt})\n\nHABILIDADES:\n`
+        + `${abilityLines(hero).join('\n')}\n\nITENS:\n${candidateLines(candidates).join('\n')}`
+        + (web ? `\n\nWEB:\n${String(web).slice(0, 4000)}` : ''),
+    },
+  ];
+}
+
+/** Valida a resposta conversada: só itens da lista; a escolha final é um deles. */
+export function parseCounterAnswer(texto, hero, candidates, { ability = null } = {}) {
+  const m = /\{[\s\S]*\}/.exec(String(texto ?? ''));
+  if (!m) throw new Error('sem JSON');
+  const d = JSON.parse(m[0]);
+  const items = pickCounterItems(d.itens, hero, candidates, { max: 5, focus: ability });
+  if (items.length < 2) throw new Error('itens válidos de menos');
+  const pickName = normName(d.escolha?.item);
+  const best = items.find(x => [x.item.name, x.item.namePt].some(n => normName(n) === pickName)) ?? items[0];
+  const text = v => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? flat(v) : '');
+  return {
+    intro: text(d.intro).slice(0, 250),
+    items,
+    best: { item: best.item, motivo: text(d.escolha?.motivo).slice(0, 250) || best.motivo },
+    tip: text(d.dica).slice(0, 250),
+  };
+}
+
+/** Pede a resposta conversada ao ia-gateway; troca de provedor se a resposta não validar. */
+export async function counterAnswerGateway(cfg, question, hero, candidates, { ability = null, web = '' } = {}) {
+  const mensagens = counterAnswerMessages(question, hero, candidates, { ability, web });
+  return jsonAnswerGateway(cfg, mensagens, t => parseCounterAnswer(t, hero, candidates, { ability }), { maxTokens: 1000 });
 }
 
 /** Pede o "Por quê?" ao ia-gateway (tarefa "frisquila_resposta"); troca de provedor se a resposta não validar. */

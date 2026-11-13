@@ -150,3 +150,13 @@ test('applySettings: escolhas do /openspeak por cima do config.json, sem alterá
 test('checkConfig: chat ligado sem canal espera o /openspeak canal', () => {
   assert.deepEqual(checkConfig({ openspeakUrl: 'https://x.y', chat: { enabled: true, channelId: '' } }), []);
 });
+
+test('dicas do status do bot: cabem no status e vêm ligadas por padrão', async () => {
+  const { PRESENCE_TIPS } = await import('../src/live.js');
+  assert.ok(PRESENCE_TIPS.length >= 10);
+  for (const t of PRESENCE_TIPS) assert.ok(t.length <= 128, t);
+  const c = { token: 'x', presence: { tipSeconds: 5 } };
+  checkConfig(c);
+  assert.equal(c.presence.tips, true);
+  assert.equal(c.presence.tipSeconds, 30);
+});

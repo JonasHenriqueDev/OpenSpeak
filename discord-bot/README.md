@@ -343,6 +343,8 @@ editá-las mesmo depois de reiniciar).
     "idle": "Ninguém ao vivo no OpenSpeak",
     "server": "👥 {usuarios} online · 👀 {assistindo} assistindo{trafego}", // "" desliga
     "rotateSeconds": 20,                            // 15 a 600: alterna entre o texto acima e "server"
+    "tips": true,                                   // sem ninguém ao vivo: dicas do que o Frisquila faz (mesmo com "enabled": false)
+    "tipSeconds": 60,                               // 30 a 3600: troca de dica
     "type": "custom"                                // custom, playing, watching, listening ou competing
   }
 }

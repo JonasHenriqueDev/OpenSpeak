@@ -26,7 +26,7 @@ import { PAGES, openButtonRow, renderPanel, renderUserLinks } from './panel.js';
 import { AnswerCache, questionWords } from './answercache.js';
 import { HELP_TEXT, packCounterAnswer, unpackCounterAnswer, counterAnswerGateway, counterCandidates, counterReasonGateway, counterSearchQuery, findAbilityInText, openSearchQuery, searchGateway, isBeginnerQuestion, answerGateway, answerMessages, askGateway, findHeroInText, findItemInText, gatewayMessages, jsonAnswerGateway, officialContext, parseQuestion } from './ask.js';
 import {
-  DOWNLOAD_URL, GitHubIssues, KIND_LABEL, REPO, duplicateComment, fallbackDraft, issueBody, issueMessages, latestChanges, mentionsOpenSpeak,
+  DOWNLOAD_URL, GitHubIssues, KIND_LABEL, REPO, VAGUE_REPORT_REPLY, duplicateComment, isVagueReport, fallbackDraft, issueBody, issueMessages, latestChanges, mentionsOpenSpeak,
   openspeakMessages, parseIssueDraft, parseOpenSpeakQuestion, renderIssueDone, renderIssueDraft, renderOpenSpeakAnswer, takeIssueQuota,
 } from './openspeak.js';
 import { buildCode } from './buildcode.js';
@@ -738,6 +738,7 @@ class LiveBot {
     if (!this.github) return { content: 'Ainda não consigo abrir issues (o GitHub não está configurado no bot). Avisa o admin direto 😉' };
     if (!takeIssueQuota(this.state.users[user.id]?.issues, Date.now(), ISSUES_PER_DAY))
       return { content: `Você já mandou ${ISSUES_PER_DAY} relatos nas últimas 24 h. Segura um pouco que o dev ainda tá lendo 😅` };
+    if (isVagueReport(text)) return { content: VAGUE_REPORT_REPLY };
     const open = await this.github.listOpen().catch(err => (log('issues: lista:', err.message), []));
     let draft = fallbackDraft(text);
     if (this.gateway) {
@@ -747,6 +748,7 @@ class LiveBot {
         log('issues: rascunho pela IA:', err.message);
       }
     }
+    if (draft.vague) return { content: VAGUE_REPORT_REPLY };
     const now = Date.now();
     for (const [k, d] of this.issueDrafts) if (now - d.at > ISSUE_DRAFT_TTL_MS) this.issueDrafts.delete(k);
     const id = `${now.toString(36)}${Math.random().toString(36).slice(2, 6)}`;

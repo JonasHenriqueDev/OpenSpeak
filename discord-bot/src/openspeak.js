@@ -78,6 +78,30 @@ export function looksLikeReport(text) {
 }
 
 /**
+ * Palavras que não descrevem nada num relato: gatilhos ("bug", "travando"), nomes (bot, app), conectivos e
+ * xingamentos genéricos. "o frisquila ta bugado" só tem essas, então não vira issue.
+ */
+const VAGUE_WORDS = new Set(`
+  o a os as um uma uns umas e ou de do da dos das no na nos nas em pra pro pras pros para por com sem que se
+  eu me mim meu minha voce vc vcs ele ela isso isto esse essa aqui ai ae la ta tah esta estao to tou tava estava
+  e eh foi fica ficou ficando esta muito mt mto mta meio todo toda tudo nada mais menos so sempre agora hoje ainda
+  pq porque cara mano mn velho vei slk pô po pqp kkk kk kkkk rs ne hein oi ola opa bom ruim pessimo horrivel
+  frisquila bot openspeak open speak app aplicativo programa site coisa negocio parada isso
+  bug bugs bugado bugada bugou bugando issue sugestao sugestoes sugiro reportar reporta relatar relato reclamacao reclamar
+  erro erros problema problemas quebrado quebrada quebrou defeito lixo merda bosta zoado zuado estragado
+  nao funciona funcionando funcionou parou crash crashou crasha travando trava travou travado fechando lento lenta
+`.split(/\s+/).filter(Boolean));
+
+/** Relato sem conteúdo (menos de 2 palavras que dizem algo além de "tá bugado"). */
+export function isVagueReport(text) {
+  return words(text).trim().split(' ').filter(w => w && !VAGUE_WORDS.has(w)).length < 2;
+}
+
+export const VAGUE_REPORT_REPLY = 'Pra eu abrir uma issue preciso de mais detalhe 😅 Me conta **o que** aconteceu, **onde** '
+  + '(app, site, atividade do Discord ou o próprio Frisquila) e **o que você estava fazendo**. '
+  + 'Ex.: "@Frisquila bug: o áudio some quando troco de janela na transmissão".';
+
+/**
  * Sem IA: 'issue' para relato explícito ("bug:", "sugestão:"), 'openspeak' para pergunta que cita
  * o OpenSpeak. null quando não dá para ter certeza (aí o ia-gateway classifica).
  */
@@ -148,7 +172,9 @@ export function issueMessages(text, openIssues = []) {
         + 'Discord) em issues do GitHub para o desenvolvedor. Escreva em português do Brasil, sem inventar nada além do relato. '
         + 'Responda SÓ um JSON: {"titulo": "<até 80 caracteres, objetivo>", "corpo": "<Markdown curto: o que acontece ou o que '
         + 'a pessoa quer; passos e detalhes só se estiverem no relato>", "tipo": "bug" | "sugestao" | "outro", '
-        + '"duplicada": <número de uma issue aberta abaixo que trata EXATAMENTE do mesmo assunto, ou null>}.\n\n'
+        + '"duplicada": <número de uma issue aberta abaixo que trata EXATAMENTE do mesmo assunto, ou null>, '
+        + '"vago": <true se o relato não diz o que acontece de errado ou o que a pessoa quer (ex.: "tá bugado", '
+        + '"não funciona", "arruma aí"), senão false>}.\n\n'
         + `ISSUES ABERTAS:\n${list}`,
     },
     { role: 'user', content: String(text).slice(0, 1500) },
@@ -167,7 +193,7 @@ export function parseIssueDraft(texto, openIssues = []) {
   const kind = ['bug', 'sugestao'].includes(d.tipo) ? d.tipo : 'outro';
   const dup = Number(d.duplicada);
   const duplicate = openIssues.find(i => i.number === dup) ?? null;
-  return { title, body: clean(d.corpo, 2500), kind, duplicate };
+  return { title, body: clean(d.corpo, 2500), kind, duplicate, vague: d.vago === true };
 }
 
 /** Rascunho sem IA: o próprio relato. */

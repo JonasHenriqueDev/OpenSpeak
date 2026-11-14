@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GitHubIssues, OPENSPEAK_FACTS, duplicateComment, fallbackDraft, issueBody, issueMessages, latestChanges, mentionsOpenSpeak,
+  GitHubIssues, OPENSPEAK_FACTS, duplicateComment, isVagueReport, fallbackDraft, issueBody, issueMessages, latestChanges, mentionsOpenSpeak,
   openspeakMessages, parseIssueDraft, parseOpenSpeakQuestion, renderIssueDraft, resetChangelogCache, summarizeChangelog, takeIssueQuota,
 } from '../src/openspeak.js';
 import { KINDS, answerMessages, parseGatewayAnswer } from '../src/ask.js';
@@ -66,6 +66,16 @@ test('rascunho da IA: só duplicada que existe', () => {
   assert.throws(() => parseIssueDraft('{"titulo":""}'));
   assert.throws(() => parseIssueDraft('nada'));
   assert.match(issueMessages('relato', open)[0].content, /#7: Áudio some/);
+});
+
+test('relato vago não vira issue', () => {
+  for (const t of ['o frisquila ta bugado', '<@123> o openspeak não funciona', 'tá travando mano', 'bug', 'o app ta zoado kkk'])
+    assert.ok(isVagueReport(t), t);
+  for (const t of ['bug: o áudio some quando troco de janela', 'Sugestão: tema claro', 'o openspeak podia ter atalho pra pausar',
+    'o frisquila não responde o /build do haze'])
+    assert.ok(!isVagueReport(t), t);
+  assert.equal(parseIssueDraft('{"titulo":"Bot bugado","vago":true}').vague, true);
+  assert.equal(parseIssueDraft('{"titulo":"x"}').vague, false);
 });
 
 test('rascunho sem IA usa o próprio relato', () => {

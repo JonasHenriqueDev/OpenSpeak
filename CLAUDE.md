@@ -60,3 +60,11 @@ Default server `wss://openspeak.duckdns.org/ws` runs the native server on an Ora
 Logs (capability `CLIENT_LOGS`, both servers when `OPENSPEAK_LOG_DIR` isn't "off"; default `logs/` in the user data dir, `~/.openspeak/logs` for Node): the server writes its own log to `server-<dia>.log` and what clients send with `clientlog` {version, lines} to `clients/<dia>/<apelido>.log` (`native/server/LogStore.*`, `server/logStore.js`: 500 lines per command, 8 MB per client per day, 14 days). The native client (`native/client/core/ClientLog.*`) installs the Qt message handler, keeps a local file per day (7 days, "Abrir pasta de registros" in settings) and sends info+ lines every 5 s unless the user turns off "Enviar registros ao servidor" (`Settings.sendLogs`).
 
 License: AGPL-3.0-or-later; update `THIRD_PARTY_LICENSES.md` when adding dependencies.
+
+## Revisão e testes
+Ao terminar uma funcionalidade completa, chame o subagente
+testador e depois o revisor. Não chame para mudanças
+pequenas (texto, estilo, renomear variável, ajuste de
+configuração). Corrija os problemas que eles apontarem.
+Depois de corrigir, rode só o testador de novo, não o
+revisor. Se eu disser "sem revisão", pule os dois.

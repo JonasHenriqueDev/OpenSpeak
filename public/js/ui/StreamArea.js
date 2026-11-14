@@ -24,6 +24,9 @@ export class StreamArea {
     this.actions = actions;
     this.tiles = new Map();
     this.focusId = null;
+    // Stream em que se desenha: fica em destaque (e a área travada) até sair do desenho.
+    this.drawingId = null;
+    this.focusBeforeDraw = null;
     this.offset = 0;
     this.perPage = 0;
     // Previews ajustados à mão, em frações da área (ver rectToFraction).
@@ -81,6 +84,7 @@ export class StreamArea {
         this.organized = false;
       }
     }
+    if (this.drawingId && !ids.has(this.drawingId)) this.drawingId = null;
     if (this.focusId && !ids.has(this.focusId)) this.focusId = null;
     for (const item of items) {
       const id = item.info.streamIdentifier;
@@ -167,6 +171,26 @@ export class StreamArea {
       this.tiles.get(s.id).setRect(rects[i]);
     });
     if (firstChange) this.#renderToolbar();
+  }
+
+  #drawingChanged(id, on) {
+    if (on) {
+      if (!this.drawingId) this.focusBeforeDraw = this.focusId;
+      this.drawingId = id;
+      if (this.focusId === id) return;
+      this.focusId = id;
+      this.offset = 0;
+      this.render();
+      return;
+    }
+    if (this.drawingId !== id) return;
+    this.drawingId = null;
+    if (this.focusId !== id) return;
+    const back = this.focusBeforeDraw && this.tiles.has(this.focusBeforeDraw) ? this.focusBeforeDraw : null;
+    this.focusId = back === id ? null : back;
+    this.offset = 0;
+    // Pode vir de dentro do update de um tile: renderiza depois.
+    queueMicrotask(() => this.render());
   }
 
   /** Sai do foco e alinha os previews sem mudar o tamanho; de novo, deixa todos iguais. */
@@ -272,7 +296,10 @@ export class StreamArea {
         guard(m.leaveStream(id));
         this.render();
       },
+      drawingChanged: (id, on) => this.#drawingChanged(id, on),
       toggleFocus: id => {
+        // Tirar o destaque de quem desenha também sai do desenho (e vai para a grade).
+        if (this.drawingId === id && this.focusId === id) this.focusBeforeDraw = null;
         this.focusId = this.focusId === id ? null : id;
         this.offset = 0;
         this.render();

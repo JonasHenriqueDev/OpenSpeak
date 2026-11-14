@@ -15,6 +15,9 @@ Rectangle {
     signal statsRequested(string id)
 
     property string focusId: ""
+    // Stream em que se desenha: fica em destaque (e a área travada) até sair do desenho.
+    property string drawingId: ""
+    property string focusBeforeDraw: ""
     property int offset: 0
     property var rects: ({})
     property int perPage: 0
@@ -38,6 +41,26 @@ Rectangle {
         focusId = id
         offset = 0
         relayout()
+    }
+    function setDrawing(id, on) {
+        if (on) {
+            if (drawingId === "")
+                focusBeforeDraw = focusId
+            drawingId = id
+            if (focusId !== id) {
+                focusId = id
+                offset = 0
+                relayout()
+            }
+        } else if (drawingId === id) {
+            drawingId = ""
+            const back = focusBeforeDraw !== id && hasItem(focusBeforeDraw) ? focusBeforeDraw : ""
+            if (focusId === id) {
+                focusId = back
+                offset = 0
+                relayout()
+            }
+        }
     }
     function hasItem(id) {
         for (let i = 0; i < streams.count; ++i)
@@ -85,6 +108,8 @@ Rectangle {
                 if (streams.get(i)[r] !== row[r])
                     streams.setProperty(i, r, row[r])
         }
+        if (drawingId && ids.indexOf(drawingId) < 0)
+            drawingId = ""
         if (focusId && ids.indexOf(focusId) < 0)
             focusId = ""
         const kept = {}
@@ -195,6 +220,7 @@ Rectangle {
                 Repeater {
                     model: streams
                     delegate: StreamTile {
+                        id: areaTile
                         required property string streamIdentifier
                         required property var model
                         streamId: streamIdentifier
@@ -207,6 +233,15 @@ Rectangle {
                         height: rect ? rect.h : 0
                         focused: root.focusId === streamIdentifier
                         arrangeable: root.focusId === ""
+                        onDrawingChanged: root.setDrawing(streamIdentifier, drawing)
+                        // Outro stream em destaque (ou de volta à grade): sai do desenho.
+                        Connections {
+                            target: root
+                            function onFocusIdChanged() {
+                                if (areaTile.drawMode && root.focusId !== areaTile.streamIdentifier)
+                                    areaTile.drawMode = false
+                            }
+                        }
                         property var arrangeStart: null
                         onArrangeBegun: { arrangeStart = rect; root.beginArrange() }
                         onMoveDragged: (dx, dy) => root.arrangeTo(streamIdentifier,
@@ -218,6 +253,12 @@ Rectangle {
                         Behavior on width { enabled: !arranging; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         Behavior on height { enabled: !arranging; NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
                         onToggleFocus: {
+                            // Tirar o destaque de quem desenha também sai do desenho (e vai para a grade).
+                            if (areaTile.drawing) {
+                                root.focusBeforeDraw = ""
+                                areaTile.drawMode = false
+                                return
+                            }
                             root.focusId = root.focusId === streamIdentifier ? "" : streamIdentifier
                             root.offset = 0
                             root.relayout()

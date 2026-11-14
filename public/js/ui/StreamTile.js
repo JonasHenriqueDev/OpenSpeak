@@ -263,9 +263,16 @@ export class StreamTile {
     }
   }
 
+  /** Liga/desliga o desenho e avisa a área (que põe o stream em destaque e trava o arrasto). */
+  #setDrawMode(on) {
+    if (this.drawMode === on) return;
+    this.drawMode = on;
+    this.actions.drawingChanged?.(this.streamIdentifier, on);
+  }
+
   #setDrawing(canDraw, show) {
     const visible = canDraw && show;
-    if (!canDraw || !show) this.drawMode = false;
+    if (!canDraw || !show) this.#setDrawMode(false);
     this.canvas.hidden = !visible;
     this.el.classList.toggle('drawing', this.drawMode);
     if (visible) this.paintDrawings();
@@ -283,10 +290,10 @@ export class StreamTile {
       this.drawMenuOpen ? h('div.draw-menu', { on: { pointerdown: ev => ev.stopPropagation() } },
         item(t(this.drawMode ? 'video.draw.stop' : 'video.draw.start'), () => {
           if (!this.drawMode && !show) a.setDrawSetting('showDrawings', true);
-          this.drawMode = !this.drawMode;
+          this.#setDrawMode(!this.drawMode);
         }),
         item(t(show ? 'video.draw.hide' : 'video.draw.show'), () => {
-          if (show) this.drawMode = false;
+          if (show) this.#setDrawMode(false);
           a.setDrawSetting('showDrawings', !show);
         }),
         item(t('video.draw.clear_mine'), () => a.clearMyDrawings(id))) : null);
@@ -313,7 +320,7 @@ export class StreamTile {
 
   #exitDrawing() {
     if (!this.drawMode) return;
-    this.drawMode = false;
+    this.#setDrawMode(false);
     this.update(this.model);
   }
 
@@ -376,6 +383,8 @@ export class StreamTile {
     if (status === InboundStatus.PLAYING || status === InboundStatus.RECONNECTING) {
       this.#attach(view.session?.mediaStream ?? null, { muted: false });
       const canDraw = a.canDraw();
+      // Outro stream em destaque (ou de volta à grade): sai do desenho.
+      if (this.drawMode && !m.isFocused && !this.pipWindow) this.#setDrawMode(false);
       this.#setDrawing(canDraw, a.drawSettings().show);
       if (!canDraw) this.drawMenuOpen = false;
       replaceChildren(this.overlay,

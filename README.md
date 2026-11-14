@@ -43,6 +43,10 @@ Detalhes em [native/README.md](native/README.md).
 
 ## Cliente web
 
+> **Congelado.** O cliente web e o servidor Node não recebem mais atualizações: ficam como estão
+> (novembro de 2026). Novidades saem só no app nativo para Windows. O site continua funcionando
+> com o servidor nativo, que segue compatível com ele.
+
 ### Rodar
 
 ```bash

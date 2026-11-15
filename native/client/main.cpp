@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
     if (parser.isSet(nickOpt))
         settings.setNickname(parser.value(nickOpt));
     ConnectionHandler handler;
-    // Edição lite: só cliente do servidor (streams P2P ou SFU), sem Tailscale nem sala web.
+    // Edição padrão (id "lite" em edition.txt): só cliente do servidor (streams P2P ou SFU), sem Tailscale nem sala web.
     const bool lite = updater.edition() == QLatin1String("lite");
     if (!lite) {
         // Modos avançados: descoberta dos pares pela tailnet (sem servidor).

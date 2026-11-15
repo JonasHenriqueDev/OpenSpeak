@@ -19,10 +19,10 @@
 ; Mesmo AppId nas duas edições: trocar de edição atualiza a instalação existente.
 #if Edition == "full"
   #define SetupName "OpenSpeak-Full-Setup"
-  #define AppVerName "OpenSpeak " + AppVersion
+  #define AppVerName "OpenSpeak Completo " + AppVersion
 #else
   #define SetupName "OpenSpeak-Setup"
-  #define AppVerName "OpenSpeak Lite " + AppVersion
+  #define AppVerName "OpenSpeak " + AppVersion
 #endif
 #ifndef AppId
   #define AppId "{{6F1B4F0A-0E2C-4C1B-9E7A-0F5E2B1C9D11}"
@@ -72,7 +72,7 @@ Source: "{#Staging}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs cr
 
 #if Edition != "full"
 [InstallDelete]
-; Ao trocar da edição completa para a lite, remove o que só a completa instala.
+; Ao trocar da edição completa para a padrão, remove o que só a completa instala.
 Type: files; Name: "{app}\openspeak-server.exe"
 Type: files; Name: "{app}\Qt6HttpServer.dll"
 Type: filesandordirs; Name: "{app}\public"

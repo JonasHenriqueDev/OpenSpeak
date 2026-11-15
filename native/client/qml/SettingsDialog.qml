@@ -110,7 +110,7 @@ Popup {
                             Layout.fillWidth: true
                             Layout.topMargin: 12
                             leftPadding: 10
-                            text: "OpenSpeak " + Updater.version + (Updater.edition === "lite" ? " Lite" : "")
+                            text: "OpenSpeak " + Updater.version + (Updater.edition === "full" ? " Completo" : "")
                             color: Theme.textFaint
                             font.pixelSize: 11
                         }
@@ -864,7 +864,7 @@ Popup {
                             Layout.fillWidth: true
                             spacing: 2
                             Label {
-                                text: "OpenSpeak " + Updater.version + (Updater.edition === "lite" ? " Lite" : "")
+                                text: "OpenSpeak " + Updater.version + (Updater.edition === "full" ? " Completo" : "")
                                 color: Theme.text
                                 font.pixelSize: 16
                                 font.weight: Font.DemiBold

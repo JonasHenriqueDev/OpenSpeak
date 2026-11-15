@@ -1,12 +1,14 @@
-# Monta as edições lite (OpenSpeak-Setup-<versão>.exe, padrão) e completa
+# Monta a edição padrão (OpenSpeak-Setup-<versão>.exe) e a completa
 # (OpenSpeak-Full-Setup-<versão>.exe), com instalador, ZIP e exe portáteis.
-#   .\package.ps1                # só a edição lite (instalador), compila Release antes
+#   .\package.ps1                # só a edição padrão (instalador), compila Release antes
 #   .\package.ps1 -Full          # também a edição completa
 #   .\package.ps1 -Portable      # também ZIP e exe portáteis das edições geradas
 #   .\package.ps1 -AllTests      # roda a suíte completa em vez de só os testes afetados
 #   .\package.ps1 -SkipBuild
+# A versão vem de native/VERSION (-Version sobrepõe). Gera também dist\SHA256SUMS-<versão>.txt
+# com os arquivos desta execução; para publicar, use o release.ps1.
 param(
-    [string]$Version = '1.0.46',
+    [string]$Version,
     [switch]$SkipBuild,
     [switch]$AllTests,
     [switch]$Full,
@@ -16,13 +18,16 @@ param(
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 $release = Join-Path $here 'build\Release'
+if (-not $Version) { $Version = "$(Get-Content -LiteralPath (Join-Path $here 'VERSION') -Raw -ErrorAction SilentlyContinue)".Trim() }
+if ($Version -cnotmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') { Write-Error "versão inválida ou native/VERSION ausente: '$Version'"; exit 1 }
+$script:outputs = [System.Collections.Generic.List[string]]::new()
 
 if (-not $SkipBuild) {
     & (Join-Path $here 'build.ps1') -Version $Version -AllTests:$AllTests
     if ($LASTEXITCODE) { Write-Error 'build/testes falharam'; exit 1 }
 }
 
-# Edições: lite (padrão; só o cliente do servidor, P2P ou SFU) e completa (com Tailscale,
+# Edições: padrão (id interno "lite"; só o cliente do servidor, P2P ou SFU) e completa (com Tailscale,
 # sala web e servidor dedicado). As duas usam o mesmo OpenSpeak.exe; edition.txt define a edição.
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
 $crt = Get-ChildItem (Join-Path $vs 'VC\Redist\MSVC') -Directory | Sort-Object Name -Descending |
@@ -74,6 +79,7 @@ function Build-Edition([string]$Edition) {
     if ($LASTEXITCODE) { throw "Inno Setup falhou ($Edition)" }
     # Nome fixo para /releases/latest/download/<prefixo>-Setup.exe; publique em cada release.
     Copy-Item (Join-Path $here "dist\$prefix-Setup-$Version.exe") (Join-Path $here "dist\$prefix-Setup.exe") -Force
+    $script:outputs.Add("$prefix-Setup-$Version.exe"); $script:outputs.Add("$prefix-Setup.exe")
 
     if (-not $Portable) { return }
     # 5) Distribuição portátil com as mesmas dependências do instalador.
@@ -87,8 +93,19 @@ function Build-Edition([string]$Edition) {
     & $cmake --build $portableBuild --config Release --parallel | Out-Null
     if ($LASTEXITCODE) { throw 'Build do launcher portátil falhou' }
     Copy-Item (Join-Path $portableBuild 'Release\OpenSpeakPortable.exe') (Join-Path $here "dist\$prefix-Portable-$Version.exe") -Force
+    $script:outputs.Add("$prefix-$Version-portable.zip"); $script:outputs.Add("$prefix-Portable-$Version.exe")
 }
 
 Build-Edition 'lite'
 if ($Full) { Build-Edition 'full' }
+
+# 7) Hashes no formato do sha256sum ("<hash> *<arquivo>", LF): o AutoUpdater confere o
+# instalador baixado por este arquivo, então ele cobre exatamente o que foi gerado agora.
+$sums = foreach ($name in $script:outputs) {
+    "$((Get-FileHash -LiteralPath (Join-Path $here "dist\$name") -Algorithm SHA256).Hash.ToLowerInvariant()) *$name"
+}
+$sumsPath = Join-Path $here "dist\SHA256SUMS-$Version.txt"
+[System.IO.File]::WriteAllText($sumsPath, (($sums -join "`n") + "`n"), [System.Text.UTF8Encoding]::new($false))
+Write-Host "Pacote $Version pronto em dist\:"
+@($script:outputs) + "SHA256SUMS-$Version.txt" | ForEach-Object { Write-Host "  $_" }
 exit 0

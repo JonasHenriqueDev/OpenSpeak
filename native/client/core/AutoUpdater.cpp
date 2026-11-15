@@ -155,7 +155,7 @@ void AutoUpdater::handleReleaseDocument(const QJsonDocument &doc) {
             setStatus(QStringLiteral("OpenSpeak %1 está atualizado neste canal.").arg(version())); return;
         }
         m_offer.insert("edition", target);
-        setStatus(switching ? QStringLiteral("OpenSpeak %1 %2 disponível.").arg(target == QLatin1String("full") ? QStringLiteral("completo") : QStringLiteral("lite"), newVersion())
+        setStatus(switching ? QStringLiteral("OpenSpeak %1 %2 disponível.").arg(target == QLatin1String("full") ? QStringLiteral("Completo") : QStringLiteral("padrão"), newVersion())
                             : QStringLiteral("Nova versão %1 disponível.").arg(newVersion()));
         if (m_startupBusy && installed()) downloadAndInstall();
         else {

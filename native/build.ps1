@@ -8,7 +8,7 @@
 # O mapa teste -> arquivos fica em tests/TestSelection.ps1; quem passou é lembrado em build/test-cache-<Config>.json.
 param(
     [string]$Config = 'Release',
-    [string]$Version = '1.0.46',
+    [string]$Version,
     [switch]$ServerOnly,
     [string]$Tests,
     [switch]$AllTests,
@@ -22,6 +22,9 @@ $ErrorActionPreference = 'Continue'
 $here = $PSScriptRoot
 $build = "$here\build"
 . "$here\tests\TestSelection.ps1"
+# Versão em um lugar só: native/VERSION (o release.ps1 grava; -Version sobrepõe sem gravar).
+if (-not $Version) { $Version = "$(Get-Content -LiteralPath "$here\VERSION" -Raw -ErrorAction SilentlyContinue)".Trim() }
+if ($Version -cnotmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$') { Write-Host "versão inválida ou native/VERSION ausente: '$Version'"; exit 1 }
 
 $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
 $cmakeDir = Join-Path $vs 'Common7\IDE\CommonExtensions\Microsoft\CMake'

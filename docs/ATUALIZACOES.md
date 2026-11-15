@@ -23,7 +23,7 @@ Em Preferências › Atualizações (também pelo botão com ícone de download 
 - **Receber pré-releases**: desabilitado por padrão. Desligado recebe somente
   releases estáveis. Ligado recebe a versão mais nova entre releases e pré-releases.
 - **Edição**: não há mais escolha nas preferências. Cada instalação continua na própria
-  edição: **Lite** (padrão, só o cliente do servidor, com streams P2P ou pelo
+  edição: a **padrão** (só o cliente do servidor, com streams P2P ou pelo
   servidor/SFU) ou **Completa** (inclui também Tailscale, sala web e servidor
   dedicado). Para trocar, instale o instalador da outra edição; as duas usam a
   mesma pasta e as mesmas configurações.
@@ -50,12 +50,26 @@ manual da 1.0.0 para receber o mecanismo automático.
 
 ## Publicar versões futuras
 
-1. Atualize as versões do projeto e compile/teste antes da publicação.
-2. Execute `native/package.ps1 -Version <versão>`. O parâmetro é repassado ao
-   build para que a versão informada pelo app corresponda ao instalador.
-3. Publique na release os instaladores das duas edições, cada um com o nome
-   versionado e o fixo: `OpenSpeak-Setup-<versão>.exe` e **`OpenSpeak-Setup.exe`**
-   (lite, padrão) e `OpenSpeak-Full-Setup-<versão>.exe` e
+O caminho normal é o `native/release.ps1`, que faz os passos abaixo sozinho:
+
+1. Escreva no topo do `native/CHANGELOG.md` a seção
+   `# OpenSpeak <versão> — <resumo>`; ela vira o título e as notas da release.
+2. Rode `native/release.ps1 <versão> -DryRun` para compilar, testar e empacotar
+   sem publicar, e depois `native/release.ps1 <versão>`. Ele confere se a `main`
+   está limpa e em dia, grava `native/VERSION` (a única fonte da versão, lida
+   pelo `build.ps1` e pelo `package.ps1`), faz o commit, cria a tag e publica a
+   release com os instaladores e o `SHA256SUMS-<versão>.txt` gerado pelo
+   `package.ps1`.
+
+Para publicar à mão:
+
+1. Grave a versão em `native/VERSION` e compile/teste antes da publicação.
+2. Execute `native/package.ps1`. Ele gera os instaladores e o
+   `SHA256SUMS-<versão>.txt` em `native/dist`.
+3. Publique na release o `SHA256SUMS-<versão>.txt` e os instaladores gerados,
+   cada um com o nome versionado e o fixo: `OpenSpeak-Setup-<versão>.exe` e
+   **`OpenSpeak-Setup.exe`** (edição padrão; é o que sai sem opções) e, só quando
+   gerada com `-Full`, `OpenSpeak-Full-Setup-<versão>.exe` e
    **`OpenSpeak-Full-Setup.exe`** (completa). O nome fixo mantém o link web
    funcionando em todas as releases estáveis. O app de cada edição só aceita
    o instalador da edição escolhida.

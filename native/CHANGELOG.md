@@ -1,3 +1,9 @@
+# OpenSpeak 1.0.46 — stream parada enquanto você desenha
+
+- Ao ligar o desenho, a transmissão vai para o **destaque** e a área fica
+  travada: o quadro não se arrasta nem muda de tamanho enquanto você rabisca.
+  Ao sair do desenho, volta o destaque que estava antes.
+
 # OpenSpeak 1.0.45 — botão para sair do desenho
 
 - A barra de cores do desenho ganhou o botão **✕ Sair**, para voltar ao normal

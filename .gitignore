@@ -5,7 +5,8 @@ native/dist/
 native/shots/
 native/vcpkg_installed/
 native/*.log
-.claude/
+.claude/*
+!.claude/agents/
 *.log
 web-dist/
 .vercel/

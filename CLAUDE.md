@@ -9,7 +9,9 @@ OpenSpeak is a P2P video streaming app (screen/window/camera with audio) modeled
 1. **Web client + Node server** (repo root): `server/` (signaling, `virtualServer.js`), `public/js/` (browser WebRTC client; phones and tablets get the watch-only `ui/MobileApp.js`, `?mobile=1` forces it), `api/` + `vercel.json` (Vercel deployment: `/ws` → `api/ws.js`, with `server/cloudRoom.js` + `redisRoomStore.js` for room state).
 2. **Native Windows app** (`native/`, C++ / Qt 6 QML / libdatachannel / FFmpeg+NVENC): client `OpenSpeak.exe` (`native/client/`) and server `openspeak-server.exe` (`native/server/`). Shared wire protocol in `native/common/Protocol.h`.
 
-Native and browser clients speak the **same protocol** and can watch each other — a protocol change must be mirrored in `server/protocol.js`/`server/virtualServer.js` and `native/common/Protocol.h`/`native/server/VirtualServer.cpp`.
+**The web version is frozen (since 2026-11-13, after native 1.0.45 / commit `e8c73cc`).** Do not change `public/`, `server/`, `api/`, `vercel.json` or `test/` anymore — no new features, no protocol mirroring, no fixes — unless the user explicitly asks for that specific web change. New features go only into the native client/server (`native/`) and `discord-bot/`. The native server still serves the frozen `public/` and old web clients still connect to it, so native protocol changes must stay backward compatible: gate new behaviour behind a new capability and never remove or change the meaning of commands/fields the web client uses. The descriptions of the web side below describe that frozen state.
+
+Native and browser clients speak the **same protocol** and can watch each other; the shared parts live in `server/protocol.js`/`server/virtualServer.js` (frozen) and `native/common/Protocol.h`/`native/server/VirtualServer.cpp`.
 
 Command names deliberately match TeamSpeak 6 (`setupstream`, `joinstreamrequest`, `respondjoinstreamrequest`, `streamsignaling`). Flow: streamer `setupstream` → viewer `joinstreamrequest` (with decodable codecs) → privacy check (Public/Contacts/Private) → streamer creates a `SessionOutbound` and offers → SDP/ICE over `streamsignaling` → media peer-to-peer (DTLS-SRTP). Class names mirror TS too: `ScreenshareManager`, `StreamBase`, `SessionOutbound`/`SessionInbound`, `StatsCollector` (same thresholds as TS).
 
@@ -58,3 +60,11 @@ Default server `wss://openspeak.duckdns.org/ws` runs the native server on an Ora
 Logs (capability `CLIENT_LOGS`, both servers when `OPENSPEAK_LOG_DIR` isn't "off"; default `logs/` in the user data dir, `~/.openspeak/logs` for Node): the server writes its own log to `server-<dia>.log` and what clients send with `clientlog` {version, lines} to `clients/<dia>/<apelido>.log` (`native/server/LogStore.*`, `server/logStore.js`: 500 lines per command, 8 MB per client per day, 14 days). The native client (`native/client/core/ClientLog.*`) installs the Qt message handler, keeps a local file per day (7 days, "Abrir pasta de registros" in settings) and sends info+ lines every 5 s unless the user turns off "Enviar registros ao servidor" (`Settings.sendLogs`).
 
 License: AGPL-3.0-or-later; update `THIRD_PARTY_LICENSES.md` when adding dependencies.
+
+## Revisão e testes
+Ao terminar uma funcionalidade completa, chame o subagente
+testador e depois o revisor. Não chame para mudanças
+pequenas (texto, estilo, renomear variável, ajuste de
+configuração). Corrija os problemas que eles apontarem.
+Depois de corrigir, rode só o testador de novo, não o
+revisor. Se eu disser "sem revisão", pule os dois.

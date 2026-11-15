@@ -75,16 +75,9 @@ public:
     /// Como os quadros estão sendo capturados (informações da transmissão).
     QString captureMethod() const { return m_captureMethod; }
 
-    /// Janela preta na captura sem borda: sem isto (prévia do seletor), troca sozinha para o
-    /// WGC (com borda) depois de ~3 s; com isto ligado (transmissão), espera 10 s e emite
-    /// alternativeCaptureSuggested em vez de trocar.
-    void setAskBeforeFallback(bool ask);
-    bool alternativeCapturePending() const { return m_fallbackPending; }
-    /// Troca para o Windows.Graphics.Capture. false se não houver o que trocar.
-    bool useAlternativeCapture();
-    /// Mantém a captura atual e não pergunta mais nesta fonte.
-    void declineAlternativeCapture();
-    /// Escolha manual (opções da transmissão): janela com as duas capturas possíveis?
+    /// A captura alternativa (WGC, com a borda amarela) é só escolha manual, nas opções
+    /// avançadas da transmissão: nunca troca sozinha nem pergunta quando a janela fica preta.
+    /// Janela com as duas capturas possíveis?
     bool alternativeCaptureAvailable() const;
     /// Está no Windows.Graphics.Capture (com a borda amarela)?
     bool usingAlternativeCapture() const { return m_desc.type == StreamType::Window && m_window != nullptr; }
@@ -95,8 +88,6 @@ signals:
     void frameAvailable(const QVideoFrame &frame);
     void ended();
     void errorOccurred(const QString &error);
-    /// A captura da janela está preta; pergunta se troca (setAskBeforeFallback).
-    void alternativeCaptureSuggested();
 
 private:
     void onFrame(const QVideoFrame &frame);
@@ -114,9 +105,6 @@ private:
     quintptr m_windowHwnd = 0;
     quintptr m_fallbackHwnd = 0; // janela com captura sem borda (0: só há o WGC)
     int m_fps = 30;
-    bool m_askBeforeFallback = false;
-    bool m_fallbackPending = false;  // pergunta em aberto
-    bool m_fallbackDeclined = false; // recusou: não pergunta mais
     QSize m_lastSize;
     QVideoFrame m_lastFrame;
     QMediaCaptureSession m_session;

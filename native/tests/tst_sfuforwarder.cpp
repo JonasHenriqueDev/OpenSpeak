@@ -4,6 +4,7 @@
 
 #include "SfuForwarder.h"
 #include "SfuLayerPolicy.h"
+#include "Simulcast.h"
 
 #include <QTest>
 
@@ -215,6 +216,99 @@ private slots:
         QCOMPARE(forced.step(cfg, cfg, t), 1);
         QCOMPARE(sfu::layerPreferenceFromString(QStringLiteral("low")), LayerPreference::Low);
         QCOMPARE(sfu::layerPreferenceFromString(QStringLiteral("xyz")), LayerPreference::Auto);
+    }
+
+    // O espectador "aquece" a camada baixa (pede para religá-la) antes de descer,
+    // e solta só quando a banda volta acima de UpRatio.
+    void policyWarmsLowLayerBeforeSwitching()
+    {
+        using namespace std::chrono_literals;
+        LayerPolicy p;
+        const int cfg = 5'000'000;
+        auto t = LayerPolicy::Clock::now();
+        QCOMPARE(p.step(cfg, cfg, t), 0);
+        QVERIFY(!p.wantsLow());
+        QCOMPARE(p.step(int(cfg * 0.75), cfg, t += 1s), 0); // abaixo de 80%: aquece, sem descer
+        QVERIFY(p.wantsLow());
+        QCOMPARE(p.step(int(cfg * 0.82), cfg, t += 1s), 0); // entre 80% e 85%: continua aquecida
+        QVERIFY(p.wantsLow());
+        QCOMPARE(p.step(cfg, cfg, t += 1s), 0); // voltou: solta
+        QVERIFY(!p.wantsLow());
+        // Queda forte: aquece no primeiro ajuste e desce 2 s depois (tempo do keyframe chegar).
+        QCOMPARE(p.step(1'000'000, cfg, t += 1s), 0);
+        QVERIFY(p.wantsLow());
+        QCOMPARE(p.step(1'000'000, cfg, t += 2s), 1);
+        QVERIFY(p.wantsLow()); // na baixa
+        p.preference = LayerPreference::High;
+        QVERIFY(!p.wantsLow());
+        p.preference = LayerPreference::Low;
+        QVERIFY(p.wantsLow());
+    }
+
+    void lowLayerControlPausesAndResumes()
+    {
+        using namespace std::chrono_literals;
+        using Action = LowLayerControl::Action;
+        LowLayerControl c;
+        auto t = LowLayerControl::Clock::now();
+        // Sem a baixa no ar (transmissor sem simulcast): nada a controlar.
+        QCOMPARE(c.step(false, false, t), Action::None);
+        QVERIFY(!c.simulcast(true, false));
+        QCOMPARE(c.step(true, false, t += 1s), Action::None); // chegou agora: começa a contar
+        QCOMPARE(c.step(true, false, t += 29s), Action::None);
+        QCOMPARE(c.step(true, false, t += 1s), Action::Pause); // 30 s sem ninguém
+        QVERIFY(c.paused());
+        QCOMPARE(c.step(false, false, t += 1s), Action::None);
+        QVERIFY(c.simulcast(true, false)); // pausada a pedido: segue em simulcast
+        QVERIFY(!c.simulcast(false, false));
+        // Alguém precisa: religa na hora, uma vez.
+        QCOMPARE(c.step(false, true, t += 1s), Action::Resume);
+        QVERIFY(!c.paused());
+        QCOMPARE(c.step(false, true, t += 1s), Action::None);
+        // Não voltou em 3 s: pede de novo.
+        QCOMPARE(c.step(false, true, t += 2s), Action::Resume);
+        QCOMPARE(c.step(true, true, t += 1s), Action::None);
+        // Precisou há pouco: espera os 30 s inteiros de novo.
+        QCOMPARE(c.step(true, false, t += 29s), Action::None);
+        QCOMPARE(c.step(true, false, t += 1s), Action::Pause);
+        QVERIFY(!c.bonusActive()); // sem confirmação ainda
+        c.onAck(true, true);
+        QVERIFY(c.bonusActive());
+        QCOMPARE(c.step(false, true, t += 1s), Action::Resume);
+        QVERIFY(!c.bonusActive());
+        // Espera configurável (testes).
+        LowLayerControl quick;
+        quick.idleBeforePause = 2s;
+        QCOMPARE(quick.step(true, false, t), Action::None);
+        QCOMPARE(quick.step(true, false, t += 2s), Action::Pause);
+        quick.onAck(true, false); // AMF/QSV: pausou, mas sem bônus
+        QVERIFY(quick.paused());
+        QVERIFY(!quick.bonusActive());
+
+        // Transmissor antigo: não confirma; depois de 5 s o servidor desiste e não pede mais.
+        LowLayerControl old;
+        old.idleBeforePause = 2s;
+        QCOMPARE(old.step(true, false, t), Action::None);
+        QCOMPARE(old.step(true, false, t += 2s), Action::Pause);
+        QCOMPARE(old.step(true, false, t += 4s), Action::None);
+        QVERIFY(old.paused());
+        QCOMPARE(old.step(true, false, t += 1s), Action::None);
+        QVERIFY(!old.paused());
+        QVERIFY(!old.simulcast(true, false)); // a baixa sumir agora é de verdade
+        QCOMPARE(old.step(true, false, t += 60s), Action::None);
+        QCOMPARE(old.step(true, true, t += 1s), Action::None);
+    }
+
+    void lowLayerBitrateMovesToHighWhilePaused()
+    {
+        QCOMPARE(simulcast::lowLayerBitrate(1'000'000), 300'000);
+        QCOMPARE(simulcast::lowLayerBitrate(3'000'000), 600'000);
+        QCOMPARE(simulcast::lowLayerBitrate(8'000'000), 900'000);
+        QCOMPARE(simulcast::highLayerBitrate(3'000'000, false), 3'000'000);
+        QCOMPARE(simulcast::highLayerBitrate(3'000'000, true), 3'600'000);
+        QVERIFY(simulcast::worthIt(1'200'000, 720));
+        QVERIFY(!simulcast::worthIt(1'000'000, 720));
+        QVERIFY(!simulcast::worthIt(3'000'000, 480));
     }
 };
 

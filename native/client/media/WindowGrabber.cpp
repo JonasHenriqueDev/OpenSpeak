@@ -319,8 +319,6 @@ struct WindowGrabber::Impl {
     std::shared_ptr<FramePool> pool = std::make_shared<FramePool>();
     QVideoFrame lastFrame;
     Method lastMethod = Method::None;
-    int blackStreak = 0;
-    bool blackReported = false; // já avisou deste trecho preto (volta a avisar depois de um quadro bom)
     bool closed = false;
     bool occluded = false;
     ULONGLONG occlusionCheckedAt = 0;
@@ -585,22 +583,6 @@ void WindowGrabber::tick()
         ok = d.grabPrintWindow(b);
     if (!ok)
         return;
-
-    // C) preto nos dois modos por m_blackFallbackSeconds (3 s; folga para um alt-tab não
-    // cair na captura com borda): PW_RENDERFULLCONTENT não funciona para esta janela.
-    // Só avisa (uma vez por trecho preto) e segue capturando: quem decide trocar para o
-    // Windows.Graphics.Capture é o VideoSource (na transmissão, pergunta antes).
-    if (method == Impl::Method::PrintWindow && d.outIsBlack()) {
-        const int seconds = m_blackFallbackSeconds;
-        if (++d.blackStreak >= seconds * m_fps && !d.blackReported) {
-            d.blackReported = true;
-            qInfo() << "WindowGrabber: duplicação e PrintWindow só devolvem preto há" << seconds << "s";
-            emit fallbackRequested();
-        }
-    } else {
-        d.blackStreak = 0;
-        d.blackReported = false;
-    }
 
     if (method != d.lastMethod) {
         d.lastMethod = method;

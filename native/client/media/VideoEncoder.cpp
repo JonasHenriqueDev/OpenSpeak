@@ -1,4 +1,5 @@
 #include "VideoEncoder.h"
+#include "EncoderTuning.h"
 
 #include <QElapsedTimer>
 #include <QImage>
@@ -49,7 +50,8 @@ AVPixelFormat avFormatFor(QVideoFrameFormat::PixelFormat f)
 
 bool isHardware(const QString &name) { return name != QLatin1String("libopenh264"); }
 
-AVCodecContext *createContext(const char *name, const QSize &size, int fps, int bitrate, bool screen)
+/// Abre o encoder com as opções do nível; `optionalCount` = quantos dos extras opcionais usar.
+AVCodecContext *openContext(const char *name, const QSize &size, int fps, int bitrate, EncoderTier tier, size_t optionalCount)
 {
     const AVCodec *codec = avcodec_find_encoder_by_name(name);
     if (!codec)
@@ -68,36 +70,34 @@ AVCodecContext *createContext(const char *name, const QSize &size, int fps, int 
     ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;
     ctx->thread_count = isHardware(QLatin1String(name)) ? 1 : 0;
 
-    const QByteArray n(name);
-    if (n == "h264_nvenc") {
-        av_opt_set(ctx->priv_data, "preset", "p3", 0);
-        av_opt_set(ctx->priv_data, "tune", "ull", 0);
-        av_opt_set(ctx->priv_data, "rc", "cbr", 0);
-        av_opt_set(ctx->priv_data, "zerolatency", "1", 0);
-        av_opt_set(ctx->priv_data, "delay", "0", 0);
-        av_opt_set(ctx->priv_data, "forced-idr", "1", 0);
-        av_opt_set(ctx->priv_data, "profile", "baseline", 0);
-    } else if (n == "h264_amf") {
-        av_opt_set(ctx->priv_data, "usage", "ultralowlatency", 0);
-        av_opt_set(ctx->priv_data, "quality", "speed", 0);
-        av_opt_set(ctx->priv_data, "rc", "cbr", 0);
-        av_opt_set(ctx->priv_data, "profile", "constrained_baseline", 0);
-    } else if (n == "h264_qsv") {
-        av_opt_set(ctx->priv_data, "preset", "veryfast", 0);
-        av_opt_set(ctx->priv_data, "async_depth", "1", 0);
-        av_opt_set(ctx->priv_data, "low_delay_brc", "1", 0);
-        av_opt_set(ctx->priv_data, "profile", "baseline", 0);
-    } else if (n == "libopenh264") {
-        av_opt_set(ctx->priv_data, "profile", "constrained_baseline", 0);
-        av_opt_set(ctx->priv_data, "allow_skip_frames", "1", 0);
-        av_opt_set(ctx->priv_data, "rc_mode", "bitrate", 0);
-    }
-    Q_UNUSED(screen);
+    const EncoderTuning tuning = encoderTuning(QLatin1String(name), tier);
+    for (const EncoderOption &o : tuning.options)
+        av_opt_set(ctx->priv_data, o.key, o.value, 0);
+    for (size_t i = 0; i < std::min(optionalCount, tuning.optional.size()); ++i)
+        av_opt_set(ctx->priv_data, tuning.optional[i].key, tuning.optional[i].value, 0);
     if (avcodec_open2(ctx, codec, nullptr) < 0) {
         avcodec_free_context(&ctx);
         return nullptr;
     }
     return ctx;
+}
+
+/// Tenta o nível pedido com todos os extras, depois tirando um por vez do fim
+/// e, se nada abrir, o nível rápido. `tier` volta com o nível que abriu.
+AVCodecContext *createContext(const char *name, const QSize &size, int fps, int bitrate, EncoderTier &tier)
+{
+    if (tier == EncoderTier::Quality && encoderHasTiers(QLatin1String(name))) {
+        const size_t extras = encoderTuning(QLatin1String(name), tier).optional.size();
+        for (size_t n = extras + 1; n-- > 0;) {
+            if (AVCodecContext *ctx = openContext(name, size, fps, bitrate, EncoderTier::Quality, n)) {
+                if (n < extras)
+                    qCInfo(lcEnc) << name << "sem" << (extras - n) << "ajuste(s) opcional(is) de qualidade";
+                return ctx;
+            }
+        }
+    }
+    tier = EncoderTier::Fast;
+    return openContext(name, size, fps, bitrate, EncoderTier::Fast, 0);
 }
 
 } // namespace
@@ -108,7 +108,8 @@ QStringList VideoEncoder::availableEncoders()
         QStringList out;
         av_log_set_level(AV_LOG_QUIET);
         for (const char *name : EncoderOrder) {
-            if (AVCodecContext *ctx = createContext(name, QSize(640, 360), 30, 1'000'000, true)) {
+            EncoderTier tier = EncoderTier::Fast;
+            if (AVCodecContext *ctx = createContext(name, QSize(640, 360), 30, 1'000'000, tier)) {
                 out.append(QLatin1String(name));
                 avcodec_free_context(&ctx);
             }
@@ -129,6 +130,9 @@ void VideoEncoder::start(const VideoEncoderConfig &config, Output output)
     m_config = config;
     m_output = std::move(output);
     m_targetBitrate = config.bitrate;
+    m_bitrateBonus = 0;
+    m_tier = EncoderTier::Quality; // cada transmissão começa caprichando
+    m_guard.reset();
     m_running = true;
     m_thread = std::thread(&VideoEncoder::run, this);
 }
@@ -156,7 +160,14 @@ void VideoEncoder::setConfig(const VideoEncoderConfig &config)
 void VideoEncoder::setTargetBitrate(int bps)
 {
     std::lock_guard lock(m_mutex);
-    m_targetBitrate = std::clamp(bps, 150'000, m_config.bitrate);
+    m_targetBitrate = std::clamp(bps, 150'000, std::max(150'000, m_config.bitrate + m_bitrateBonus.load()));
+}
+
+void VideoEncoder::setBitrateBonus(int bps)
+{
+    std::lock_guard lock(m_mutex);
+    m_bitrateBonus = std::max(0, bps);
+    m_targetBitrate = std::min(m_targetBitrate.load(), m_config.bitrate + m_bitrateBonus.load());
 }
 
 void VideoEncoder::pushFrame(const QVideoFrame &frame)
@@ -226,10 +237,15 @@ bool VideoEncoder::openCodec(const QSize &sourceSize)
     for (const QString &e : availableEncoders())
         if (!order.contains(e))
             order.append(e);
+    if (m_fallbackToFast.exchange(false))
+        m_tier = EncoderTier::Fast; // até o fim da transmissão
+    const EncoderTier wanted = m_tier;
     for (const QString &name : order) {
-        m_ctx = createContext(name.toLatin1().constData(), target, cfg.fps, bitrate, cfg.screenContent);
+        EncoderTier tier = wanted;
+        m_ctx = createContext(name.toLatin1().constData(), target, cfg.fps, bitrate, tier);
         if (m_ctx) {
             m_encoderName = name;
+            m_tier = tier;
             break;
         }
     }
@@ -247,10 +263,13 @@ bool VideoEncoder::openCodec(const QSize &sourceSize)
     m_appliedBitrate = bitrate;
     m_lastReopenUs = nowUs();
     m_keyFrameRequested = true;
+    const bool quality = m_tier == EncoderTier::Quality && encoderHasTiers(m_encoderName);
     qCInfo(lcEnc).noquote() << "codificador" << m_encoderName << QStringLiteral("%1x%2@%3 %4 bps")
-                                                                     .arg(target.width()).arg(target.height()).arg(cfg.fps).arg(bitrate);
+                                                                     .arg(target.width()).arg(target.height()).arg(cfg.fps).arg(bitrate)
+                            << (quality ? "(qualidade)" : "(rápido)");
     std::lock_guard lock(m_mutex);
     m_stats.encoder = m_encoderName;
+    m_stats.qualityTier = quality;
     m_stats.width = target.width();
     m_stats.height = target.height();
     m_stats.currentBitrate = bitrate;
@@ -280,15 +299,20 @@ bool VideoEncoder::encodeFrame(const QVideoFrame &input, qint64 timestampUs)
     if (size.isEmpty())
         return false;
 
-    const bool reconfigure = m_reconfigure.exchange(false);
+    const bool reconfigure = m_reconfigure.exchange(false) || m_fallbackToFast.load();
     if (!m_ctx || size != m_sourceSize || reconfigure)
         if (!openCodec(size))
             return false;
 
     // Controle de banda: NVENC aceita troca dinâmica; os demais são reabertos.
-    const int target = m_targetBitrate.load();
+    // O bônus (camada baixa pausada) só vale onde a troca é dinâmica.
+    int target = m_targetBitrate.load();
+    if (!hasDynamicBitrate(m_encoderName)) {
+        std::lock_guard lock(m_mutex);
+        target = std::min(target, m_config.bitrate);
+    }
     if (std::abs(target - m_appliedBitrate) > m_appliedBitrate / 20) {
-        if (m_encoderName == QLatin1String("h264_nvenc")) {
+        if (hasDynamicBitrate(m_encoderName)) {
             m_ctx->bit_rate = target;
             m_ctx->rc_max_rate = target;
             m_ctx->rc_buffer_size = target / 2;
@@ -341,8 +365,14 @@ bool VideoEncoder::encodeFrame(const QVideoFrame &input, qint64 timestampUs)
     timer.start();
     if (avcodec_send_frame(m_ctx, m_frame) < 0)
         return false;
-    drain(timestampUs);
+    // O tempo é só do codificador: a entrega (mutex dos espectadores, envio pela
+    // rede) fica fora, para o recuo do EncoderLoadGuard medir a GPU e não o upload.
+    std::vector<EncodedVideoFrame> encoded;
+    drain(timestampUs, encoded);
     const double encodeTime = timer.nsecsElapsed() / 1e9;
+    if (m_output)
+        for (const EncodedVideoFrame &out : encoded)
+            m_output(out);
 
     // Estatísticas (janela de 1 s).
     std::lock_guard lock(m_mutex);
@@ -360,6 +390,14 @@ bool VideoEncoder::encodeFrame(const QVideoFrame &input, qint64 timestampUs)
         m_fpsFrames = 0;
         m_encodeTimeAcc = 0;
         m_encodeTimeCount = 0;
+        // Encoder pesado demais no nível de qualidade: volta para o rápido (reabre
+        // com keyframe, uma vez só por transmissão).
+        if (m_tier == EncoderTier::Quality && encoderHasTiers(m_encoderName) &&
+            m_guard.feed(m_stats.avgEncodeTime, m_config.fps)) {
+            qCInfo(lcEnc) << m_encoderName << "no limite (" << m_stats.avgEncodeTime * 1000
+                          << "ms por quadro ): voltando para os ajustes rápidos";
+            m_fallbackToFast = true;
+        }
         if (m_stats.avgEncodeTime > 1.0 / std::max(1, m_config.fps))
             m_stats.limitReason = QStringLiteral("cpu");
         else if (m_appliedBitrate < m_config.bitrate * 9 / 10)
@@ -370,7 +408,7 @@ bool VideoEncoder::encodeFrame(const QVideoFrame &input, qint64 timestampUs)
     return true;
 }
 
-void VideoEncoder::drain(qint64 timestampUs)
+void VideoEncoder::drain(qint64 timestampUs, std::vector<EncodedVideoFrame> &encoded)
 {
     while (avcodec_receive_packet(m_ctx, m_packet) == 0) {
         EncodedVideoFrame out;
@@ -380,8 +418,7 @@ void VideoEncoder::drain(qint64 timestampUs)
         out.width = m_ctx->width;
         out.height = m_ctx->height;
         av_packet_unref(m_packet);
-        if (m_output)
-            m_output(out);
+        encoded.push_back(std::move(out));
     }
 }
 

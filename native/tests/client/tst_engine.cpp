@@ -11,8 +11,10 @@
 #include "StreamStats.h"
 #include "VideoDecoder.h"
 #include "VideoEncoder.h"
+#include "EncoderTuning.h"
 #include "SourceThumbnails.h"
 
+#include <QElapsedTimer>
 #include <QImage>
 #include <algorithm>
 #include <climits>
@@ -260,6 +262,99 @@ private slots:
         inbound.video.limitReason = QStringLiteral("cpu");
         analyzeIssues(inbound, &t, false);
         QVERIFY(inbound.issues.isEmpty());
+    }
+
+    // Nível de qualidade: mais capricho no hardware, mesmos ajustes de latência; o
+    // OpenH264 (software) não muda. Extras opcionais ficam separados (driver antigo).
+    void encoderTuningTiers()
+    {
+        const auto value = [](const EncoderTuning &t, const char *key) -> QString {
+            for (const auto &o : t.options)
+                if (qstrcmp(o.key, key) == 0)
+                    return QString::fromLatin1(o.value);
+            return {};
+        };
+        const EncoderTuning nvQ = encoderTuning(QStringLiteral("h264_nvenc"), EncoderTier::Quality);
+        const EncoderTuning nvF = encoderTuning(QStringLiteral("h264_nvenc"), EncoderTier::Fast);
+        QCOMPARE(value(nvQ, "preset"), QStringLiteral("p5"));
+        QCOMPARE(value(nvF, "preset"), QStringLiteral("p3"));
+        QCOMPARE(value(nvQ, "zerolatency"), QStringLiteral("1"));
+        QCOMPARE(value(nvQ, "profile"), QStringLiteral("baseline")); // todo mundo decodifica
+        QCOMPARE(nvQ.optional.size(), size_t(2));
+        QVERIFY(nvF.optional.empty());
+        QCOMPARE(value(encoderTuning(QStringLiteral("h264_amf"), EncoderTier::Quality), "quality"), QStringLiteral("balanced"));
+        QCOMPARE(value(encoderTuning(QStringLiteral("h264_amf"), EncoderTier::Fast), "quality"), QStringLiteral("speed"));
+        QCOMPARE(value(encoderTuning(QStringLiteral("h264_qsv"), EncoderTier::Quality), "preset"), QStringLiteral("medium"));
+        QVERIFY(!encoderHasTiers(QStringLiteral("libopenh264")));
+        const EncoderTuning swQ = encoderTuning(QStringLiteral("libopenh264"), EncoderTier::Quality);
+        const EncoderTuning swF = encoderTuning(QStringLiteral("libopenh264"), EncoderTier::Fast);
+        QCOMPARE(swQ.options.size(), swF.options.size());
+        QVERIFY(VideoEncoder::hasDynamicBitrate(QStringLiteral("h264_nvenc")));
+        QVERIFY(!VideoEncoder::hasDynamicBitrate(QStringLiteral("h264_amf")));
+    }
+
+    // Recuo automático: 3 janelas seguidas acima de 70% do tempo de um quadro.
+    void encoderLoadGuardFallsBack()
+    {
+        EncoderLoadGuard g;
+        QVERIFY(!g.feed(0.012, 60)); // 72% de 16,7 ms
+        QVERIFY(!g.feed(0.012, 60));
+        QVERIFY(!g.feed(0.005, 60)); // folga: zera
+        QVERIFY(!g.feed(0.012, 60));
+        QVERIFY(!g.feed(0.012, 60));
+        QVERIFY(g.feed(0.012, 60));
+        EncoderLoadGuard g30;
+        for (int i = 0; i < 5; ++i)
+            QVERIFY(!g30.feed(0.012, 30)); // 36% de 33 ms
+    }
+
+    // Camada baixa pausada pelo servidor: o encoder para de mandar e volta com keyframe.
+    void encoderPauseResumesWithKeyFrame()
+    {
+        QList<EncodedVideoFrame> packets;
+        std::mutex m;
+        VideoEncoder enc;
+        VideoEncoderConfig cfg;
+        cfg.maxWidth = 640;
+        cfg.maxHeight = 360;
+        cfg.fps = 30;
+        cfg.bitrate = 800'000;
+        enc.start(cfg, [&](const EncodedVideoFrame &f) {
+            std::lock_guard lock(m);
+            packets.append(f);
+        });
+        QImage img(1280, 720, QImage::Format_RGBX8888);
+        int hue = 0;
+        const auto feed = [&](int ms) {
+            QElapsedTimer t;
+            t.start();
+            while (t.elapsed() < ms) {
+                img.fill(QColor::fromHsv((hue += 7) % 360, 200, 200));
+                enc.pushFrame(QVideoFrame(img));
+                QTest::qWait(35);
+            }
+        };
+        feed(1500);
+        QTRY_VERIFY_WITH_TIMEOUT([&] { std::lock_guard lock(m); return packets.size() >= 5; }(), 5000);
+        enc.setPaused(true);
+        QTest::qWait(300); // o que estava na fila sai
+        int before;
+        {
+            std::lock_guard lock(m);
+            before = int(packets.size());
+        }
+        feed(500);
+        {
+            std::lock_guard lock(m);
+            QCOMPARE(int(packets.size()), before); // pausado: nada sai
+        }
+        enc.requestKeyFrame();
+        enc.setPaused(false);
+        feed(1000);
+        enc.stop();
+        std::lock_guard lock(m);
+        QVERIFY(int(packets.size()) > before);
+        QVERIFY(packets.at(before).keyFrame);
     }
 
     void gridLayouts()

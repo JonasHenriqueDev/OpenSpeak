@@ -4,6 +4,7 @@
 #include "SfuLayerPolicy.h"
 #include "SfuIngest.h"
 #include "SfuWsViewer.h"
+#include "Simulcast.h"
 
 #include <QLoggingCategory>
 #include <QPointer>
@@ -16,6 +17,9 @@ namespace openspeak {
 
 SfuRelay::SfuRelay(Options options, QObject *parent) : QObject(parent), m_options(std::move(options))
 {
+    // Só para testes: espera menor antes de pausar a camada baixa.
+    if (const int ms = qEnvironmentVariableIntValue("OPENSPEAK_SFU_LOW_IDLE_MS"); ms > 0)
+        m_lowIdle = std::chrono::milliseconds(ms);
     m_statsTimer.setInterval(1000);
     connect(&m_statsTimer, &QTimer::timeout, this, &SfuRelay::adjustBitrates);
     m_statsTimer.start();
@@ -76,6 +80,7 @@ void SfuRelay::openStream(const QString &streamId, int ownerClid, int bitrate)
     s.id = streamId;
     s.ownerClid = ownerClid;
     s.bitrate = bitrate;
+    s.low.idleBeforePause = m_lowIdle;
     s.forwarder = std::make_shared<sfu::Forwarder>();
     auto send = [this, streamId, ownerClid](const QJsonObject &payload) {
         QMetaObject::invokeMethod(this, [this, streamId, ownerClid, payload] {
@@ -173,6 +178,11 @@ void SfuRelay::signaling(const QString &streamId, int fromClid, const QJsonObjec
         return;
     Stream &s = it->second;
     if (fromClid == s.ownerClid) {
+        if (payload.value("type").toString() == QLatin1String("lowlayer")) {
+            // Confirmação da pausa da camada baixa (transmissor com STREAM_SFU_LAYER_PAUSE).
+            s.low.onAck(payload.value("paused").toBool(), payload.value("bonus").toBool());
+            return;
+        }
         s.ingest->onSignalingMessage(payload);
         return;
     }
@@ -243,23 +253,31 @@ void SfuRelay::adjustBitrates()
 void SfuRelay::adjust(Stream &s, bool collect)
 {
     const auto now = LayerPolicy::Clock::now();
-    // Simulcast só com as duas camadas chegando; sem ele, uma qualidade para
-    // todos: o transmissor segue o espectador mais limitado (com piso).
-    const bool simulcast = s.forwarder->hasLayer(sfu::HighLayer) && s.forwarder->hasLayer(sfu::LowLayer);
+    // Simulcast com as duas camadas chegando, ou com a baixa pausada a pedido; sem
+    // ele, uma qualidade para todos: o transmissor segue o espectador mais limitado (com piso).
+    const bool highAlive = s.forwarder->hasLayer(sfu::HighLayer), lowAlive = s.forwarder->hasLayer(sfu::LowLayer);
+    const bool simulcast = s.low.simulcast(highAlive, lowAlive);
     if (simulcast != s.simulcast) {
         s.simulcast = simulcast;
         qCInfo(lcSfu) << "stream" << s.id << (simulcast ? "simulcast ativo (2 camadas)" : "uma camada só")
-                      << "alta" << s.forwarder->hasLayer(sfu::HighLayer) << "baixa" << s.forwarder->hasLayer(sfu::LowLayer);
+                      << "alta" << highAlive << "baixa" << lowAlive;
     }
-    int high = s.bitrate, low = s.bitrate;
-    bool anyHigh = false;
+    // Com a baixa pausada (e o bônus confirmado), o bitrate dela está na alta: vale
+    // para o teto das estimativas e do REMB. Os limiares da política usam sempre o
+    // bitrate do stream, para a pausa não mudar quem desce (nem oscilar).
+    const int bitrate = simulcast::highLayerBitrate(s.bitrate, s.low.bonusActive());
+    int high = bitrate, low = s.bitrate;
+    bool anyHigh = false, wantsLow = false;
     for (auto &[clid, egress] : s.viewers) {
         if (collect)
-            egress->collectStats(s.bitrate);
+            egress->collectStats(bitrate);
         ViewerLayer &v = s.layers[clid];
         const int estimate = egress->estimatedBitrate();
         const int layer = simulcast ? v.policy.step(estimate, s.bitrate, now) : sfu::HighLayer;
+        // A baixa pausada não está no ar: o Forwarder segue na alta até o keyframe dela.
         s.forwarder->setSinkLayer(egress->sink(), layer);
+        if (simulcast && v.policy.wantsLow())
+            wantsLow = true;
         if (egress->state() == RtcSession::State::Connected) {
             // Quem forçou a alta assume o risco: a banda dele não puxa a camada
             // dos outros para baixo.
@@ -277,15 +295,35 @@ void SfuRelay::adjust(Stream &s, bool collect)
         ViewerLayer &v = s.layers[clid];
         const int layer = simulcast && v.policy.preference == LayerPreference::Low ? sfu::LowLayer : sfu::HighLayer;
         s.forwarder->setSinkLayer(ws->sink(), layer);
+        if (layer == sfu::LowLayer)
+            wantsLow = true;
         reportLayer(s, clid, v, simulcast, layer);
+    }
+    // Religar é urgente (alguém vai precisar); pausar espera o ajuste de 1 Hz.
+    if (collect || wantsLow) {
+        switch (s.low.step(lowAlive, wantsLow, now)) {
+        case LowLayerControl::Action::Pause: sendLowLayer(s, false); break;
+        case LowLayerControl::Action::Resume: sendLowLayer(s, true); break;
+        case LowLayerControl::Action::None: break;
+        }
     }
     if (!collect)
         return;
-    const int floor = simulcast ? std::max(MinTargetBitrate, int(s.bitrate * HighLayerFloor)) : MinTargetBitrate;
-    high = anyHigh ? std::max(high, std::min(floor, s.bitrate)) : s.bitrate;
+    const int floor = simulcast ? std::max(MinTargetBitrate, int(bitrate * HighLayerFloor)) : MinTargetBitrate;
+    high = anyHigh ? std::max(high, std::min(floor, bitrate)) : bitrate;
     s.forwarder->requestBitrate(sfu::HighLayer, unsigned(high));
-    if (simulcast) // o transmissor limita ao bitrate próprio da camada baixa
+    if (simulcast && lowAlive) // o transmissor limita ao bitrate próprio da camada baixa
         s.forwarder->requestBitrate(sfu::LowLayer, unsigned(std::max(low, 150'000)));
+}
+
+void SfuRelay::sendLowLayer(Stream &s, bool active)
+{
+    qCInfo(lcSfu) << "stream" << s.id << (active ? "religando a camada baixa" : "pausando a camada baixa (ninguém nela)");
+    const QJsonObject payload{{"type", "lowlayer"}, {"active", active}};
+    QMetaObject::invokeMethod(this, [this, streamId = s.id, clid = s.ownerClid, payload] {
+        if (m_signal)
+            m_signal(streamId, clid, payload);
+    }, Qt::QueuedConnection);
 }
 
 void SfuRelay::reportLayer(Stream &s, int clid, ViewerLayer &v, bool simulcast, int layer)

@@ -8,6 +8,9 @@
 // dele (automático) ou o que ele escolher. A camada atual vai ao espectador por
 // `streamsignaling` com {type:'layer', simulcast, layer, preference}, e ele
 // escolhe mandando {type:'layer', preference:'auto'|'high'|'low'} ao clid 0.
+// Quando nenhum espectador precisa da camada baixa, o relay pede ao transmissor
+// para pausá-la ({type:'lowlayer', active}, LowLayerControl) e o bitrate dela
+// passa para a alta.
 
 #include "RtcSession.h"
 #include "SfuLayerPolicy.h"
@@ -29,6 +32,7 @@ class SfuWsViewer;
 namespace sfu { class Forwarder; }
 using sfu::LayerPolicy;
 using sfu::LayerPreference;
+using sfu::LowLayerControl;
 
 class SfuRelay : public QObject, public StreamRelay {
     Q_OBJECT
@@ -77,6 +81,7 @@ private:
         std::map<int, SfuWsViewer *> wsViewers; // fora do controle de banda (sem RR/REMB)
         std::map<int, ViewerLayer> layers;        // por espectador (WebRTC ou WebSocket)
         bool simulcast = false;                   // as duas camadas chegando (último ajuste)
+        LowLayerControl low;                      // camada baixa sob demanda
     };
 
     template <typename Session> void wire(Session *session, const QString &streamId, int clid);
@@ -86,6 +91,8 @@ private:
     void adjust(Stream &s, bool collect);
     /// Informa ao espectador a camada atual, se mudou.
     void reportLayer(Stream &s, int clid, ViewerLayer &v, bool simulcast, int layer);
+    /// Pede ao transmissor para pausar ou religar a camada baixa.
+    void sendLowLayer(Stream &s, bool active);
 
     Options m_options;
     SignalFn m_signal;
@@ -93,6 +100,7 @@ private:
     BinaryFn m_binary;
     std::map<QString, Stream> m_streams;
     QTimer m_statsTimer;
+    LowLayerControl::Clock::duration m_lowIdle = LowLayerControl::DefaultIdleBeforePause;
 };
 
 } // namespace openspeak

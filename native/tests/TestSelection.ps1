@@ -9,7 +9,8 @@
 $script:BuildInputs = '(^|/)CMakeLists\.txt$|^native/vcpkg\.json$'
 $script:IgnoredInputs = @(
     '^native/(installer|portable)/',
-    '^native/(build|package)\.ps1$',
+    '^native/(build|package|release)\.ps1$',
+    '^native/VERSION$',                   # versão: só muda o texto exibido
     '^native/tests/TestSelection\.ps1$',
     '^native/common/Version\.',           # versão: só muda o texto exibido
     '^native/\.gitignore$',
@@ -18,6 +19,7 @@ $script:IgnoredInputs = @(
 
 $protocol = '^native/common/Protocol\.h$'
 $commonRtc = '^native/common/rtc/'
+$simulcast = '^native/common/Simulcast\.h$'
 # A captura real de janela tem teste próprio e não participa dos e2e (usam o padrão de teste).
 $engine = '^native/client/(core|media|mesh|rtc|video)/(?!WindowGrabber\.)'
 $server = '^native/server/'
@@ -28,15 +30,15 @@ $script:TestInputs = @{
     tst_virtualserver   = @($protocol, '^native/server/(VirtualServer|ProfileStore|StreamRelay|LogStore)\.')
     tst_serverhost      = @($protocol, $commonRtc, $server)
     tst_rtprecovery     = @($commonRtc)
-    tst_sfuforwarder    = @($commonRtc, '^native/server/Sfu')
+    tst_sfuforwarder    = @($commonRtc, $simulcast, '^native/server/Sfu')
     tst_updates         = @('^native/client/core/(AutoUpdater|UpdatePolicy|Settings)\.')
     tst_cloudconnection = @($protocol, '^native/client/core/ServerConnection\.')
     tst_windowgrabber   = @('^native/client/media/WindowGrabber\.')
     tst_windowthumbnail = @('^native/client/WindowThumbnail\.')
-    tst_engine          = @($protocol, $commonRtc, $engine)
+    tst_engine          = @($protocol, $commonRtc, $simulcast, $engine)
     tst_mesh_e2e        = @($protocol, $commonRtc, $engine)
     tst_p2p_e2e         = @($protocol, $commonRtc, $engine, $server)
-    tst_sfu_e2e         = @($protocol, $commonRtc, $engine, $server)
+    tst_sfu_e2e         = @($protocol, $commonRtc, $simulcast, $engine, $server)
 }
 
 # Painéis: arquivos que cada ui_<painel> realmente valida.

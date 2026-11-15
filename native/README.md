@@ -66,7 +66,7 @@ cd native && D:/Dev/vcpkg/vcpkg.exe install --triplet x64-windows-static-md --x-
 
 Há duas edições, com o mesmo `OpenSpeak.exe`:
 
-- **Lite** (padrão), `OpenSpeak-Setup-<versão>.exe`: cliente do servidor, com
+- **Padrão**, `OpenSpeak-Setup-<versão>.exe`: cliente do servidor, com
   streams P2P direto ou pelo servidor (SFU).
 - **Completa**, `OpenSpeak-Full-Setup-<versão>.exe`: inclui também o modo
   Tailnet, a sala web e o servidor dedicado (`openspeak-server.exe`).
@@ -80,7 +80,7 @@ via servidor não exige Tailscale. O [Tailscale](https://tailscale.com/download/
 é necessário somente para os modos avançados de tailnet e sala web.
 
 Para gerar o instalador, rode o comando abaixo. Ele compila, testa e cria
-`native/dist/OpenSpeak-Setup-<versão>.exe` (lite) e
+`native/dist/OpenSpeak-Setup-<versão>.exe` (padrão). Com `-Full` gera também
 `native/dist/OpenSpeak-Full-Setup-<versão>.exe` (completa).
 
 ```bash
@@ -158,7 +158,8 @@ clid reservado `0`:
    300 kbps, limitado ao bitrate do stream).
 
 Escopo desta fase: codec fixo **H.264 (Constrained Baseline, packetization-mode=1) +
-Opus**, uma qualidade só (sem simulcast), pensado para 1 transmissor e até ~4
+Opus**, com simulcast (camada alta + camada baixa até 480p, pausada quando ninguém
+precisa dela, `STREAM_SFU_LAYER_PAUSE`), pensado para 1 transmissor e até ~4
 espectadores. Privacidade, pedidos, limite, kick e ban funcionam como no P2P. O
 servidor Node/Vercel continua só P2P (não anuncia `STREAM_SFU`).
 
@@ -274,7 +275,7 @@ Detalhes do motor:
 ## Limitações conhecidas
 
 - O app nativo negocia só **H.264** (o libdatachannel 0.24 não tem depacketizador AV1).
-- **SFU** só no servidor nativo, sem simulcast/SVC nem TURN. O relay não pede
+- **SFU** só no servidor nativo, sem SVC nem TURN. O relay não pede
   retransmissão (NACK) ao transmissor: perdas no trecho transmissor → servidor só se
   recuperam com keyframe.
 - Sem sincronização fina áudio/vídeo (o TS tem `VideoAudioSyncBuffer`); os dois

@@ -356,6 +356,7 @@ QJsonObject VirtualServer::view(const Client &client) const
     if (m_relay) {
         caps.append(CapStreamSFU);
         caps.append(CapStreamSimulcast);
+        caps.append(CapStreamLayerPause);
     }
     caps.append(CapStreamDraw);
     for (const auto &[cid, ch] : m_channels)

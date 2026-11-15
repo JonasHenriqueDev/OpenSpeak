@@ -9,6 +9,7 @@
 #include "ServerHost.h"
 #include "Settings.h"
 
+#include <QElapsedTimer>
 #include <QSignalSpy>
 #include <QTest>
 #include <QUdpSocket>
@@ -196,6 +197,96 @@ private slots:
         ma.stopStream(id);
         QTRY_VERIFY_WITH_TIMEOUT(b.streams().isEmpty() && c.streams().isEmpty(), 3000);
         QTRY_VERIFY_WITH_TIMEOUT(mb.items().isEmpty(), 3000);
+    }
+
+    /// Camada baixa sob demanda: sem ninguém nela o servidor pede ao transmissor para
+    /// pausá-la; quando um espectador escolhe a baixa ela volta e a troca acontece sem
+    /// a imagem parar (o espectador segue na alta até o keyframe da baixa).
+    void lowLayerOnDemand()
+    {
+        const QByteArray previousIdle = qgetenv("OPENSPEAK_SFU_LOW_IDLE_MS");
+        qputenv("OPENSPEAK_SFU_LOW_IDLE_MS", "2000");
+        const auto restoreEnv = qScopeGuard([&] {
+            if (previousIdle.isNull()) qunsetenv("OPENSPEAK_SFU_LOW_IDLE_MS");
+            else qputenv("OPENSPEAK_SFU_LOW_IDLE_MS", previousIdle);
+        });
+        ServerHost::Options opts;
+        opts.port = 0;
+        opts.address = QHostAddress::LocalHost;
+        opts.iceServers = {};
+        opts.sfu = true;
+        opts.rtcPort = freeUdpPort();
+        ServerHost host(opts);
+        QVERIFY(host.start());
+        const QString url = QStringLiteral("ws://127.0.0.1:%1/ws").arg(host.port());
+
+        Settings settingsA(QStringLiteral("sfu-low-host"), true), settingsB(QStringLiteral("sfu-low-viewer"), true);
+        for (Settings *s : {&settingsA, &settingsB}) {
+            s->setShowInactiveStreams(true);
+            s->setHiddenStreams({});
+        }
+        ConnectionHandler a, b;
+        ScreenshareManager ma(&a, &settingsA), mb(&b, &settingsB);
+        a.connectTo(url, QStringLiteral("LowHost"), settingsA.uid());
+        b.connectTo(url, QStringLiteral("LowViewer"), settingsB.uid());
+        QTRY_VERIFY_WITH_TIMEOUT(a.isConnected() && b.isConnected(), 5000);
+        QVERIFY(a.hasLayerPause());
+
+        QVERIFY(ma.openPreview({{"type", 2}, {"id", "test"}, {"test", true}}, 30));
+        ma.startStream({{"name", "Low"}, {"access", 1}, {"mode", 2}, {"audio", false}, {"bitrate", 2'000'000},
+                        {"width", 1280}, {"height", 720}, {"fps", 30}});
+        QTRY_COMPARE_WITH_TIMEOUT(b.streams().size(), 1, 5000);
+        const QString id = b.streams().firstKey();
+        QCOMPARE(ma.stats(id, 0).value("lowLayer").toString(), QStringLiteral("active"));
+
+        QVideoSink sink;
+        int frames = 0;
+        QSize size;
+        qint64 lastFrameAt = 0, maxGap = 0;
+        bool measureGap = false;
+        QElapsedTimer clock;
+        clock.start();
+        connect(&sink, &QVideoSink::videoFrameChanged, this, [&](const QVideoFrame &f) {
+            frames++;
+            size = f.size();
+            const qint64 now = clock.elapsed();
+            if (measureGap && lastFrameAt > 0)
+                maxGap = std::max(maxGap, now - lastFrameAt);
+            lastFrameAt = now;
+        });
+        mb.joinStream(id);
+        QTRY_VERIFY_WITH_TIMEOUT(item(mb, id).value("status").toString() != QLatin1String("waiting"), 5000);
+        mb.attachVideo(id, &sink);
+        QTRY_VERIFY_WITH_TIMEOUT(frames >= 15, 20000);
+        QCOMPARE(size, QSize(1280, 720));
+        QTRY_VERIFY_WITH_TIMEOUT(item(mb, id).value("simulcast").toBool(), 5000);
+
+        // Ninguém na baixa por 2 s: pausada, e o stream segue em simulcast (botão de qualidade).
+        QTRY_COMPARE_WITH_TIMEOUT(ma.stats(id, 0).value("lowLayer").toString(), QStringLiteral("paused"), 15000);
+        QTest::qWait(2500); // a baixa sai do ar no servidor (LayerTimeout)
+        QVERIFY(item(mb, id).value("simulcast").toBool());
+        const int beforePause = frames;
+        QTRY_VERIFY_WITH_TIMEOUT(frames >= beforePause + 15, 10000);
+        QCOMPARE(size, QSize(1280, 720));
+
+        // Escolheu a baixa: religa e troca sem parar a imagem.
+        measureGap = true;
+        mb.setQualityPreference(id, QStringLiteral("low"));
+        QTRY_COMPARE_WITH_TIMEOUT(ma.stats(id, 0).value("lowLayer").toString(), QStringLiteral("active"), 5000);
+        QTRY_COMPARE_WITH_TIMEOUT(size.height(), 480, 10000);
+        const int afterSwitch = frames;
+        QTRY_VERIFY_WITH_TIMEOUT(frames >= afterSwitch + 10, 10000);
+        measureGap = false;
+        qInfo() << "maior intervalo entre quadros na troca:" << maxGap << "ms";
+        QVERIFY2(maxGap < 1000, qPrintable(QStringLiteral("imagem parou %1 ms").arg(maxGap)));
+
+        // De volta ao automático: volta para a alta e, sem ninguém na baixa, pausa de novo.
+        mb.setQualityPreference(id, QStringLiteral("auto"));
+        QTRY_COMPARE_WITH_TIMEOUT(size, QSize(1280, 720), 10000);
+        QTRY_COMPARE_WITH_TIMEOUT(ma.stats(id, 0).value("lowLayer").toString(), QStringLiteral("paused"), 15000);
+
+        ma.stopStream(id);
+        QTRY_VERIFY_WITH_TIMEOUT(b.streams().isEmpty(), 3000);
     }
 
     /// Simulcast contra um servidor de verdade (OPENSPEAK_E2E_URL, ex.:

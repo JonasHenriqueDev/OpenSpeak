@@ -30,16 +30,19 @@ export const OPENSPEAK_FACTS = [
   'Atualização automática: ao abrir, o app procura versão nova no GitHub, baixa, confere o SHA-256 e instala sozinho. '
     + 'Em Preferências › Atualizações: verificar a cada 6 horas (ligado), receber pré-releases (desligado), Verificar agora, '
     + 'Baixar atualização e Aplicar e reiniciar. Versões anteriores à 1.0.0 precisam instalar a 1.0.0 à mão. A versão portátil não se atualiza sozinha.',
-  'Edições: Lite (padrão, OpenSpeak-Setup.exe), só o cliente do servidor; Completa/Full (OpenSpeak-Full-Setup.exe), que tem também '
+  'Edições: a padrão (OpenSpeak-Setup.exe), só o cliente do servidor; Completa/Full (OpenSpeak-Full-Setup.exe), que tem também '
     + 'o modo Tailnet (sem servidor, pela rede Tailscale), a sala web e o servidor dedicado. Para trocar, instale o instalador da outra '
     + 'edição; as configurações continuam.',
   'Desde a 1.0.36 toda transmissão passa pelo servidor (SFU): o IP de quem transmite não aparece para quem assiste e o upload '
     + 'não cresce a cada espectador. O modo P2P saiu. Versões antigas do app precisam atualizar para transmitir.',
   'Qualidade por espectador (simulcast, 1.0.35): quem transmite pelo app manda também uma versão leve (até 480p) e cada um recebe '
     + 'a que a conexão aguenta. No vídeo há o botão de qualidade: Automática, Alta ou Baixa; o ícone fica amarelo na qualidade baixa. '
-    + 'Transmissões pelo site, de versão antiga ou abaixo de 540p / 1,2 Mbps têm uma qualidade só.',
+    + 'Transmissões pelo site, de versão antiga ou abaixo de 540p / 1,2 Mbps têm uma qualidade só. Desde a 1.0.47 a versão leve '
+    + 'só é enviada quando alguém precisa dela, e o upload que ela usaria vai para a qualidade alta.',
+  'Qualidade do codificador (1.0.47): a placa de vídeo (NVIDIA, AMD ou Intel) capricha mais em cada quadro sem tirar FPS; se não '
+    + 'der conta, o app volta sozinho para os ajustes rápidos. Dá para ver nas estatísticas da transmissão (Ajustes do codificador).',
   'Janela transmitindo preta: use a Captura alternativa (opções avançadas da transmissão de janela, dá para ligar com a transmissão '
-    + 'no ar; aparece com uma borda amarela). O app sugere isso depois de 10 segundos de tela preta.',
+    + 'no ar; aparece com uma borda amarela). O app nunca troca sozinho nem avisa: é só essa opção manual.',
   'Áudio: vem ligado em toda transmissão nova (desligar vale só para aquela). Na janela, vai o som do próprio programa, inclusive '
     + 'apps da Microsoft Store. O áudio do Discord nunca vai junto. Volume de quem você assiste vai até 500%, e dá para mudar com a roda do mouse.',
   'Quedas de internet curtas pausam a transmissão em vez de desconectar (o servidor espera até 90 s para retomar).',

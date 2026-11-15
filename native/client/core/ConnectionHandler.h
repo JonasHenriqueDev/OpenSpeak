@@ -126,6 +126,7 @@ public:
     bool hasStreamingP2P() const { return m_capabilities.contains(CapStreamP2P); }
     bool hasStreamingSFU() const { return m_capabilities.contains(CapStreamSFU); }
     bool hasSimulcast() const { return m_capabilities.contains(CapStreamSimulcast); }
+    bool hasLayerPause() const { return m_capabilities.contains(CapStreamLayerPause); }
     bool hasProfiles() const { return m_capabilities.contains(CapProfiles); }
     bool hasProfileMedia() const { return m_capabilities.contains(CapProfileMedia); }
     bool hasClientLogs() const { return m_capabilities.contains(CapClientLogs); }

@@ -1,5 +1,6 @@
 #include "ScreenshareManager.h"
 #include "Presets.h"
+#include "Simulcast.h"
 
 #include <QDateTime>
 #include <QJsonArray>
@@ -35,7 +36,6 @@ QVariantMap historyEntry(const StatsSummary &s, bool inbound)
 // quando a alta é bem maior que ela.
 constexpr int LowLayerMaxWidth = 854, LowLayerMaxHeight = 480;
 
-bool simulcastWorthIt(int bitrate, int height) { return bitrate >= 1'200'000 && (height <= 0 || height >= 540); }
 
 VideoEncoderConfig lowLayerConfig(int width, int height, int fps, int bitrate, bool screenContent)
 {
@@ -43,7 +43,7 @@ VideoEncoderConfig lowLayerConfig(int width, int height, int fps, int bitrate, b
     ec.maxWidth = width > 0 ? std::min(width, LowLayerMaxWidth) : LowLayerMaxWidth;
     ec.maxHeight = height > 0 ? std::min(height, LowLayerMaxHeight) : LowLayerMaxHeight;
     ec.fps = std::min(fps, 30);
-    ec.bitrate = std::clamp(bitrate / 5, 300'000, 900'000);
+    ec.bitrate = simulcast::lowLayerBitrate(bitrate);
     ec.screenContent = screenContent;
     return ec;
 }
@@ -260,6 +260,7 @@ void ScreenshareManager::startStream(const QVariantMap &config)
     QVariantMap persisted = config;
     persisted.remove("name");
     persisted.remove("alternativeCapture"); // vale para a janela escolhida, não para a próxima
+    persisted.remove("alternativeCaptureAvailable");
     m_settings->setLastStreamingConfig(persisted);
 
     const QVariant alternativeCapture = config.value("alternativeCapture");
@@ -324,7 +325,7 @@ void ScreenshareManager::startMedia(OwnStream &own)
     // Simulcast: segundo encoder, a camada baixa, que o servidor entrega a quem
     // não aguenta a alta (ou pediu a baixa). Servidores antigos não sabem
     // separar as camadas, por isso só com a capacidade anunciada.
-    if (own.sfu() && m_handler->hasSimulcast() && simulcastWorthIt(own.config.bitrate, own.config.height)) {
+    if (own.sfu() && m_handler->hasSimulcast() && simulcast::worthIt(own.config.bitrate, own.config.height)) {
         own.encoderLow = std::make_unique<VideoEncoder>();
         own.encoderLow->start(lowLayerConfig(own.config.width, own.config.height, own.config.fps, own.config.bitrate,
                                              ec.screenContent),
@@ -337,7 +338,6 @@ void ScreenshareManager::startMedia(OwnStream &own)
     connect(own.source.get(), &VideoSource::frameAvailable, this, [p](const QVideoFrame &f) { p->pushFrame(f); });
     const QString id = own.id;
     connect(own.source.get(), &VideoSource::ended, this, [this, id] { stopStream(id); });
-    watchCaptureFallback(own);
 
     // Áudio do stream (sistema / processo da janela / microfone).
     if (!own.config.audio)
@@ -493,8 +493,6 @@ void ScreenshareManager::changeSource(const QString &id)
     m_preview->clearPreviewSinks(); // picker sinks should not survive the dialog
     own.source->transferPreviewSinksTo(*m_preview); // local tile and fullscreen
     own.source->disconnect(this);
-    if (own.source->alternativeCapturePending())
-        emit captureFallbackResolved(id);
     own.source->close();
     own.source = std::move(m_preview);
     emit previewChanged();
@@ -506,7 +504,6 @@ void ScreenshareManager::changeSource(const QString &id)
         own.encoderLow->requestKeyFrame();
     connect(own.source.get(), &VideoSource::frameAvailable, this, [p](const QVideoFrame &f) { p->pushFrame(f); });
     connect(own.source.get(), &VideoSource::ended, this, [this, id] { stopStream(id); });
-    watchCaptureFallback(own);
     startAudioFor(own); // o áudio acompanha a nova fonte
     m_conn->sendCommand(QStringLiteral("updatestream"), {{"streamIdentifier", id}, {"type", int(own.config.type)}, {"app", own.config.app}});
     notifyChanged();
@@ -534,12 +531,15 @@ void ScreenshareManager::setPaused(const QString &id, bool paused)
     auto it = m_own.find(id);
     if (it == m_own.end())
         return;
-    it->second->paused = paused;
-    for (VideoEncoder *encoder : {it->second->encoder.get(), it->second->encoderLow.get()}) {
+    OwnStream &own = *it->second;
+    own.paused = paused;
+    for (VideoEncoder *encoder : {own.encoder.get(), own.encoderLow.get()}) {
         if (!encoder)
             continue;
-        encoder->setPaused(paused);
-        if (!paused)
+        // A camada baixa pausada pelo servidor continua pausada.
+        const bool stop = paused || (encoder == own.encoderLow.get() && own.lowPaused);
+        encoder->setPaused(stop);
+        if (!stop)
             encoder->requestKeyFrame();
     }
     m_conn->sendCommand(QStringLiteral("updatestream"), {{"streamIdentifier", id}, {"paused", paused}});
@@ -584,16 +584,29 @@ void ScreenshareManager::keepOwnPreview(const QString &id)
     notifyChanged();
 }
 
-void ScreenshareManager::watchCaptureFallback(OwnStream &own)
+void ScreenshareManager::setLowLayerActive(OwnStream &own, bool active)
 {
-    // Na transmissão, a troca para a captura com borda amarela é decisão de quem transmite.
-    own.source->setAskBeforeFallback(true);
-    const QString id = own.id;
-    connect(own.source.get(), &VideoSource::alternativeCaptureSuggested, this, [this, id] {
-        auto it = m_own.find(id);
-        if (it != m_own.end())
-            emit captureFallbackSuggested(id, it->second->source->label());
-    });
+    if (!own.encoderLow || !m_handler->hasLayerPause() || own.lowPaused == !active)
+        return;
+    own.lowPaused = !active;
+    if (active) {
+        // Volta já com keyframe: o servidor troca o espectador assim que ele chega.
+        // O bônus sai na hora, para o upload ter espaço para as duas camadas.
+        own.bitrateBonus = 0;
+        own.encoder->setBitrateBonus(0);
+        own.encoderLow->requestKeyFrame();
+        own.encoderLow->setPaused(own.paused);
+    } else {
+        own.encoderLow->setPaused(true); // o encoder continua aberto: religar é instantâneo
+    }
+    qCInfo(lcShare) << "stream" << own.id << (active ? "camada baixa religada" : "camada baixa pausada (ninguém nela)");
+    // Confirma ao servidor; `bonus`: o bitrate da baixa vai para a alta (só onde o
+    // encoder troca o bitrate sem keyframe). Sem isto ele trata como versão antiga.
+    const bool bonus = !active && VideoEncoder::hasDynamicBitrate(own.encoder->stats().encoder);
+    m_conn->sendCommand(QStringLiteral("streamsignaling"),
+                        {{"streamIdentifier", own.id}, {"clid", RelayClid},
+                         {"payload", QJsonObject{{"type", "lowlayer"}, {"paused", !active}, {"bonus", bonus}}}});
+    notifyChanged();
 }
 
 void ScreenshareManager::applyAlternativeCapture(OwnStream &own, const QVariant &use)
@@ -601,29 +614,11 @@ void ScreenshareManager::applyAlternativeCapture(OwnStream &own, const QVariant 
     // Escolha manual nas opções da transmissão (sem a chave: mantém o que está).
     if (!use.isValid())
         return;
-    const bool pending = own.source->alternativeCapturePending();
     if (own.source->setAlternativeCapture(use.toBool())) {
         own.encoder->requestKeyFrame();
         if (own.encoderLow)
             own.encoderLow->requestKeyFrame();
     }
-    if (pending && !own.source->alternativeCapturePending())
-        emit captureFallbackResolved(own.id);
-}
-
-void ScreenshareManager::respondAlternativeCapture(const QString &id, bool use)
-{
-    auto it = m_own.find(id);
-    if (it == m_own.end())
-        return;
-    OwnStream &own = *it->second;
-    if (!use) {
-        own.source->declineAlternativeCapture();
-    } else if (own.source->useAlternativeCapture()) {
-        own.encoder->requestKeyFrame();
-        notifyChanged();
-    }
-    emit captureFallbackResolved(id);
 }
 
 void ScreenshareManager::closeOwnPreview(const QString &id)
@@ -1107,6 +1102,10 @@ void ScreenshareManager::onSignaling(const QJsonObject &a)
     const QJsonObject payload = a.value("payload").toObject();
     auto own = m_own.find(id);
     if (own != m_own.end()) {
+        if (clid == RelayClid && payload.value("type").toString() == QLatin1String("lowlayer")) {
+            setLowLayerActive(*own->second, payload.value("active").toBool(true));
+            return;
+        }
         if (SessionOutbound *s = own->second->sessions.value(clid))
             s->onSignalingMessage(payload);
         return;
@@ -1172,8 +1171,6 @@ void ScreenshareManager::disposeOwn(const QString &id)
     if (own.encoderLow)
         own.encoderLow->stop();
     own.source->disconnect(this);
-    if (own.source->alternativeCapturePending())
-        emit captureFallbackResolved(id);
     own.source->close();
     for (int clid : own.sessions.keys())
         removeSession(own, clid);
@@ -1434,11 +1431,21 @@ void ScreenshareManager::collectStats()
         const VideoEncoderStats enc = own.encoder->stats();
         const TargetQuality target{own.config.width > 0 ? own.config.width : enc.width,
                                    own.config.height > 0 ? own.config.height : enc.height, own.config.fps};
-        int bitrate = own.config.bitrate;
+        // Camada baixa pausada: o bitrate dela passa para a alta aos poucos (~4 s),
+        // só onde o encoder troca o bitrate sem keyframe (NVENC).
+        const int bonusTarget = own.lowPaused && VideoEncoder::hasDynamicBitrate(enc.encoder)
+                                    ? simulcast::lowLayerBitrate(own.config.bitrate) : 0;
+        if (own.bitrateBonus != bonusTarget) {
+            own.bitrateBonus = bonusTarget > own.bitrateBonus ? std::min(bonusTarget, own.bitrateBonus + std::max(1, bonusTarget / 4))
+                                                              : bonusTarget;
+            own.encoder->setBitrateBonus(own.bitrateBonus);
+        }
+        const int configured = own.config.bitrate + own.bitrateBonus;
+        int bitrate = configured;
         bool any = false;
         for (auto sIt = own.sessions.begin(); sIt != own.sessions.end(); ++sIt) {
             SessionOutbound *s = sIt.value();
-            s->collectStats(enc, target, own.config.bitrate);
+            s->collectStats(enc, target, configured);
             if (s->state() == RtcSession::State::Connected) {
                 // Single-encoding: o encoder acompanha o espectador mais limitado.
                 bitrate = std::min(bitrate, s->estimatedBitrate());
@@ -1448,16 +1455,16 @@ void ScreenshareManager::collectStats()
             pushHistory(h.video, historyEntry(s->videoStats(), false));
             pushHistory(h.audio, historyEntry(s->audioStats(), false));
         }
-        own.encoder->setTargetBitrate(any ? bitrate : own.config.bitrate);
-        if (own.encoderLow) {
+        own.encoder->setTargetBitrate(any ? bitrate : configured);
+        if (own.encoderLow && !own.lowPaused) {
             // Camada baixa: REMB do servidor (espectadores nela) e perda no
             // upload; nunca acima da metade do que a alta está usando.
-            const int configured = lowLayerConfig(own.config.width, own.config.height, own.config.fps, own.config.bitrate,
-                                                  true).bitrate;
-            int low = configured;
+            const int lowConfigured = lowLayerConfig(own.config.width, own.config.height, own.config.fps,
+                                                     own.config.bitrate, true).bitrate;
+            int low = lowConfigured;
             for (SessionOutbound *s : std::as_const(own.sessions))
                 if (s->hasLowLayer())
-                    low = std::min(low, s->collectLowLayer(configured));
+                    low = std::min(low, s->collectLowLayer(lowConfigured));
             own.encoderLow->setTargetBitrate(std::min(low, std::max(150'000, bitrate / 2)));
         }
         if (!own.sessions.isEmpty())
@@ -1496,6 +1503,9 @@ QVariantMap ScreenshareManager::stats(const QString &id, int viewerClid) const
         if (o.source)
             out["capture"] = o.source->captureMethod();
         out["audioCapture"] = o.audio ? o.audioLabel : QStringLiteral("Desativado");
+        // Camada baixa do simulcast: "off" (sem simulcast), "active" ou "paused" (ninguém nela).
+        out["lowLayer"] = !o.encoderLow ? QStringLiteral("off") : o.lowPaused ? QStringLiteral("paused") : QStringLiteral("active");
+        out["encoderQuality"] = o.encoder && o.encoder->stats().qualityTier;
         if (const SessionOutbound *s = o.sessions.value(viewerClid)) {
             out["video"] = s->videoStats().toVariant();
             out["audio"] = s->audioStats().toVariant();

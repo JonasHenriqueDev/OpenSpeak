@@ -4,6 +4,8 @@
 // todos os espectadores ("single-encoding" do TS 6). Roda em thread própria
 // e descarta quadros quando está atrasado (sempre codifica o mais recente).
 
+#include "EncoderTuning.h"
+
 #include <QByteArray>
 #include <QSize>
 #include <QString>
@@ -14,6 +16,7 @@
 #include <functional>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 struct AVCodecContext;
 struct AVFrame;
@@ -47,6 +50,7 @@ struct VideoEncoderStats {
     int currentBitrate = 0;
     QString limitReason = QStringLiteral("none"); // none | cpu | bandwidth
     quint64 framesEncoded = 0;
+    bool qualityTier = false; // nível "Quality" (EncoderTuning.h) em uso
 };
 
 class VideoEncoder {
@@ -66,8 +70,14 @@ public:
     void pushFrame(const QVideoFrame &frame);
     void requestKeyFrame() { m_keyFrameRequested = true; }
     void setConfig(const VideoEncoderConfig &config);
-    /// Bitrate efetivo (controle de congestionamento), limitado ao configurado.
+    /// Bitrate efetivo (controle de congestionamento), limitado ao configurado
+    /// mais o bônus.
     void setTargetBitrate(int bps);
+    /// Bitrate extra permitido acima do configurado (camada baixa pausada: o
+    /// bitrate dela vai para a alta). Só vale nos encoders que trocam o bitrate
+    /// sem reabrir (NVENC); nos outros seria um keyframe a cada passo.
+    void setBitrateBonus(int bps);
+    static bool hasDynamicBitrate(const QString &encoderName) { return encoderName == QLatin1String("h264_nvenc"); }
     void setPaused(bool paused) { m_paused = paused; }
 
     VideoEncoderStats stats() const;
@@ -77,7 +87,7 @@ private:
     bool openCodec(const QSize &sourceSize);
     void closeCodec();
     bool encodeFrame(const QVideoFrame &frame, qint64 timestampUs);
-    void drain(qint64 timestampUs);
+    void drain(qint64 timestampUs, std::vector<EncodedVideoFrame> &encoded);
 
     VideoEncoderConfig m_config;
     Output m_output;
@@ -92,6 +102,8 @@ private:
     std::atomic<bool> m_paused{false};
     std::atomic<bool> m_reconfigure{false};
     std::atomic<int> m_targetBitrate{0};
+    std::atomic<int> m_bitrateBonus{0};
+    std::atomic<bool> m_fallbackToFast{false}; // o guarda pediu o nível rápido
     qint64 m_lastAcceptedUs = -1;
 
     // estado do codificador (apenas na thread do encoder)
@@ -101,6 +113,8 @@ private:
     SwsContext *m_sws = nullptr;
     QSize m_sourceSize;
     QString m_encoderName;
+    EncoderTier m_tier = EncoderTier::Quality;
+    EncoderLoadGuard m_guard;
     int m_appliedBitrate = 0;
     qint64 m_lastReopenUs = 0;
     qint64 m_frameIndex = 0;

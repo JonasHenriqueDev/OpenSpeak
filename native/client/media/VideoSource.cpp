@@ -17,13 +17,6 @@
 
 namespace openspeak {
 
-namespace {
-// Segundos de preto antes de propor a captura com borda amarela: na prévia do seletor
-// troca sozinha (rápido); na transmissão pergunta, então espera mais para não incomodar
-// quem só está carregando um jogo ou passando por uma tela de loading.
-int blackFallbackSeconds(bool askBeforeFallback) { return askBeforeFallback ? 10 : 3; }
-} // namespace
-
 VideoSource::VideoSource(QObject *parent) : QObject(parent)
 {
     m_session.setVideoSink(&m_sink);
@@ -236,13 +229,6 @@ bool VideoSource::open(const SourceDescriptor &desc, int targetFps)
     return true;
 }
 
-void VideoSource::setAskBeforeFallback(bool ask)
-{
-    m_askBeforeFallback = ask;
-    if (m_grabber && m_desc.type == StreamType::Window)
-        m_grabber->setBlackFallbackSeconds(blackFallbackSeconds(ask));
-}
-
 void VideoSource::startBorderlessWindowCapture()
 {
     m_grabber = std::make_unique<WindowGrabber>(m_fallbackHwnd, m_fps);
@@ -251,15 +237,6 @@ void VideoSource::startBorderlessWindowCapture()
     connect(m_grabber.get(), &WindowGrabber::windowClosed, this, [this] {
         emit errorOccurred(QStringLiteral("window_closed"));
         emit ended();
-    });
-    m_grabber->setBlackFallbackSeconds(blackFallbackSeconds(m_askBeforeFallback));
-    connect(m_grabber.get(), &WindowGrabber::fallbackRequested, this, [this] {
-        if (!m_askBeforeFallback) {
-            useAlternativeCapture();
-        } else if (!m_fallbackDeclined && !m_fallbackPending) {
-            m_fallbackPending = true;
-            emit alternativeCaptureSuggested();
-        }
     });
     m_captureMethod = QStringLiteral("Duplicação de tela (DXGI)");
     m_grabber->start();
@@ -274,11 +251,12 @@ bool VideoSource::setAlternativeCapture(bool use)
 {
     if (!alternativeCaptureAvailable() || use == usingAlternativeCapture())
         return false;
-    if (use)
-        return useAlternativeCapture();
-    // Escolha manual da captura sem borda: não pergunta mais se ela ficar preta.
-    m_fallbackPending = false;
-    m_fallbackDeclined = true;
+    if (use) {
+        qInfo() << "VideoSource: trocando para o Windows.Graphics.Capture";
+        m_grabber.reset();
+        startWindowCapture(m_fallbackWindow);
+        return true;
+    }
     qInfo() << "VideoSource: voltando para a captura sem borda";
     disconnect(m_window.get(), nullptr, this, nullptr);
     m_window->stop();
@@ -288,29 +266,10 @@ bool VideoSource::setAlternativeCapture(bool use)
     return true;
 }
 
-bool VideoSource::useAlternativeCapture()
-{
-    m_fallbackPending = false;
-    if (!m_active || !m_grabber || m_desc.type != StreamType::Window || m_window)
-        return false;
-    qInfo() << "VideoSource: trocando para o Windows.Graphics.Capture";
-    m_grabber.reset();
-    startWindowCapture(m_fallbackWindow);
-    return true;
-}
-
-void VideoSource::declineAlternativeCapture()
-{
-    m_fallbackPending = false;
-    m_fallbackDeclined = true;
-}
-
 void VideoSource::close()
 {
     m_testTimer.stop();
     m_grabber.reset();
-    m_fallbackPending = false;
-    m_fallbackDeclined = false;
     m_fallbackHwnd = 0;
     m_windowHwnd = 0;
     if (m_screen)

@@ -46,6 +46,11 @@ inline const QString CapStreamSFU = QStringLiteral("STREAM_SFU"); // só com rel
 /// O relay aceita duas camadas de vídeo do transmissor (mid "video-low") e a
 /// escolha de qualidade do espectador (`streamsignaling` {type:'layer'}).
 inline const QString CapStreamSimulcast = QStringLiteral("STREAM_SFU_SIMULCAST");
+/// Camada baixa sob demanda: quando nenhum espectador precisa dela, o relay manda ao
+/// transmissor `streamsignaling` do clid 0 com {type:'lowlayer', active:false}; ele para
+/// esse encoder e usa o bitrate dela na alta (Simulcast.h). {active:true} religa, com
+/// keyframe. Transmissores antigos ignoram a mensagem e seguem mandando as duas.
+inline const QString CapStreamLayerPause = QStringLiteral("STREAM_SFU_LAYER_PAUSE");
 inline const QString CapProfiles = QStringLiteral("PROFILES");    // perfis guardados no servidor
 inline const QString CapProfileMedia = QStringLiteral("PROFILE_MEDIA"); // banner baixado sob demanda
 /// O servidor guarda os registros (logs) que o cliente manda com `clientlog`

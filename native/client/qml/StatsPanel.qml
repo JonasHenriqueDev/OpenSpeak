@@ -206,6 +206,10 @@ ScrollView {
                             rows.push([I18n.t("video.stream.stats.video.decoder"), s.decoder || "—"])
                         } else {
                             rows.push([I18n.t("video.stream.stats.video.encoder"), s.encoder || "—"])
+                            rows.push([I18n.t("video.stream.stats.video.encoder.tier"),
+                                       I18n.t(root.data_.encoderQuality ? "video.stream.stats.video.encoder.quality" : "video.stream.stats.video.encoder.fast")])
+                            if (root.data_.lowLayer && root.data_.lowLayer !== "off")
+                                rows.push([I18n.t("video.stream.stats.video.lowlayer"), I18n.t("video.stream.stats.video.lowlayer." + root.data_.lowLayer)])
                             rows.push([I18n.t("video.stream.stats.video.capture"), root.data_.capture || "—"])
                             rows.push([I18n.t("video.stream.stats.video.limit.reason"), s.limitReason || "none", "video:qualitylimit"])
                         }

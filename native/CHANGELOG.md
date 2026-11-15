@@ -1,3 +1,25 @@
+# OpenSpeak 1.0.47 — imagem melhor sem pesar no PC
+
+- **Imagem mais bonita na transmissão:** o codificador de vídeo da placa
+  (NVIDIA, AMD ou Intel) agora capricha mais em cada quadro, com menos blocos em
+  céu, fumaça, sombra e cena escura. Ele usa um chip separado do que roda o jogo,
+  então não tira FPS e a latência continua a mesma. Quem assiste não precisa de
+  nada diferente.
+- **Se a placa não der conta, volta sozinho:** o app mede quanto tempo o
+  codificador leva por quadro e, se ficar no limite, volta para os ajustes de
+  antes, sem você perceber. Quem transmite sem placa de vídeo compatível fica
+  exatamente como antes.
+- **Qualidade baixa só quando alguém precisa:** quando ninguém está assistindo na
+  qualidade baixa, o app para de mandá-la e o upload que ela usava vai para a
+  qualidade alta. Quando alguém precisa (internet piorando ou escolheu Baixa), ela
+  volta antes da troca, e a imagem não trava nem fica preta. Precisa do servidor
+  atualizado; com servidor antigo tudo funciona como antes.
+- As estatísticas da transmissão mostram os ajustes do codificador (Qualidade ou
+  Rápido) e se a qualidade baixa está sendo enviada ou pausada.
+- **Captura alternativa só quando você quiser:** o app não troca mais sozinho para
+  a captura com a borda amarela nem pergunta quando a janela fica preta. Ela fica
+  só como opção nas configurações avançadas da transmissão de janela.
+
 # OpenSpeak 1.0.46 — stream parada enquanto você desenha
 
 - Ao ligar o desenho, a transmissão vai para o **destaque** e a área fica

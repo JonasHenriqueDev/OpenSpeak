@@ -162,7 +162,7 @@ export function renderPanel(page, v) {
     const embed = baseEmbed(v, '🔗 Links (X, TikTok, Instagram)', l.enabled)
       .setDescription(describe(v, 'O Discord costuma mostrar a prévia de posts do X, vídeos do TikTok e reels do Instagram quebrada. '
         + 'O bot troca o link por um serviço que mostra a prévia certa (vídeo tocando no Discord, fotos e texto) e tira o rastreio: '
-        + 'X → fxtwitter (ou o serviço escolhido) só em posts com vídeo (foto e texto ficam com o link original), TikTok → tnktok.com, Instagram → uuinstagram.com. '
+        + 'X → fxtwitter (ou o serviço escolhido) só em posts com vídeo (foto e texto ficam com o link original), TikTok → tnktok.com, Instagram → kkinstagram.com. '
         + 'Com o alcance **Só quem ativar**, cada pessoa liga para si com `/links`.'))
       .addFields(
         { name: 'Situação', value: onOff(l.enabled), inline: true },
@@ -243,7 +243,7 @@ export function renderUserLinks(v) {
   const embed = new EmbedBuilder().setColor(on ? BRAND : OFF).setTitle('🔗 Seus links (X, TikTok, Instagram)')
     .setThumbnail(v.avatar || null)
     .setDescription([v.notice,
-      'O bot pode trocar os links do X, TikTok e Instagram que **você** manda (por fxtwitter, tnktok e uuinstagram), para o Discord mostrar a prévia certa. '
+      'O bot pode trocar os links do X, TikTok e Instagram que **você** manda (por fxtwitter, tnktok e kkinstagram), para o Discord mostrar a prévia certa. '
       + 'Vale em todos os servidores com o bot que permitem a correção.'].filter(Boolean).join('\n\n'))
     .addFields({
       name: 'Sua escolha',

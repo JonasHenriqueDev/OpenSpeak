@@ -1,6 +1,6 @@
 // Correção de links para a prévia funcionar no Discord: X/Twitter (fxtwitter.com por
 // padrão, só em posts com vídeo), TikTok (tnktok.com) e reels/posts do Instagram
-// (uuinstagram.com). O envio (resposta ou webhook) fica no bot.js.
+// (kkinstagram.com). O envio (resposta ou webhook) fica no bot.js.
 
 /** Serviços aceitos (menu do painel). */
 export const LINK_SERVICES = ['fxtwitter.com', 'fixupx.com', 'vxtwitter.com'];
@@ -15,7 +15,7 @@ export const LINK_SCOPES = ['usuarios', 'todos'];
 export const LINK_NETWORKS = {
   x: { label: 'X/Twitter', emoji: '🐦', description: 'posts com vídeo do x.com/twitter.com → fxtwitter (ou o serviço escolhido)' },
   tiktok: { label: 'TikTok', emoji: '🎵', description: 'tiktok.com → tnktok.com' },
-  instagram: { label: 'Instagram', emoji: '📸', description: 'reels e posts → uuinstagram.com' },
+  instagram: { label: 'Instagram', emoji: '📸', description: 'reels e posts → kkinstagram.com' },
 };
 
 export const DEFAULT_LINK_SETTINGS = Object.freeze({
@@ -59,7 +59,7 @@ export function linkSettings(saved) {
 const TIKTOK_LINK = /(<)?https?:\/\/(?:(vm|vt)\.|www\.|m\.)?tiktok\.com\/([\w@.\/-]*[\w\/])(?:\?[^\s<>#]*)?(?:#[^\s<>]*)?/gi;
 
 /**
- * Instagram: reels, posts e IGTV (com ou sem o perfil antes) -> uuinstagram.com, que só pede
+ * Instagram: reels, posts e IGTV (com ou sem o perfil antes) -> kkinstagram.com, que só pede
  * "uu" antes de instagram.com. Rastreio (?igsh=…) sai. Grupos: 1 = "<", 2 = tipo, 3 = código.
  */
 const INSTAGRAM_LINK = /(<)?https?:\/\/(?:www\.|m\.)?instagram\.com\/(?:[\w.]+\/)?(reels?|p|tv)\/([\w-]+)\/?(?:\?[^\s<>#]*)?(?:#[^\s<>]*)?/gi;
@@ -148,7 +148,7 @@ export function rewriteLinks(content, settings = DEFAULT_LINK_SETTINGS, { keepX 
     });
   }
   if (networks.instagram) {
-    text = text.replace(INSTAGRAM_LINK, (m, angle, kind, code) => keep(m, angle, `https://uuinstagram.com/${kind.toLowerCase()}/${code}/`));
+    text = text.replace(INSTAGRAM_LINK, (m, angle, kind, code) => keep(m, angle, `https://kkinstagram.com/${kind.toLowerCase()}/${code}/`));
   }
   return { content: text, links };
 }

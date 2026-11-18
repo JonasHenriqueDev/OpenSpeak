@@ -73,7 +73,7 @@ O bot corrige links de três redes para a prévia (com o vídeo tocando) funcion
 |---|---|---|
 | X/Twitter | `fxtwitter.com` (ou `fixupx.com` / `vxtwitter.com`) | posts com vídeo ou GIF (`/usuario/status/ID`); posts só com foto ou texto ficam com o link original |
 | TikTok | [`tnktok.com`](https://github.com/okdargy/fxtiktok) | vídeos, fotos e links curtos (`vm.`/`vt.tiktok.com`, `/t/…`); perfis ficam como estão |
-| Instagram | [`uuinstagram.com`](https://uuinstagram.com) | reels, posts e IGTV (`/reel/`, `/reels/`, `/p/`, `/tv/`, com ou sem o perfil antes) |
+| Instagram | [`kkinstagram.com`](https://kkinstagram.com) | reels, posts e IGTV (`/reel/`, `/reels/`, `/p/`, `/tv/`, com ou sem o perfil antes) |
 
 No painel (`/painel` → 🔗 Links) dá para escolher quais redes corrigir em cada servidor (as três vêm ligadas) e o serviço do X. O resto abaixo (modos, alcance, `/links`, edição/exclusão) vale para as três.
 

@@ -59,7 +59,7 @@ test('nome do webhook aceito pelo Discord', () => {
   assert.doesNotMatch(webhookName('clyde'), /clyde/i);
 });
 
-test('TikTok vira tnktok.com (vídeo, foto e link curto) e Instagram vira uuinstagram.com (reel, post)', async () => {
+test('TikTok vira tnktok.com (vídeo, foto e link curto) e Instagram vira kkinstagram.com (reel, post)', async () => {
   const { rewriteLinks, linkSettings } = await import('../src/xlinks.js');
   const s = linkSettings({});
   const cases = [
@@ -68,10 +68,10 @@ test('TikTok vira tnktok.com (vídeo, foto e link curto) e Instagram vira uuinst
     ['https://vt.tiktok.com/ZSxyz/', 'https://vt.tnktok.com/ZSxyz/'],
     ['https://www.tiktok.com/t/ZT8abc/', 'https://tnktok.com/t/ZT8abc/'],
     ['(https://www.tiktok.com/@a.b/photo/123).', '(https://tnktok.com/@a.b/photo/123).'],
-    ['https://www.instagram.com/reel/DQabc-12_x/?igsh=MWQ1ZGUxMzBkMA==', 'https://uuinstagram.com/reel/DQabc-12_x/'],
-    ['https://instagram.com/p/Cxyz123/', 'https://uuinstagram.com/p/Cxyz123/'],
-    ['https://www.instagram.com/fulano/reel/DQq1w2e3r/', 'https://uuinstagram.com/reel/DQq1w2e3r/'],
-    ['https://www.instagram.com/reels/DQzzz/', 'https://uuinstagram.com/reels/DQzzz/'],
+    ['https://www.instagram.com/reel/DQabc-12_x/?igsh=MWQ1ZGUxMzBkMA==', 'https://kkinstagram.com/reel/DQabc-12_x/'],
+    ['https://instagram.com/p/Cxyz123/', 'https://kkinstagram.com/p/Cxyz123/'],
+    ['https://www.instagram.com/fulano/reel/DQq1w2e3r/', 'https://kkinstagram.com/reel/DQq1w2e3r/'],
+    ['https://www.instagram.com/reels/DQzzz/', 'https://kkinstagram.com/reels/DQzzz/'],
   ];
   for (const [input, expected] of cases) assert.equal(rewriteLinks(input, s).content, expected, input);
   // Perfil, página inicial e link entre < > ficam como estão.

@@ -1,3 +1,11 @@
+# OpenSpeak 1.0.48 — câmera sem vazar o microfone
+
+- **Placa de captura sem o seu microfone:** ao transmitir uma câmera ou placa de
+  captura, o app pegava o microfone padrão do Windows junto, e quem assistia ouvia
+  a sua voz. Agora vai só o áudio do próprio dispositivo (o som da placa de
+  captura ou o microfone da webcam), achado pelo nome. Se o dispositivo não tiver
+  áudio, a transmissão vai sem som, nunca com o microfone.
+
 # OpenSpeak 1.0.47 — imagem melhor sem pesar no PC
 
 - **Imagem mais bonita na transmissão:** o codificador de vídeo da placa

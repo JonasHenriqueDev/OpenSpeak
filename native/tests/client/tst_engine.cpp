@@ -109,6 +109,12 @@ private slots:
         // Sem áudio próprio: nada (nunca o microfone padrão).
         QCOMPARE(AudioCapture::matchCameraAudio(QStringLiteral("OBS Virtual Camera"), inputs), -1);
         QCOMPARE(AudioCapture::matchCameraAudio(QString(), inputs), -1);
+        // Placa USB genérica (VID 345F): vídeo e áudio com palavras genéricas diferentes.
+        const QStringList real{QStringLiteral("Mic (MCHOSE V9 PRO)"),
+                               QStringLiteral("Interface de áudio digital (USB3 Digital Audio)")};
+        QCOMPARE(AudioCapture::matchCameraAudio(QStringLiteral("USB3 Video"), real), 1);
+        QCOMPARE(AudioCapture::matchCameraAudio(QStringLiteral("USB2 Video"), real), -1);
+        QCOMPARE(AudioCapture::matchCameraAudio(QStringLiteral("Video"), real), -1);
     }
 
     void capturesAudioByDefault()

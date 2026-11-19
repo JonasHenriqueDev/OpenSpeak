@@ -1,6 +1,7 @@
 #include "AudioCapture.h"
 
 #include <QMediaDevices>
+#include <QRegularExpression>
 
 #include <windows.h>
 #include <audioclient.h>
@@ -152,6 +153,30 @@ int AudioCapture::matchCameraAudio(const QString &camera, const QStringList &aud
             continue;
         const QString inner = a.mid(open + 1, close - open - 1).trimmed();
         if (inner.size() >= 4 && cam.contains(inner))
+            return i;
+    }
+    // 3) sem as palavras genéricas, sobra o mesmo nome: "USB3 Video" e "Interface de
+    // áudio digital (USB3 Digital Audio)" são a mesma placa ("usb3").
+    auto core = [](const QString &name) {
+        static const QStringList generic{
+            QStringLiteral("video"), QStringLiteral("vídeo"), QStringLiteral("camera"), QStringLiteral("câmera"),
+            QStringLiteral("webcam"), QStringLiteral("audio"), QStringLiteral("áudio"), QStringLiteral("digital"),
+            QStringLiteral("interface"), QStringLiteral("de"), QStringLiteral("microfone"), QStringLiteral("microphone"),
+            QStringLiteral("mic"), QStringLiteral("input"), QStringLiteral("entrada"), QStringLiteral("device")};
+        QStringList words = name.toCaseFolded().split(QRegularExpression(QStringLiteral("[^\\w.]+")), Qt::SkipEmptyParts);
+        words.removeIf([](const QString &w) { return generic.contains(w); });
+        words.sort();
+        words.removeDuplicates();
+        return words;
+    };
+    const QStringList camCore = core(camera);
+    if (camCore.isEmpty() || camCore.join(QString()).size() < 3)
+        return -1;
+    for (int i = 0; i < audioInputs.size(); ++i) {
+        const QString &a = audioInputs[i];
+        const int open = a.lastIndexOf(QLatin1Char('(')), close = a.lastIndexOf(QLatin1Char(')'));
+        const QString inner = open >= 0 && close > open ? a.mid(open + 1, close - open - 1) : a;
+        if (core(inner) == camCore)
             return i;
     }
     return -1;

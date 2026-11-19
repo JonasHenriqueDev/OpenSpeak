@@ -135,15 +135,45 @@ quint32 AudioCapture::pidForWindow(quintptr id)
     return familyRoot(pid, processes);
 }
 
-bool AudioCapture::start(Mode mode, quint32 pid, std::function<quint32()> resolvePid)
+int AudioCapture::matchCameraAudio(const QString &camera, const QStringList &audioInputs)
+{
+    const QString cam = camera.trimmed().toCaseFolded();
+    if (cam.size() < 3)
+        return -1;
+    // 1) o nome completo da câmera dentro do nome do áudio; 2) o que está entre
+    // parênteses no áudio ("Microfone (USB3.0 Capture)") igual ou contido no da câmera.
+    for (int i = 0; i < audioInputs.size(); ++i)
+        if (audioInputs[i].toCaseFolded().contains(cam))
+            return i;
+    for (int i = 0; i < audioInputs.size(); ++i) {
+        const QString a = audioInputs[i].toCaseFolded();
+        const int open = a.lastIndexOf(QLatin1Char('(')), close = a.lastIndexOf(QLatin1Char(')'));
+        if (open < 0 || close <= open)
+            continue;
+        const QString inner = a.mid(open + 1, close - open - 1).trimmed();
+        if (inner.size() >= 4 && cam.contains(inner))
+            return i;
+    }
+    return -1;
+}
+
+bool AudioCapture::start(Mode mode, quint32 pid, std::function<quint32()> resolvePid, const QString &deviceName)
 {
     stop();
     m_running = true;
-    if (mode == Mode::Microphone) {
-        const QAudioDevice device = QMediaDevices::defaultAudioInput();
+    if (mode == Mode::Microphone || mode == Mode::Device) {
+        QAudioDevice device;
+        if (mode == Mode::Microphone) {
+            device = QMediaDevices::defaultAudioInput();
+        } else {
+            for (const QAudioDevice &d : QMediaDevices::audioInputs())
+                if (d.description() == deviceName)
+                    device = d;
+        }
         if (device.isNull()) {
             m_running = false;
-            emit errorOccurred(QStringLiteral("nenhum microfone"));
+            emit errorOccurred(mode == Mode::Microphone ? QStringLiteral("nenhum microfone")
+                                                        : QStringLiteral("entrada de áudio não encontrada: ") + deviceName);
             return false;
         }
         QAudioFormat fmt;

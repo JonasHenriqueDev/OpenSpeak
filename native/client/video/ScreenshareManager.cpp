@@ -2,9 +2,11 @@
 #include "Presets.h"
 #include "Simulcast.h"
 
+#include <QAudioDevice>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QLoggingCategory>
+#include <QMediaDevices>
 #include <QRegularExpression>
 #include <QUrl>
 
@@ -384,10 +386,23 @@ void ScreenshareManager::startAudioFor(OwnStream &own)
     own.audio->stop();
     own.excludingDiscord = false;
     switch (own.config.type) {
-    case StreamType::Camera:
-        own.audioLabel = QStringLiteral("Microfone");
-        own.audio->start(AudioCapture::Mode::Microphone);
+    case StreamType::Camera: {
+        // Só o áudio do próprio dispositivo (placa de captura, microfone da webcam); o
+        // microfone padrão ia junto com a placa e vazava a voz de quem transmite.
+        QStringList inputs;
+        const auto devices = QMediaDevices::audioInputs();
+        for (const QAudioDevice &d : devices)
+            inputs.append(d.description());
+        const int match = AudioCapture::matchCameraAudio(own.source->label(), inputs);
+        qCInfo(lcShare) << "áudio da câmera:" << own.source->label() << "->" << (match >= 0 ? inputs[match] : QStringLiteral("nenhum"));
+        if (match >= 0) {
+            own.audioLabel = inputs[match];
+            own.audio->start(AudioCapture::Mode::Device, 0, {}, inputs[match]);
+        } else {
+            own.audioLabel = QStringLiteral("Sem áudio");
+        }
         break;
+    }
     case StreamType::Window: {
         // Pelo HWND da captura: o título muda (aba, música, notificações) e podia apontar
         // para outro processo, ou nenhum, e o stream ficava sem som.

@@ -4,7 +4,8 @@
 //            EXCETO o Discord (o Windows só exclui uma árvore de processos; enquanto
 //            o Discord estiver fechado, volta a excluir o OpenSpeak)
 //  - Janela: apenas o áudio do processo dono da janela (pelo HWND; pidForWindow)
-//  - Câmera: microfone padrão
+//  - Câmera: a entrada de áudio do próprio dispositivo (placa de captura, microfone
+//            da webcam), achada pelo nome; nunca o microfone padrão
 // Usa o "process loopback" do WASAPI (Windows 10 2004+), como o
 // ProcessAudioCapturer do TeamSpeak. Saída: float32 intercalado.
 
@@ -14,6 +15,7 @@
 #include <QList>
 #include <QObject>
 #include <QPair>
+#include <QStringList>
 
 #include <atomic>
 #include <functional>
@@ -25,14 +27,15 @@ namespace openspeak {
 class AudioCapture : public QObject {
     Q_OBJECT
 public:
-    enum class Mode { SystemExcludingSelf, SystemExcludingDiscord, Process, Microphone };
+    enum class Mode { SystemExcludingSelf, SystemExcludingDiscord, Process, Microphone, Device };
 
     explicit AudioCapture(QObject *parent = nullptr);
     ~AudioCapture() override;
 
     /// `pid` só é usado em Mode::Process; `resolvePid` (opcional) é chamado a cada
     /// segundo para seguir o processo da janela (0 = mantém o atual).
-    bool start(Mode mode, quint32 pid = 0, std::function<quint32()> resolvePid = {});
+    /// Mode::Device: `deviceName` é a descrição da entrada de áudio (QAudioDevice).
+    bool start(Mode mode, quint32 pid = 0, std::function<quint32()> resolvePid = {}, const QString &deviceName = {});
     void stop();
     bool isRunning() const { return m_running; }
 
@@ -56,6 +59,9 @@ public:
     static quint32 discordRootPid();
     /// Entre processos (pid, pai), a raiz: o de menor PID cujo pai não está na lista.
     static quint32 rootProcess(const QList<QPair<quint32, quint32>> &processes);
+    /// Índice da entrada de áudio que pertence à câmera/placa `camera` (pelo nome: "HD60 S"
+    /// casa com "Game Capture HD60 S Audio" ou "Microfone (HD60 S)"), ou -1 se nenhuma.
+    static int matchCameraAudio(const QString &camera, const QStringList &audioInputs);
 
 signals:
     /// Amostras float32 intercaladas (SampleRate/Channels acima).

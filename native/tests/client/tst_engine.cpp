@@ -97,6 +97,20 @@ private slots:
         QCOMPARE(AudioCapture::rootProcess({}), 0u);
     }
 
+    void cameraUsesOwnAudioNotDefaultMic()
+    {
+        const QStringList inputs{QStringLiteral("Microfone (Realtek(R) Audio)"),
+                                 QStringLiteral("Game Capture HD60 S Audio"),
+                                 QStringLiteral("Microfone (HD Pro Webcam C920)"),
+                                 QStringLiteral("Interface de áudio digital (USB3.0 Capture)")};
+        QCOMPARE(AudioCapture::matchCameraAudio(QStringLiteral("Game Capture HD60 S"), inputs), 1);
+        QCOMPARE(AudioCapture::matchCameraAudio(QStringLiteral("HD Pro Webcam C920"), inputs), 2);
+        QCOMPARE(AudioCapture::matchCameraAudio(QStringLiteral("USB3.0 Capture"), inputs), 3);
+        // Sem áudio próprio: nada (nunca o microfone padrão).
+        QCOMPARE(AudioCapture::matchCameraAudio(QStringLiteral("OBS Virtual Camera"), inputs), -1);
+        QCOMPARE(AudioCapture::matchCameraAudio(QString(), inputs), -1);
+    }
+
     void capturesAudioByDefault()
     {
         Settings settings(QStringLiteral("audio-default"), true);

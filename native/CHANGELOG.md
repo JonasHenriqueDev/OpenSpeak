@@ -1,3 +1,11 @@
+# OpenSpeak 1.0.49 — som da placa de captura de volta
+
+- **Placa de captura com som de novo:** na 1.0.48, algumas placas de captura
+  ficavam sem som nenhum na transmissão, porque o Windows dá nomes diferentes
+  para o vídeo e para o áudio do mesmo aparelho (por exemplo "USB3 Video" e
+  "USB3 Digital Audio"). Agora o app reconhece que os dois são a mesma placa e
+  manda o som do jogo junto, ainda sem o seu microfone.
+
 # OpenSpeak 1.0.48 — câmera sem vazar o microfone
 
 - **Placa de captura sem o seu microfone:** ao transmitir uma câmera ou placa de

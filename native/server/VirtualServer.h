@@ -48,6 +48,12 @@ public:
     /// Retoma a sessão com o token do login; devolve a visão atual da sala ou
     /// lança CommandError(session_expired).
     QJsonObject resume(int clid, const QString &token);
+    /// Sessões suspensas (aguardando retomada) que o login novo de `clid` substitui:
+    /// o app reaberto depois de uma queda não deve deixar a sessão velha (com o
+    /// stream) duplicada até a espera acabar. O uid é público na sala, então exige
+    /// também o mesmo apelido e, além disso, o mesmo perfil provado com senha ou a
+    /// mesma rede (`sameNetwork(clidVelho)`).
+    QList<int> suspendedReplacedBy(int clid, const std::function<bool(int)> &sameNetwork) const;
 
     /// Executa um comando; devolve `data` da resposta ou lança CommandError.
     QJsonObject handle(int clid, const QString &cmd, const QJsonObject &args);

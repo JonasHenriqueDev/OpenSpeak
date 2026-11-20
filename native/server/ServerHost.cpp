@@ -420,8 +420,17 @@ void ServerHost::onMessage(QWebSocket *ws, const QString &text)
     }
     // Measure after login as well: native peers may still be opening when the
     // handshake ping arrives. The reply establishes the client's public view.
-    if (cmd == QLatin1String("login") && reply.value("return_code").toString() == rc::Ok)
+    if (cmd == QLatin1String("login") && reply.value("return_code").toString() == rc::Ok) {
         ws->ping();
+        // App reaberto depois de uma queda: a sessão velha do mesmo uid (e o stream
+        // dela) sai já, em vez de ficar duplicada até a espera da retomada acabar.
+        const QString ip = m_connectionInfo.value(clid).ip;
+        const auto sameNetwork = [this, ip](int old) { return !ip.isEmpty() && m_connectionInfo.value(old).ip == ip; };
+        for (const int old : m_server.suspendedReplacedBy(clid, sameNetwork)) {
+            qCInfo(lcServer) << "sessão suspensa clid=" << old << "substituída por clid=" << clid;
+            dropClient(old);
+        }
+    }
 }
 
 void ServerHost::resumeSession(QWebSocket *ws, int tempClid, const QJsonObject &msg)

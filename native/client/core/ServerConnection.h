@@ -78,6 +78,12 @@ private:
     int m_resumeClid = 0, m_retryMs = 1000;
     QUrl m_url;
     QTimer m_retry, m_heartbeat, m_liveness;
+    // Tentativa de reconexão presa (SYN perdido, rede oscilando): sem isto o
+    // QWebSocket fica ~20 s+ esperando o TCP e a sessão expira no servidor.
+    QTimer m_connectTimeout;
+    int m_connectTimeoutMs = 10'000; // cresce a cada tentativa (rede lenta), até 20 s
+    bool m_retryScheduled = false;   // abort + disconnected não agendam em dobro
+    void scheduleRetry();
     QElapsedTimer m_sincePong;
 };
 

@@ -129,6 +129,53 @@ private slots:
         alice.ws.abort();
         QTRY_VERIFY(bob.indexOf("notifyclientleftview") >= 0);
     }
+
+    void freshLoginReplacesSuspendedSessionOfSameUid()
+    {
+        // App fechado e reaberto depois de uma queda: login novo (sem token) com o
+        // mesmo uid. A sessão velha e o stream dela saem já, sem esperar a retomada.
+        Peer alice(port), bob(port), carol(port);
+        QTRY_VERIFY(alice.ws.state() == QAbstractSocket::ConnectedState && bob.ws.state() == QAbstractSocket::ConnectedState
+                    && carol.ws.state() == QAbstractSocket::ConnectedState);
+        const auto login = alice.command("login", {{"nickname", "alice"}, {"uid", "a"}, {"resumable", true}});
+        const int oldClid = login.value("data").toObject().value("clid").toInt();
+        QCOMPARE(bob.command("login", {{"nickname", "bob"}, {"uid", "b"}}).value("return_code").toString(), rc::Ok);
+        // Outra sessão suspensa, de outro uid: não é afetada.
+        QCOMPARE(carol.command("login", {{"nickname", "carol"}, {"uid", "c"}, {"resumable", true}}).value("return_code").toString(), rc::Ok);
+        const QString sid = alice.command("setupstream").value("data").toObject().value("streamIdentifier").toString();
+        QVERIFY(!sid.isEmpty());
+        alice.ws.abort();
+        carol.ws.abort();
+        QTRY_VERIFY(bob.indexOf("notifyclientupdated") >= 0);
+
+        // O uid é público na sala: com outro apelido, não derruba ninguém.
+        bob.messages.clear();
+        Peer mallory(port);
+        QTRY_VERIFY(mallory.ws.state() == QAbstractSocket::ConnectedState);
+        QCOMPARE(mallory.command("login", {{"nickname", "mallory"}, {"uid", "a"}}).value("return_code").toString(), rc::Ok);
+        QTest::qWait(200);
+        QVERIFY(bob.indexOf("notifystreamstopped") < 0);
+
+        bob.messages.clear();
+        Peer reopened(port);
+        QTRY_VERIFY(reopened.ws.state() == QAbstractSocket::ConnectedState);
+        const auto fresh = reopened.command("login", {{"nickname", "alice"}, {"uid", "a"}, {"resumable", true}});
+        QCOMPARE(fresh.value("return_code").toString(), rc::Ok);
+        QVERIFY(fresh.value("data").toObject().value("clid").toInt() != oldClid);
+        QTRY_VERIFY(bob.indexOf("notifystreamstopped") >= 0);
+        QTRY_VERIFY(bob.indexOf("notifyclientleftview") >= 0);
+        QList<int> left;
+        for (const QJsonObject &m : bob.messages)
+            if (m.value("cmd") == QLatin1String("notifyclientleftview"))
+                left.append(m.value("args").toObject().value("clid").toInt());
+        QCOMPARE(left, QList<int>{oldClid});
+        // A sessão velha não pode mais ser retomada; a da Carol continua esperando.
+        Peer late(port);
+        QTRY_VERIFY(late.ws.state() == QAbstractSocket::ConnectedState);
+        const auto resume = late.command("login", {{"nickname", "alice"}, {"uid", "a"}, {"resumeClid", oldClid},
+                                                   {"resumeToken", login.value("data").toObject().value("resumeToken")}});
+        QCOMPARE(resume.value("return_code").toString(), rc::SessionExpired);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestServerHost)

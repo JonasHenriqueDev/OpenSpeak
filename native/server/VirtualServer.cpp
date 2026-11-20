@@ -269,6 +269,24 @@ QJsonObject VirtualServer::resume(int clid, const QString &token)
     return data;
 }
 
+QList<int> VirtualServer::suspendedReplacedBy(int clid, const std::function<bool(int)> &sameNetwork) const
+{
+    QList<int> out;
+    const auto it = m_clients.find(clid);
+    if (it == m_clients.end() || !it->second.loggedIn || it->second.uid.isEmpty())
+        return out;
+    const Client &fresh = it->second;
+    for (const auto &[old, c] : m_clients) {
+        if (old == clid || !c.suspended || c.uid != fresh.uid
+            || c.nickname.compare(fresh.nickname, Qt::CaseInsensitive) != 0)
+            continue;
+        const bool sameProfile = !c.profile.isEmpty() && c.profile == fresh.profile;
+        if (sameProfile || (sameNetwork && sameNetwork(old)))
+            out.append(old);
+    }
+    return out;
+}
+
 QJsonObject VirtualServer::handle(int clid, const QString &cmd, const QJsonObject &args)
 {
     auto it = m_clients.find(clid);

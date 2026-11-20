@@ -2,6 +2,7 @@
 #include "Version.h"
 
 #include <QJsonDocument>
+#include <QLoggingCategory>
 #include <QSysInfo>
 
 namespace openspeak {
@@ -12,6 +13,9 @@ constexpr int CommandTimeoutMs = 15'000;
 // fechar o TCP). Derrubar e retomar a sessão é mais rápido que esperar o TCP.
 constexpr int LivenessPingMs = 5'000;
 constexpr int LivenessTimeoutMs = 15'000;
+constexpr int ReconnectTimeoutMs = 10'000;
+constexpr int MaxReconnectTimeoutMs = 20'000;
+Q_LOGGING_CATEGORY(lcConn, "openspeak.connection")
 }
 
 // ===================================================== WebSocketConnection
@@ -20,6 +24,8 @@ WebSocketConnection::WebSocketConnection(QObject *parent) : ServerConnection(par
 {
     m_ws.setMaxAllowedIncomingMessageSize(4 * 1024 * 1024);
     connect(&m_ws, &QWebSocket::connected, this, [this] {
+        m_connectTimeout.stop();
+        m_connectTimeoutMs = ReconnectTimeoutMs;
         m_wasOpen = true;
         m_sincePong.start();
         m_liveness.start();
@@ -30,9 +36,11 @@ WebSocketConnection::WebSocketConnection(QObject *parent) : ServerConnection(par
             sendCommand("login", args, [this](const CommandResult &r) {
                 if (r.ok()) {
                     m_retryMs = 1000;
+                    qCInfo(lcConn) << "sessão retomada";
                     emit notification("cloudview", r.data);
                     emit notification("cloudconnection", {{"reconnecting", false}});
                 } else if (r.returnCode == "session_expired") {
+                    qCInfo(lcConn) << "sessão expirou no servidor, entrando de novo";
                     m_resumeToken.clear();
                     auto fresh = m_loginArgs;
                     fresh.remove("resumeClid"); fresh.remove("resumeToken");
@@ -47,7 +55,10 @@ WebSocketConnection::WebSocketConnection(QObject *parent) : ServerConnection(par
                     });
                 } else if (r.returnCode == "access_denied") {
                     m_stopped = true; m_ws.close(); emit disconnected(r.error);
-                } else m_ws.close();
+                } else {
+                    qCInfo(lcConn) << "retomada falhou:" << r.returnCode << r.error;
+                    m_ws.close();
+                }
             });
             return;
         }
@@ -56,21 +67,44 @@ WebSocketConnection::WebSocketConnection(QObject *parent) : ServerConnection(par
     connect(&m_ws, &QWebSocket::textMessageReceived, this, &WebSocketConnection::onText);
     connect(&m_ws, &QWebSocket::disconnected, this, [this] {
         m_liveness.stop();
+        m_connectTimeout.stop();
         failAll(QStringLiteral("disconnected"));
         const QString reason = m_wasOpen ? m_ws.closeReason() : m_ws.errorString();
+        const bool wasOpen = m_wasOpen;
         m_wasOpen = false;
         // Com sessão retomável (sala web ou servidor nativo) a queda não tira
         // ninguém da sala: reconecta e retoma o mesmo clid, mídia incluída.
         if (!m_stopped && !m_resumeToken.isEmpty()) {
-            emit notification("cloudconnection", {{"reconnecting", true}});
-            m_retry.start(m_retryMs);
-            m_retryMs = qMin(m_retryMs * 2, 10'000);
+            if (wasOpen)
+                qCInfo(lcConn) << "conexão com o servidor caiu:" << reason;
+            scheduleRetry();
             return;
         }
         emit disconnected(reason);
     });
     m_retry.setSingleShot(true);
-    connect(&m_retry, &QTimer::timeout, this, [this] { if (!m_stopped) m_ws.open(m_url); });
+    connect(&m_retry, &QTimer::timeout, this, [this] {
+        if (m_stopped)
+            return;
+        m_retryScheduled = false;
+        qCInfo(lcConn) << "reconectando ao servidor";
+        m_ws.open(m_url);
+        if (!m_resumeToken.isEmpty()) {
+            m_connectTimeout.start(m_connectTimeoutMs);
+            m_connectTimeoutMs = qMin(m_connectTimeoutMs + 5'000, MaxReconnectTimeoutMs);
+        }
+    });
+    m_connectTimeout.setSingleShot(true);
+    connect(&m_connectTimeout, &QTimer::timeout, this, [this] {
+        if (m_stopped || isConnected())
+            return;
+        qCInfo(lcConn) << "tentativa de reconexão sem resposta, tentando de novo";
+        m_ws.abort();
+        // O abort de um socket ainda abrindo nem sempre emite disconnected (e às
+        // vezes emite depois): scheduleRetry ignora a segunda chamada.
+        if (!m_stopped && !m_resumeToken.isEmpty())
+            scheduleRetry();
+    });
     m_heartbeat.setInterval(30'000);
     connect(&m_heartbeat, &QTimer::timeout, this, [this] {
         if (isConnected() && !m_resumeToken.isEmpty()) sendCommand("sync", {}, [this](const CommandResult &r) {
@@ -91,15 +125,26 @@ WebSocketConnection::WebSocketConnection(QObject *parent) : ServerConnection(par
     });
 }
 
+void WebSocketConnection::scheduleRetry()
+{
+    if (m_retryScheduled)
+        return;
+    m_retryScheduled = true;
+    emit notification("cloudconnection", {{"reconnecting", true}});
+    m_retry.start(m_retryMs);
+    m_retryMs = qMin(m_retryMs * 2, 10'000);
+}
+
 void WebSocketConnection::setCloudMode(bool enabled) { m_cloud = enabled; }
 void WebSocketConnection::open(const QUrl &url) {
     m_url = url; m_stopped = false; m_retryMs = 1000;
-    m_resumeToken.clear(); m_retry.stop(); m_heartbeat.stop();
+    m_resumeToken.clear(); m_retry.stop(); m_heartbeat.stop(); m_connectTimeout.stop();
+    m_retryScheduled = false; m_connectTimeoutMs = ReconnectTimeoutMs;
     m_ws.open(url);
 }
 
 void WebSocketConnection::close() {
-    m_stopped = true; m_retry.stop(); m_heartbeat.stop(); m_liveness.stop();
+    m_stopped = true; m_retry.stop(); m_heartbeat.stop(); m_liveness.stop(); m_connectTimeout.stop();
     if (isConnected() && !m_resumeToken.isEmpty()) {
         const QJsonObject msg{{"type", "cmd"}, {"id", m_nextId++}, {"cmd", "logout"}, {"args", QJsonObject{}}};
         m_ws.sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact)));

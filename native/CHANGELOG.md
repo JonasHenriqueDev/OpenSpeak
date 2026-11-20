@@ -1,3 +1,14 @@
+# OpenSpeak 1.0.50 — transmissão sem ficar duplicada depois de uma queda
+
+- **Sem transmissão duplicada:** se a sua internet caía no meio da transmissão e
+  você fechava e abria o app de novo, a transmissão antiga ficava aparecendo junto
+  com a nova por até um minuto e meio. Agora o servidor percebe que é você
+  voltando e tira a antiga na hora. Precisa do servidor atualizado.
+- **Reconexão mais insistente:** depois de uma queda, o app não fica mais preso
+  numa tentativa de reconexão que não responde. Ele desiste dela em alguns
+  segundos e tenta de novo, então a transmissão tem mais chance de voltar sozinha
+  antes de o servidor desistir dela.
+
 # OpenSpeak 1.0.49 — som da placa de captura de volta
 
 - **Placa de captura com som de novo:** na 1.0.48, algumas placas de captura

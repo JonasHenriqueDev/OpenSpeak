@@ -1,3 +1,9 @@
+# OpenSpeak 1.0.52 — texto do aviso de qualidade mais claro
+
+- **Aviso de qualidade reescrito:** o balão que aparece quando a qualidade cai
+  por conexão lenta agora diz "Qualidade reduzida" e explica o motivo de um
+  jeito mais natural. O botão passou a se chamar "Voltar para a alta".
+
 # OpenSpeak 1.0.51 — aviso quando a qualidade cai sozinha
 
 - **Aviso de qualidade baixa:** quando a qualidade está no automático e a sua

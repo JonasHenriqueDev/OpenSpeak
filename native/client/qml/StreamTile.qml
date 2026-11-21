@@ -52,6 +52,33 @@ Rectangle {
             console.info("desenho disponível no stream", streamId)
     }
     readonly property string qualityAutoText: I18n.t("video.quality.auto")
+    // Aviso de "qualidade abaixada automaticamente": no automático o servidor
+    // começa na camada alta, então a troca para a baixa durante a exibição é
+    // sempre a regra de conexão lenta. Uma vez por exibição (até sair do
+    // stream), para não insistir se a camada oscilar. No picture-in-picture o
+    // botão não está à vista: o aviso fica para a próxima troca.
+    readonly property string streamLayer: data_.layer || "high"
+    property bool autoLowNoticed: false
+    onStreamLayerChanged: {
+        if (streamLayer === "low" && simulcast && qualityPreference === "auto" && playing && !inPip && !autoLowNoticed) {
+            autoLowNoticed = true
+            showAutoLowNotice()
+        } else if (streamLayer === "high") {
+            qualityNotice.close()
+            fullscreenQualityNotice.close()
+        }
+    }
+    onQualityPreferenceChanged: if (qualityPreference !== "auto") { qualityNotice.close(); fullscreenQualityNotice.close() }
+    function showAutoLowNotice() {
+        console.info("qualidade abaixada automaticamente no stream", streamId)
+        if (fullscreenWindow.visible) {
+            fullscreenWindow.controlsShown = true
+            fullscreenIdle.restart()
+            fullscreenQualityNotice.open()
+        } else {
+            qualityNotice.open()
+        }
+    }
     readonly property string qualityTip: !simulcast ? I18n.t("video.quality") + ": " + I18n.t("video.quality.single")
         : I18n.t("video.quality") + ": "
         + (qualityPreference === "high" ? I18n.t("video.quality.high")
@@ -99,6 +126,14 @@ Rectangle {
     }
     onStatusChanged: {
         refreshAttachment()
+        if (!playing) {
+            autoLowNoticed = false
+            qualityNotice.close()
+            fullscreenQualityNotice.close()
+        } else if (DebugOpen === "quality-notice" && !own && status === "playing" && !autoLowNoticed) { // depuração: --open quality-notice
+            autoLowNoticed = true
+            Qt.callLater(showAutoLowNotice)
+        }
         if (!playing) {
             pipWindow.close()
             fullscreenWindow.close()
@@ -256,10 +291,13 @@ Rectangle {
         color: "black"
         title: tile.data_.name
         onVisibleChanged: {
-            if (visible)
+            if (visible) {
                 fullscreenIdle.restart()
-            else
+                qualityNotice.close()
+            } else {
+                fullscreenQualityNotice.close()
                 tile.detach(fullscreenVideo.videoSink)
+            }
         }
         // Controles aparecem ao mexer o mouse e somem (com o cursor) após 2,5 s parado.
         property bool controlsShown: true
@@ -273,6 +311,7 @@ Rectangle {
             id: fullscreenIdle
             interval: 2500
             onTriggered: fullscreenWindow.controlsShown = fullscreenTopHover.hovered || fullscreenBottomHover.hovered
+                                                         || fullscreenQualityNotice.opened
         }
         MouseArea {
             anchors.fill: parent
@@ -389,8 +428,13 @@ Rectangle {
                     iconName: "quality"
                     iconColor: !tile.simulcast ? Qt.rgba(1, 1, 1, 0.55) : tile.data_.layer === "low" ? Theme.warn : "white"
                     tip: tile.qualityTip
-                    onClicked: fullscreenQualityMenu.open()
+                    onClicked: { fullscreenQualityNotice.close(); fullscreenQualityMenu.open() }
                     QualityMenu { id: fullscreenQualityMenu }
+                    QualityNotice {
+                        id: fullscreenQualityNotice
+                        maxWidth: fullscreenWindow.width - 40
+                        onClosed: fullscreenIdle.restart()
+                    }
                 }
                 Item { Layout.fillWidth: true }
                 FullscreenButton {
@@ -852,6 +896,82 @@ Rectangle {
         }
     }
 
+    // Balão que aponta para o botão de qualidade (o pai do Popup).
+    component QualityNotice: Popup {
+        id: notice
+        property real maxWidth: 320
+        readonly property real arrowX: Math.min(parent ? parent.width / 2 + 12 : 24, width - 18)
+        x: -12
+        y: -height - 10
+        width: Math.min(320, maxWidth)
+        padding: 14
+        modal: false
+        focus: false
+        // Não rouba o foco do teclado: fecha pelos botões ou sozinho em 15 s.
+        closePolicy: Popup.NoAutoClose
+        onOpened: noticeTimer.restart()
+        Timer { id: noticeTimer; interval: 15000; onTriggered: notice.close() }
+        enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 150 } }
+        exit: Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 150 } }
+        background: Rectangle {
+            color: Theme.panel2
+            radius: Theme.radius
+            border.width: 1
+            border.color: Theme.warn
+            Rectangle {
+                z: -1
+                width: 14
+                height: 14
+                rotation: 45
+                x: notice.arrowX - width / 2
+                y: parent.height - height / 2 - 1
+                color: Theme.panel2
+                border.width: 1
+                border.color: Theme.warn
+            }
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Icon { name: "warning"; size: 16; color: Theme.warn }
+                Label {
+                    Layout.fillWidth: true
+                    text: I18n.t("video.quality.auto_low.title")
+                    wrapMode: Text.WordWrap
+                    color: Theme.text
+                    font.weight: Font.DemiBold
+                }
+            }
+            Label {
+                Layout.fillWidth: true
+                text: I18n.t("video.quality.auto_low.text")
+                wrapMode: Text.WordWrap
+                color: Theme.textDim
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: 6
+                Button {
+                    flat: true
+                    text: I18n.t("video.quality.auto_low.ok")
+                    onClicked: notice.close()
+                }
+                Button {
+                    objectName: "qualityNoticeHigh"
+                    highlighted: true
+                    visible: tile.simulcast
+                    text: I18n.t("video.quality.auto_low.high")
+                    onClicked: {
+                        Screenshare.setQualityPreference(tile.streamId, "high")
+                        notice.close()
+                    }
+                }
+            }
+        }
+    }
+
     component DrawMenu: Menu {
         y: -implicitHeight
         MenuItem {
@@ -908,7 +1028,7 @@ Rectangle {
         anchors.bottom: parent.bottom
         width: parent.width
         height: tile.small ? 32 : 44
-        opacity: tile.hovered || !tile.playing ? 1 : 0
+        opacity: tile.hovered || !tile.playing || qualityNotice.opened ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 150 } }
         gradient: Gradient {
             GradientStop { position: 0; color: "transparent" }
@@ -971,8 +1091,13 @@ Rectangle {
                 iconName: "quality"
                 iconColor: !tile.simulcast ? Qt.rgba(1, 1, 1, 0.55) : tile.data_.layer === "low" ? Theme.warn : "white"
                 tip: tile.qualityTip
-                onClicked: qualityMenu.open()
+                onClicked: { qualityNotice.close(); qualityMenu.open() }
                 QualityMenu { id: qualityMenu }
+                QualityNotice {
+                    id: qualityNotice
+                    objectName: "qualityNotice"
+                    maxWidth: tile.width - 20
+                }
             }
             TileButton {
                 objectName: "drawButton"

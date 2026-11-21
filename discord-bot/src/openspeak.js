@@ -38,7 +38,8 @@ export const OPENSPEAK_FACTS = [
   'Qualidade por espectador (simulcast, 1.0.35): quem transmite pelo app manda também uma versão leve (até 480p) e cada um recebe '
     + 'a que a conexão aguenta. No vídeo há o botão de qualidade: Automática, Alta ou Baixa; o ícone fica amarelo na qualidade baixa. '
     + 'Transmissões pelo site, de versão antiga ou abaixo de 540p / 1,2 Mbps têm uma qualidade só. Desde a 1.0.47 a versão leve '
-    + 'só é enviada quando alguém precisa dela, e o upload que ela usaria vai para a qualidade alta.',
+    + 'só é enviada quando alguém precisa dela, e o upload que ela usaria vai para a qualidade alta. Desde a 1.0.51, quando o automático '
+    + 'baixa a qualidade por conexão lenta, aparece um balão no botão de qualidade com a opção "Voltar para alta".',
   'Qualidade do codificador (1.0.47): a placa de vídeo (NVIDIA, AMD ou Intel) capricha mais em cada quadro sem tirar FPS; se não '
     + 'der conta, o app volta sozinho para os ajustes rápidos. Dá para ver nas estatísticas da transmissão (Ajustes do codificador).',
   'Janela transmitindo preta: use a Captura alternativa (opções avançadas da transmissão de janela, dá para ligar com a transmissão '

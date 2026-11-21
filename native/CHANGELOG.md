@@ -1,3 +1,12 @@
+# OpenSpeak 1.0.51 — aviso quando a qualidade cai sozinha
+
+- **Aviso de qualidade baixa:** quando a qualidade está no automático e a sua
+  conexão fica lenta, o app passa a transmissão que você assiste para a
+  qualidade baixa. Agora aparece um balão apontando para o botão de qualidade
+  explicando o que aconteceu, com um botão "Voltar para alta" se você preferir
+  a qualidade alta mesmo assim. O aviso aparece uma vez por transmissão
+  assistida, também na tela cheia.
+
 # OpenSpeak 1.0.50 — transmissão sem ficar duplicada depois de uma queda
 
 - **Sem transmissão duplicada:** se a sua internet caía no meio da transmissão e

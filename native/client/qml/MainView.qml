@@ -45,18 +45,27 @@ Rectangle {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 8
                 spacing: 10
+                // Ícone do servidor que também oculta/mostra a lista de canais e usuários.
                 ToolButton {
+                    id: userListButton
                     objectName: "toggleUserList"
-                    implicitWidth: 34
-                    implicitHeight: 34
+                    implicitWidth: 28
+                    implicitHeight: 28
                     Layout.leftMargin: -6
-                    checkable: true
-                    checked: Settings.showUserList
+                    Layout.rightMargin: -6
+                    padding: 0
                     contentItem: Item {}
+                    background: Rectangle {
+                        radius: 6
+                        color: userListButton.down ? Theme.border
+                             : userListButton.hovered ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08)
+                             : "transparent"
+                    }
                     Icon {
                         anchors.centerIn: parent
-                        name: "users"
-                        color: Settings.showUserList ? Theme.accent : (parent.hovered ? Theme.text : Theme.textDim)
+                        name: "server"
+                        size: 16
+                        color: userListButton.hovered ? Theme.text : Theme.textDim
                     }
                     readonly property string tip: Settings.showUserList ? "Ocultar lista de usuários (Ctrl+B)" : "Mostrar lista de usuários (Ctrl+B)"
                     Accessible.name: tip
@@ -70,7 +79,6 @@ Rectangle {
                     context: Qt.WindowShortcut
                     onActivated: Settings.showUserList = !Settings.showUserList
                 }
-                Icon { name: "server"; size: 16; color: Theme.textDim }
                 Label {
                     text: Server.serverName; color: Theme.textDim
                     Layout.fillWidth: true

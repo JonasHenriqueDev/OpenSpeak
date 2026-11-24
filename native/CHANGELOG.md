@@ -1,3 +1,10 @@
+# OpenSpeak 1.0.54 — botão da lista de usuários mais discreto
+
+- **Botão da lista de usuários no ícone do servidor:** o botão da 1.0.53 aparecia
+  como um quadrado verde estranho na barra de cima. Agora é o próprio ícone do
+  servidor, ao lado do nome, que esconde e mostra a lista de canais e usuários.
+  O atalho Ctrl+B continua funcionando.
+
 # OpenSpeak 1.0.53 — botão para ocultar a lista de usuários
 
 - **Ocultar a lista de usuários:** um botão novo no canto esquerdo da barra de

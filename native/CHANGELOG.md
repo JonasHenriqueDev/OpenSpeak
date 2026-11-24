@@ -1,3 +1,10 @@
+# OpenSpeak 1.0.53 — botão para ocultar a lista de usuários
+
+- **Ocultar a lista de usuários:** um botão novo no canto esquerdo da barra de
+  cima esconde e mostra a lista de canais e usuários, deixando mais espaço para
+  as transmissões. O atalho Ctrl+B faz o mesmo, e o app lembra a sua escolha
+  da próxima vez que abrir.
+
 # OpenSpeak 1.0.52 — texto do aviso de qualidade mais claro
 
 - **Aviso de qualidade reescrito:** o balão que aparece quando a qualidade cai

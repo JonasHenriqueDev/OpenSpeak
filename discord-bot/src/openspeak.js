@@ -54,7 +54,7 @@ export const OPENSPEAK_FACTS = [
     + 'O perfil tem nome de exibição, cor, descrição, foto (pode ser GIF de até 320 KB) e banner (imagem ou GIF), mostrados num card.',
   'Interface: previews livres (arrastar e redimensionar), botão Organizar (alinha; um segundo clique deixa todos do mesmo tamanho), '
     + 'tamanho dos previews em Exibição, picture-in-picture, tela cheia no monitor certo, bandeja do sistema, lista de quem está assistindo, '
-    + 'botão de usuários no canto esquerdo da barra de cima (ou Ctrl+B) para ocultar a lista de canais e usuários (1.0.53), '
+    + 'clicar no ícone do servidor no canto esquerdo da barra de cima (ou Ctrl+B) para ocultar a lista de canais e usuários (1.0.53), '
     + 'temas de cores (Meia-noite, Grafite, Preto OLED, Ameixa, Floresta…) e temas de sons (Cristal, Retrô, Kalimba, Espacial, Discreto, Nostalgia…).',
   'Privacidade de cada transmissão: Pública, Contatos ou Privada (pergunta antes de deixar entrar). Nas configurações avançadas há '
     + '"Mostrar ao vivo no bot do Discord" (ligado por padrão), que faz o Frisquila avisar a transmissão.',

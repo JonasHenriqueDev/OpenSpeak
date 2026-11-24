@@ -28,6 +28,7 @@ class Settings : public QObject {
     Q_PROPERTY(bool sendLogs READ sendLogs WRITE setSendLogs NOTIFY changed)
     Q_PROPERTY(bool pipPinned READ pipPinned WRITE setPipPinned NOTIFY changed)
     Q_PROPERTY(bool showDrawings READ showDrawings WRITE setShowDrawings NOTIFY changed)
+    Q_PROPERTY(bool showUserList READ showUserList WRITE setShowUserList NOTIFY changed)
     Q_PROPERTY(QString drawColor READ drawColor WRITE setDrawColor NOTIFY changed)
     Q_PROPERTY(bool prereleaseUpdates READ prereleaseUpdates WRITE setPrereleaseUpdates NOTIFY changed)
     Q_PROPERTY(QString updateEdition READ updateEdition WRITE setUpdateEdition NOTIFY changed)
@@ -87,6 +88,9 @@ public:
     /// Mostra os desenhos dos espectadores por cima das transmissões assistidas.
     bool showDrawings() const { return value("showDrawings", true).toBool(); }
     void setShowDrawings(bool v) { set("showDrawings", v); }
+    /// Mostra a lista de canais/usuários à esquerda da janela principal.
+    bool showUserList() const { return value("showUserList", true).toBool(); }
+    void setShowUserList(bool v) { set("showUserList", v); }
     /// Cor do pincel ao desenhar na transmissão (#rrggbb).
     QString drawColor() const { return value("drawColor", QStringLiteral("#ff3b30")).toString(); }
     void setDrawColor(const QString &v) { set("drawColor", v); }

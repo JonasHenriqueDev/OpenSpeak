@@ -45,6 +45,31 @@ Rectangle {
                 anchors.leftMargin: 12
                 anchors.rightMargin: 8
                 spacing: 10
+                ToolButton {
+                    objectName: "toggleUserList"
+                    implicitWidth: 34
+                    implicitHeight: 34
+                    Layout.leftMargin: -6
+                    checkable: true
+                    checked: Settings.showUserList
+                    contentItem: Item {}
+                    Icon {
+                        anchors.centerIn: parent
+                        name: "users"
+                        color: Settings.showUserList ? Theme.accent : (parent.hovered ? Theme.text : Theme.textDim)
+                    }
+                    readonly property string tip: Settings.showUserList ? "Ocultar lista de usuários (Ctrl+B)" : "Mostrar lista de usuários (Ctrl+B)"
+                    Accessible.name: tip
+                    ToolTip.visible: hovered
+                    ToolTip.text: tip
+                    hoverEnabled: true
+                    onClicked: Settings.showUserList = !Settings.showUserList
+                }
+                Shortcut {
+                    sequence: "Ctrl+B"
+                    context: Qt.WindowShortcut
+                    onActivated: Settings.showUserList = !Settings.showUserList
+                }
                 Icon { name: "server"; size: 16; color: Theme.textDim }
                 Label {
                     text: Server.serverName; color: Theme.textDim
@@ -90,10 +115,18 @@ Rectangle {
             Layout.fillHeight: true
             spacing: 0
 
-            ChannelTree {
-                Layout.preferredWidth: 280
+            // Lista de canais/usuários; o botão da barra de título (ou Ctrl+B) oculta.
+            Item {
+                Layout.preferredWidth: Settings.showUserList ? 280 : 0
                 Layout.fillHeight: true
-                onStreamClicked: function(id) { area.focusStream(id) }
+                visible: Layout.preferredWidth > 0
+                clip: true
+                Behavior on Layout.preferredWidth { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                ChannelTree {
+                    width: 280
+                    height: parent.height
+                    onStreamClicked: function(id) { area.focusStream(id) }
+                }
             }
 
             StreamArea {

@@ -20,6 +20,8 @@ export class SharedVideoSource extends EventEmitter {
     this.videoTrack = null;
     this.audioTrack = null;
     this.paused = false;
+    this.stopped = false;
+    this.facingMode = null; // câmera do celular: 'user' (frontal) ou 'environment'
     this.quality = { width: 1280, height: 720, fps: 30 };
     this.label = '';
     this.sinks = new Set();
@@ -40,11 +42,12 @@ export class SharedVideoSource extends EventEmitter {
 
   /**
    * Abre uma fonte. Para tela/janela o navegador mostra o seletor nativo.
-   * @param {{type:number, deviceId?:string, audio:boolean, quality:object}} o
+   * `facingMode` ('user'/'environment') escolhe a câmera frontal/traseira no celular.
+   * @param {{type:number, deviceId?:string, facingMode?:string, audio:boolean, quality:object}} o
    */
-  static async open({ type, deviceId, audio, quality }) {
+  static async open({ type, deviceId, facingMode, audio, quality }) {
     const src = new SharedVideoSource();
-    await src.#capture({ type, deviceId, audio, quality });
+    await src.#capture({ type, deviceId, facingMode, audio, quality });
     return src;
   }
 
@@ -107,7 +110,7 @@ export class SharedVideoSource extends EventEmitter {
     return src;
   }
 
-  async #capture({ type, deviceId, audio, quality }) {
+  async #capture({ type, deviceId, facingMode, audio, quality }) {
     const video = { frameRate: { ideal: quality.fps, max: quality.fps } };
     if (quality.width > 0) {
       video.width = { max: quality.width };
@@ -116,6 +119,7 @@ export class SharedVideoSource extends EventEmitter {
     let media;
     if (type === StreamType.CAMERA) {
       if (deviceId) video.deviceId = { exact: deviceId };
+      else if (facingMode) video.facingMode = { ideal: facingMode };
       if (quality.width > 0) {
         video.width = { ideal: quality.width };
         video.height = { ideal: quality.height };
@@ -141,8 +145,12 @@ export class SharedVideoSource extends EventEmitter {
     this.stream = media;
     this.videoTrack = media.getVideoTracks()[0] ?? null;
     this.audioTrack = media.getAudioTracks()[0] ?? null;
-    if (!this.videoTrack) throw new Error('no_available_source');
+    if (!this.videoTrack) {
+      media.getTracks().forEach(t => t.stop()); // não deixa o microfone aberto
+      throw new Error('no_available_source');
+    }
     this.label = this.videoTrack.label;
+    if (type === StreamType.CAMERA) this.facingMode = this.videoTrack.getSettings().facingMode ?? facingMode ?? null;
     // O usuário pode encerrar pelo botão "Parar compartilhamento" do navegador.
     this.videoTrack.addEventListener('ended', () => this.emit('ended'));
     // Se o usuário trocar de janela pelo seletor do navegador, o tipo pode mudar.
@@ -206,6 +214,55 @@ export class SharedVideoSource extends EventEmitter {
     this.emit('trackschanged');
   }
 
+  /**
+   * Troca a câmera (frontal ↔ traseira) mantendo o áudio e os sinks. Muitos
+   * celulares não abrem duas câmeras ao mesmo tempo, então a atual é fechada
+   * antes; se a nova falhar, tenta reabrir a anterior.
+   */
+  async switchCamera(facingMode) {
+    if (this.type !== StreamType.CAMERA) throw new Error('no_available_source');
+    const previous = this.facingMode;
+    const open = async mode => {
+      const video = { facingMode: { ideal: mode }, frameRate: { ideal: this.quality.fps, max: this.quality.fps } };
+      if (this.quality.width > 0) {
+        video.width = { ideal: this.quality.width };
+        video.height = { ideal: this.quality.height };
+      }
+      return (await navigator.mediaDevices.getUserMedia({ video, audio: false })).getVideoTracks()[0];
+    };
+    const old = this.videoTrack;
+    old?.stop();
+    if (old) this.stream?.removeTrack(old);
+    this.videoTrack = null; // ninguém deve enviar/ler a track parada durante a troca
+    let track;
+    try {
+      track = await open(facingMode);
+    } catch (err) {
+      try {
+        track = await open(previous ?? 'user');
+      } catch {
+        this.videoTrack = null;
+        if (!this.stopped) this.emit('ended');
+        throw err;
+      }
+      this.#useVideoTrack(track);
+      throw err;
+    }
+    this.#useVideoTrack(track);
+  }
+
+  #useVideoTrack(track) {
+    if (this.stopped) return void track.stop(); // fechada enquanto trocava
+    this.videoTrack = track;
+    this.stream?.addTrack(track);
+    this.label = track.label;
+    // Com uma câmera só, o `ideal` é ignorado: vale o que o aparelho abriu.
+    this.facingMode = track.getSettings().facingMode ?? this.facingMode;
+    track.contentHint = this.#contentHint();
+    track.addEventListener('ended', () => this.emit('ended'));
+    this.emit('trackschanged');
+  }
+
   addSink(session) {
     this.sinks.add(session);
   }
@@ -239,6 +296,7 @@ export class SharedVideoSource extends EventEmitter {
   }
 
   stop() {
+    this.stopped = true;
     this.stream?.getTracks().forEach(t => t.stop());
     this.sinks.clear();
     this.videoTrack = null;

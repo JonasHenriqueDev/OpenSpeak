@@ -1,4 +1,4 @@
-// Decide quem recebe a versão mobile do site, que só assiste às transmissões.
+// Decide quem recebe a versão mobile do site (assiste e transmite só a câmera).
 
 /**
  * `?mobile=1` e `?mobile=0` forçam a escolha; sem eles, vale o aparelho.

@@ -585,6 +585,13 @@ body.mobile .login { overflow-y: auto; }
   background: transparent; color: var(--text); cursor: pointer;
 }
 .mobile-control.danger { color: var(--danger); }
+.mobile-control.disabled { opacity: .4; }
+.mobile-camera { border-bottom: 1px solid var(--border); }
+.mobile-camera .mobile-video.mirrored { transform: scaleX(-1); }
+.mobile-camera .mobile-player-center { place-items: start; }
+.mobile-camera-badges { display: flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, .55); color: #fff; font-size: 12px; }
+.mobile-golive { flex: none; margin-left: 4px; }
+.mobile-header .mobile-share { flex: none; height: 32px; margin-right: 4px; }
 .mobile-player:fullscreen { justify-content: center; }
 .mobile-player:fullscreen .mobile-video { height: 100%; aspect-ratio: auto; }
 .mobile-player:fullscreen .mobile-player-center { bottom: 0; aspect-ratio: auto; }
